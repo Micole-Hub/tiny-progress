@@ -14,11 +14,15 @@ const GOOGLE_SHEETS_API_SECRET = process.env.GOOGLE_SHEETS_API_SECRET;
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
 if (!GOOGLE_SHEETS_API_URL) {
-  throw new Error("缺少環境變數 GOOGLE_SHEETS_API_URL，請檢查 backend/.env 或 Render 環境變數");
+  throw new Error(
+    "缺少環境變數 GOOGLE_SHEETS_API_URL，請檢查 backend/.env 或 Render 環境變數"
+  );
 }
 
 if (!GOOGLE_SHEETS_API_SECRET) {
-  throw new Error("缺少環境變數 GOOGLE_SHEETS_API_SECRET，請檢查 backend/.env 或 Render 環境變數");
+  throw new Error(
+    "缺少環境變數 GOOGLE_SHEETS_API_SECRET，請檢查 backend/.env 或 Render 環境變數"
+  );
 }
 
 app.use(cors());
@@ -134,51 +138,296 @@ async function deleteItemFromGoogleSheets(id) {
   return data.item;
 }
 
+// === LINE 小工具：讀取目前 task 清單 ===
+// 目前 LINE 指令先只操作 type === "task"，不處理 standard
+async function getTasksForLine() {
+  const items = await fetchItemsFromGoogleSheets();
+  return items.filter((item) => item.type === "task");
+}
+
+// === LINE 小工具：把任務清單組成 LINE 文字 ===
+function formatTaskListForLine(tasks) {
+  if (tasks.length === 0) {
+    return [
+      "本週目前沒有任務。",
+      "",
+      "可以輸入：",
+      "新增 任務內容",
+    ].join("\n");
+  }
+
+  const taskLines = tasks.map((item, index) => {
+    const checkbox = item.done ? "☑" : "☐";
+    return `${index + 1}. ${checkbox} ${item.title}`;
+  });
+
+  return [
+    "本週任務：",
+    "",
+    ...taskLines,
+    "",
+    "可用指令：",
+    "新增 任務內容",
+    "完成 1",
+    "取消 1",
+    "改 1 新文字",
+    "刪除 1",
+    "說明",
+  ].join("\n");
+}
+
+// === LINE 小工具：把使用者輸入的編號轉成真正的 task ===
+async function findTaskByNumber(numberText) {
+  const taskNumber = Number(numberText);
+
+  if (!Number.isInteger(taskNumber) || taskNumber <= 0) {
+    return {
+      error: "請輸入正確的任務編號，例如：完成 1",
+    };
+  }
+
+  const tasks = await getTasksForLine();
+  const targetTask = tasks[taskNumber - 1];
+
+  if (!targetTask) {
+    return {
+      error: `找不到第 ${taskNumber} 個任務，請先輸入「清單」確認編號。`,
+    };
+  }
+
+  return {
+    taskNumber,
+    task: targetTask,
+    tasks,
+  };
+}
+
+// === LINE 小工具：回覆 LINE 訊息 ===
+async function replyToLine(replyToken, replyText) {
+  if (!LINE_CHANNEL_ACCESS_TOKEN) {
+    console.error("缺少 LINE_CHANNEL_ACCESS_TOKEN，無法回覆 LINE 訊息");
+    return;
+  }
+
+  const lineResponse = await fetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [
+        {
+          type: "text",
+          text: replyText,
+        },
+      ],
+    }),
+  });
+
+  if (!lineResponse.ok) {
+    const errorText = await lineResponse.text();
+    console.error("LINE Reply API 回覆失敗：", lineResponse.status, errorText);
+  }
+}
+
+// === LINE 小工具：處理文字指令 ===
+async function handleLineTextCommand(userText) {
+  let replyText = `管理局收到：${userText}`;
+
+  // === 指令：說明 ===
+  if (userText === "說明" || userText === "help" || userText === "Help") {
+    replyText = [
+      "不努力時間有限管理局 指令小抄：",
+      "",
+      "清單",
+      "查看本週任務",
+      "",
+      "新增 任務內容",
+      "例如：新增 練習 LINE Bot",
+      "",
+      "完成 編號",
+      "例如：完成 1",
+      "",
+      "取消 編號",
+      "例如：取消 1",
+      "",
+      "改 編號 新文字",
+      "例如：改 1 練習 LINE 指令",
+      "",
+      "刪除 編號",
+      "例如：刪除 1",
+    ].join("\n");
+  }
+
+  // === 指令：清單 ===
+  else if (userText === "清單") {
+    const tasks = await getTasksForLine();
+    replyText = formatTaskListForLine(tasks);
+  }
+
+  // === 指令：新增 任務內容 ===
+  else if (userText.startsWith("新增 ")) {
+    const title = userText.replace(/^新增\s+/, "").trim();
+
+    if (!title) {
+      replyText = "請輸入任務內容，例如：新增 練習 GitHub Pages";
+    } else {
+      const createdItem = await createItemToGoogleSheets({
+        type: "task",
+        title,
+      });
+
+      replyText = [
+        "已新增任務：",
+        `☐ ${createdItem.title}`,
+        "",
+        "可以輸入「清單」查看目前任務。",
+      ].join("\n");
+    }
+  }
+
+  // === 指令：完成 1 ===
+  else if (userText.startsWith("完成 ")) {
+    const numberText = userText.replace(/^完成\s+/, "").trim();
+    const result = await findTaskByNumber(numberText);
+
+    if (result.error) {
+      replyText = result.error;
+    } else {
+      const updatedItem = await updateItemToGoogleSheets(result.task.id, {
+        done: true,
+      });
+
+      replyText = [
+        `已完成第 ${result.taskNumber} 項：`,
+        `☑ ${updatedItem.title}`,
+      ].join("\n");
+    }
+  }
+
+  // === 指令：取消 1 ===
+  else if (userText.startsWith("取消 ")) {
+    const numberText = userText.replace(/^取消\s+/, "").trim();
+    const result = await findTaskByNumber(numberText);
+
+    if (result.error) {
+      replyText = result.error;
+    } else {
+      const updatedItem = await updateItemToGoogleSheets(result.task.id, {
+        done: false,
+      });
+
+      replyText = [
+        `已取消完成第 ${result.taskNumber} 項：`,
+        `☐ ${updatedItem.title}`,
+      ].join("\n");
+    }
+  }
+
+  // === 指令：改 1 新文字 ===
+  else if (userText.startsWith("改 ")) {
+    const match = userText.match(/^改\s+(\d+)\s+(.+)$/);
+
+    if (!match) {
+      replyText = "格式不對，請輸入：改 1 新任務文字";
+    } else {
+      const numberText = match[1];
+      const newTitle = match[2].trim();
+
+      const result = await findTaskByNumber(numberText);
+
+      if (result.error) {
+        replyText = result.error;
+      } else if (!newTitle) {
+        replyText = "請輸入新的任務文字，例如：改 1 練習 LINE Bot";
+      } else {
+        const updatedItem = await updateItemToGoogleSheets(result.task.id, {
+          title: newTitle,
+        });
+
+        replyText = [
+          `已更新第 ${result.taskNumber} 項：`,
+          updatedItem.title,
+        ].join("\n");
+      }
+    }
+  }
+
+  // === 指令：刪除 1 ===
+  else if (userText.startsWith("刪除 ")) {
+    const numberText = userText.replace(/^刪除\s+/, "").trim();
+    const result = await findTaskByNumber(numberText);
+
+    if (result.error) {
+      replyText = result.error;
+    } else {
+      const deletedTitle = result.task.title;
+
+      await deleteItemFromGoogleSheets(result.task.id);
+
+      replyText = [
+        `已刪除第 ${result.taskNumber} 項：`,
+        deletedTitle,
+      ].join("\n");
+    }
+  }
+
+  // === 其他文字：回提示 ===
+  else {
+    replyText = [
+      `管理局收到：${userText}`,
+      "",
+      "目前可用指令：",
+      "清單",
+      "新增 任務內容",
+      "完成 1",
+      "取消 1",
+      "改 1 新文字",
+      "刪除 1",
+      "",
+      "也可以輸入：說明",
+    ].join("\n");
+  }
+
+  return replyText;
+}
+
 // === 首頁測試 ===
 app.get("/", (req, res) => {
   res.send("不努力時間有限管理局 API 開張中");
 });
 
-// === LINE Webhook：收到 LINE 訊息後，先回覆測試文字 ===
+// === LINE Webhook：處理 LINE 聊天指令 ===
 app.post("/line/webhook", async (req, res) => {
   console.log("收到 LINE Webhook：", req.body);
 
   const events = req.body.events || [];
 
   for (const event of events) {
-    // 目前只處理文字訊息，貼圖、圖片、加入好友事件先略過
-    if (event.type !== "message" || event.message.type !== "text") {
-      continue;
-    }
+    try {
+      // 目前只處理文字訊息，貼圖、圖片、加入好友事件先略過
+      if (event.type !== "message" || event.message.type !== "text") {
+        continue;
+      }
 
-    const userText = event.message.text;
-    const replyToken = event.replyToken;
+      const userText = event.message.text.trim();
+      const replyToken = event.replyToken;
 
-    if (!LINE_CHANNEL_ACCESS_TOKEN) {
-      console.error("缺少 LINE_CHANNEL_ACCESS_TOKEN，無法回覆 LINE 訊息");
-      continue;
-    }
+      const replyText = await handleLineTextCommand(userText);
 
-    const lineResponse = await fetch("https://api.line.me/v2/bot/message/reply", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
-      },
-      body: JSON.stringify({
-        replyToken,
-        messages: [
-          {
-            type: "text",
-            text: `管理局收到：${userText}`,
-          },
-        ],
-      }),
-    });
+      await replyToLine(replyToken, replyText);
+    } catch (error) {
+      console.error("處理 LINE Webhook 發生錯誤：", error);
 
-    if (!lineResponse.ok) {
-      const errorText = await lineResponse.text();
-      console.error("LINE Reply API 回覆失敗：", lineResponse.status, errorText);
+      // 如果處理指令時出錯，盡量回覆一個安全訊息給使用者
+      if (event.replyToken) {
+        await replyToLine(
+          event.replyToken,
+          "管理局櫃台剛剛卡住了，請稍後再試一次。"
+        );
+      }
     }
   }
 
