@@ -6,16 +6,19 @@ const cors = require("cors");
 const app = express();
 
 const PORT = process.env.PORT || 3000;
+
 const GOOGLE_SHEETS_API_URL = process.env.GOOGLE_SHEETS_API_URL;
 const GOOGLE_SHEETS_API_SECRET = process.env.GOOGLE_SHEETS_API_SECRET;
-const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN; // LINE Bot 回覆訊息用
+
+// LINE Bot 回覆訊息用
+const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
 if (!GOOGLE_SHEETS_API_URL) {
-  throw new Error("缺少環境變數 GOOGLE_SHEETS_API_URL，請檢查 backend/.env");
+  throw new Error("缺少環境變數 GOOGLE_SHEETS_API_URL，請檢查 backend/.env 或 Render 環境變數");
 }
 
 if (!GOOGLE_SHEETS_API_SECRET) {
-  throw new Error("缺少環境變數 GOOGLE_SHEETS_API_SECRET，請檢查 backend/.env");
+  throw new Error("缺少環境變數 GOOGLE_SHEETS_API_SECRET，請檢查 backend/.env 或 Render 環境變數");
 }
 
 app.use(cors());
@@ -135,7 +138,53 @@ async function deleteItemFromGoogleSheets(id) {
 app.get("/", (req, res) => {
   res.send("不努力時間有限管理局 API 開張中");
 });
-// LINE Webhook：先建立最小入口，讓 LINE 可以打到後端讓 LINE Bot 回覆測試訊息
+
+// === LINE Webhook：收到 LINE 訊息後，先回覆測試文字 ===
+app.post("/line/webhook", async (req, res) => {
+  console.log("收到 LINE Webhook：", req.body);
+
+  const events = req.body.events || [];
+
+  for (const event of events) {
+    // 目前只處理文字訊息，貼圖、圖片、加入好友事件先略過
+    if (event.type !== "message" || event.message.type !== "text") {
+      continue;
+    }
+
+    const userText = event.message.text;
+    const replyToken = event.replyToken;
+
+    if (!LINE_CHANNEL_ACCESS_TOKEN) {
+      console.error("缺少 LINE_CHANNEL_ACCESS_TOKEN，無法回覆 LINE 訊息");
+      continue;
+    }
+
+    const lineResponse = await fetch("https://api.line.me/v2/bot/message/reply", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify({
+        replyToken,
+        messages: [
+          {
+            type: "text",
+            text: `管理局收到：${userText}`,
+          },
+        ],
+      }),
+    });
+
+    if (!lineResponse.ok) {
+      const errorText = await lineResponse.text();
+      console.error("LINE Reply API 回覆失敗：", lineResponse.status, errorText);
+    }
+  }
+
+  // 告訴 LINE：後端已收到 webhook
+  res.status(200).send("OK");
+});
 
 // === Read：讀取所有 items ===
 app.get("/items", async (req, res) => {
