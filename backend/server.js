@@ -13,6 +13,10 @@ const GOOGLE_SHEETS_API_SECRET = process.env.GOOGLE_SHEETS_API_SECRET;
 // LINE Bot 回覆訊息用
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
+// 暫存多步驟操作，例如「修改任務 1」之後等待使用者輸入新文字
+const pendingActions = new Map();
+const PENDING_ACTION_TTL_MS = 10 * 60 * 1000; // 10 分鐘後視為過期
+
 if (!GOOGLE_SHEETS_API_URL) {
   throw new Error(
     "缺少環境變數 GOOGLE_SHEETS_API_URL，請檢查 backend/.env 或 Render 環境變數"
@@ -138,67 +142,106 @@ async function deleteItemFromGoogleSheets(id) {
   return data.item;
 }
 
-// === LINE 小工具：讀取目前 task 清單 ===
-// 目前 LINE 指令先只操作 type === "task"，不處理 standard
-async function getTasksForLine() {
-  const items = await fetchItemsFromGoogleSheets();
-  return items.filter((item) => item.type === "task");
+// === LINE 小工具：取得使用者識別 key，用來記住修改狀態 ===
+function getLineSourceKey(event) {
+  return (
+    event.source?.userId ||
+    event.source?.groupId ||
+    event.source?.roomId ||
+    "unknown-source"
+  );
 }
 
-// === LINE 小工具：把任務清單組成 LINE 文字 ===
-function formatTaskListForLine(tasks) {
-  if (tasks.length === 0) {
-    return [
-      "本週目前沒有任務。",
-      "",
-      "可以輸入：",
-      "新增 任務內容",
-    ].join("\n");
+// === LINE 小工具：取得某一類資料 ===
+async function getItemsByType(type) {
+  const items = await fetchItemsFromGoogleSheets();
+  return items.filter((item) => item.type === type);
+}
+
+// === LINE 小工具：取得任務與完成標準 ===
+async function getTaskBoardForLine() {
+  const items = await fetchItemsFromGoogleSheets();
+
+  return {
+    tasks: items.filter((item) => item.type === "task"),
+    standards: items.filter((item) => item.type === "standard"),
+  };
+}
+
+// === LINE 小工具：格式化單一區塊 ===
+function formatLineSection(title, items, emptyText) {
+  if (items.length === 0) {
+    return [title, "", emptyText].join("\n");
   }
 
-  const taskLines = tasks.map((item, index) => {
+  const lines = items.map((item, index) => {
     const checkbox = item.done ? "☑" : "☐";
     return `${index + 1}. ${checkbox} ${item.title}`;
   });
 
-  return [
+  return [title, "", ...lines].join("\n");
+}
+
+// === LINE 小工具：格式化完整清單 ===
+function formatTaskBoardForLine({ tasks, standards }) {
+  const taskSection = formatLineSection(
     "本週任務：",
+    tasks,
+    "目前沒有任務。"
+  );
+
+  const standardSection = formatLineSection(
+    "完成標準：",
+    standards,
+    "目前沒有完成標準。"
+  );
+
+  return [
+    "📋 不努力時間有限管理局｜本週案件板",
     "",
-    ...taskLines,
+    taskSection,
+    "",
+    standardSection,
     "",
     "可用指令：",
-    "新增 任務內容",
-    "完成 1",
-    "取消 1",
-    "改 1 新文字",
-    "刪除 1",
-    "說明",
+    "攻略",
+    "新增任務 任務內容",
+    "新增標準 完成標準內容",
+    "完成任務 數字",
+    "取消任務 數字",
+    "修改任務 數字",
+    "刪除任務 數字",
+    "完成標準 數字",
+    "取消標準 數字",
+    "修改標準 數字",
+    "刪除標準 數字",
+    "用量小抄",
   ].join("\n");
 }
 
-// === LINE 小工具：把使用者輸入的編號轉成真正的 task ===
-async function findTaskByNumber(numberText) {
-  const taskNumber = Number(numberText);
+// === LINE 小工具：把編號轉成真正的 item ===
+async function findItemByNumber({ type, numberText, label }) {
+  const itemNumber = Number(numberText);
 
-  if (!Number.isInteger(taskNumber) || taskNumber <= 0) {
+  if (!Number.isInteger(itemNumber) || itemNumber <= 0) {
     return {
-      error: "請輸入正確的任務編號，例如：完成 1",
+      error: `請輸入正確的${label}編號，例如：完成${label} 數字`,
     };
   }
 
-  const tasks = await getTasksForLine();
-  const targetTask = tasks[taskNumber - 1];
+  const items = await getItemsByType(type);
+  const targetItem = items[itemNumber - 1];
 
-  if (!targetTask) {
+  if (!targetItem) {
     return {
-      error: `找不到第 ${taskNumber} 個任務，請先輸入「清單」確認編號。`,
+      error: `找不到第 ${itemNumber} 個${label}，請先輸入「清單」確認編號。`,
     };
   }
 
   return {
-    taskNumber,
-    task: targetTask,
-    tasks,
+    itemNumber,
+    item: targetItem,
+    items,
   };
 }
 
@@ -232,166 +275,510 @@ async function replyToLine(replyToken, replyText) {
   }
 }
 
+// === LINE 小工具：攻略 ===
+function getGuideText() {
+  return [
+    "📋 不努力時間有限管理局｜辦事攻略",
+    "",
+    "本局目前受理以下指令。",
+    "請注意：指令、數字、內容中間建議加空格，比較不容易出錯。",
+    "",
+    "【查看】",
+    "清單",
+    "查看本週任務與完成標準",
+    "",
+    "攻略",
+    "查看這份辦事攻略",
+    "",
+    "用量小抄",
+    "查看 LINE 訊息用量說明",
+    "",
+    "【任務辦理】",
+    "新增任務 任務內容",
+    "意思：新增一個任務",
+    "例：新增任務 練習 LINE Bot",
+    "",
+    "完成任務 數字",
+    "意思：幫指定編號的任務打勾",
+    "例：完成任務 1",
+    "例：完成任務 10",
+    "",
+    "取消任務 數字",
+    "意思：取消指定編號任務的打勾，也就是把它改回未完成",
+    "例：取消任務 1",
+    "例：取消任務 10",
+    "",
+    "修改任務 數字",
+    "意思：修改指定編號任務的文字，本局會再問你新文字",
+    "例：修改任務 1",
+    "例：修改任務 10",
+    "",
+    "修改任務 數字 新文字",
+    "意思：也可以一行直接修改完成",
+    "例：修改任務 1 練習 LINE 指令 CRUD",
+    "",
+    "刪除任務 數字",
+    "意思：刪除指定編號的任務",
+    "例：刪除任務 1",
+    "例：刪除任務 10",
+    "",
+    "【完成標準辦理】",
+    "新增標準 完成標準內容",
+    "意思：新增一個完成標準",
+    "例：新增標準 可以用 LINE 新增任務",
+    "",
+    "完成標準 數字",
+    "意思：幫指定編號的完成標準打勾",
+    "例：完成標準 1",
+    "例：完成標準 10",
+    "",
+    "取消標準 數字",
+    "意思：取消指定編號完成標準的打勾，也就是把它改回未完成",
+    "例：取消標準 1",
+    "例：取消標準 10",
+    "",
+    "修改標準 數字",
+    "意思：修改指定編號完成標準的文字，本局會再問你新文字",
+    "例：修改標準 1",
+    "例：修改標準 10",
+    "",
+    "修改標準 數字 新文字",
+    "意思：也可以一行直接修改完成",
+    "例：修改標準 1 可以從 LINE 修改完成標準",
+    "",
+    "刪除標準 數字",
+    "意思：刪除指定編號的完成標準",
+    "例：刪除標準 1",
+    "例：刪除標準 10",
+    "",
+    "【修改中止】",
+    "取消修改",
+    "意思：如果本局正在等你輸入新文字，可以取消這次修改",
+    "",
+    "⚠️ 格式提醒：",
+    "✅ 新增任務 練習 JavaScript",
+    "✅ 完成任務 10",
+    "✅ 修改標準 2",
+    "❌ 新增任務練習 JavaScript",
+    "",
+    "本局溫馨提醒：",
+    "不要一開張又關門。",
+  ].join("\n");
+}
+
+// === LINE 小工具：用量小抄 ===
+function getUsageText() {
+  return [
+    "📮 不努力時間有限管理局｜LINE 用量小抄",
+    "",
+    "【通常不太吃每月訊息額度】",
+    "你主動傳訊息，Bot 立刻回覆：",
+    "- 清單",
+    "- 攻略",
+    "- 用量小抄",
+    "- 新增任務 任務內容",
+    "- 完成任務 數字",
+    "- 修改任務 數字",
+    "- 點選圖文選單後，Bot 立刻回覆",
+    "",
+    "這類通常是 reply message。",
+    "意思是：你先敲櫃台，管理局立刻回你。",
+    "",
+    "【會計入訊息額度】",
+    "Bot 主動傳給你：",
+    "- 每日提醒",
+    "- 主動補提醒",
+    "- 主動通知你還沒完成",
+    "- 群發 / 廣播",
+    "",
+    "這類通常是 push message。",
+    "意思是：管理局主動派公文到你家。",
+    "",
+    "【目前本局規則】",
+    "- 每天主動提醒最多 1 則",
+    "- 你自己打指令，Bot 立刻回覆，走 reply",
+    "- 不做群發",
+    "- 不做廣播",
+    "- 不亂發主動通知",
+    "",
+    "【一人使用估算】",
+    "每天提醒 1 次：約 30 則 / 月",
+    "",
+    "輕用量方案目前：",
+    "月費 0 元",
+    "免費訊息 200 則 / 月",
+    "",
+    "所以一人使用，每天提醒 1 次很安全。",
+    "",
+    "本局溫馨提醒：",
+    "你主動問，不太燒額度。",
+    "管理局主動找你，才要算郵資。",
+  ].join("\n");
+}
+
+// === LINE 小工具：處理等待中的修改 ===
+async function handlePendingActionIfNeeded(sourceKey, userText) {
+  const pending = pendingActions.get(sourceKey);
+
+  if (!pending) {
+    return null;
+  }
+
+  if (userText === "取消修改") {
+    pendingActions.delete(sourceKey);
+    return "已取消這次修改。本局把待辦公文收回抽屜了。";
+  }
+
+  const isExpired = Date.now() - pending.createdAt > PENDING_ACTION_TTL_MS;
+
+  if (isExpired) {
+    pendingActions.delete(sourceKey);
+
+    return [
+      "這次修改已經逾時，請重新操作。",
+      "",
+      `例：修改${pending.label} 數字`,
+    ].join("\n");
+  }
+
+  const newTitle = userText.trim();
+
+  if (!newTitle) {
+    return `請輸入新的${pending.label}文字，或輸入「取消修改」。`;
+  }
+
+  const updatedItem = await updateItemToGoogleSheets(pending.itemId, {
+    title: newTitle,
+  });
+
+  pendingActions.delete(sourceKey);
+
+  return [
+    `已更新第 ${pending.itemNumber} 個${pending.label}：`,
+    updatedItem.title || newTitle,
+  ].join("\n");
+}
+
+// === LINE 小工具：處理新增 ===
+async function handleCreateCommand({ userText, command, type, label, example }) {
+  const title = userText.replace(new RegExp(`^${command}\\s*`), "").trim();
+
+  if (!title) {
+    return [
+      `請輸入${label}內容。`,
+      "",
+      `正確格式：${command} ${label}內容`,
+      `例：${command} ${example}`,
+      "",
+      "提醒：指令和內容中間建議加空格。",
+    ].join("\n");
+  }
+
+  const createdItem = await createItemToGoogleSheets({
+    type,
+    title,
+  });
+
+  return [
+    `已新增${label}：`,
+    `☐ ${createdItem.title || title}`,
+    "",
+    "可以輸入「清單」查看目前案件板。",
+  ].join("\n");
+}
+
+// === LINE 小工具：處理完成 / 取消 ===
+async function handleDoneCommand({ numberText, type, label, done }) {
+  const result = await findItemByNumber({
+    type,
+    numberText,
+    label,
+  });
+
+  if (result.error) {
+    return result.error;
+  }
+
+  const updatedItem = await updateItemToGoogleSheets(result.item.id, {
+    done,
+  });
+
+  const checkbox = done ? "☑" : "☐";
+  const actionText = done ? "已完成" : "已取消完成";
+
+  return [
+    `${actionText}第 ${result.itemNumber} 個${label}：`,
+    `${checkbox} ${updatedItem.title || result.item.title}`,
+  ].join("\n");
+}
+
+// === LINE 小工具：處理刪除 ===
+async function handleDeleteCommand({ numberText, type, label }) {
+  const result = await findItemByNumber({
+    type,
+    numberText,
+    label,
+  });
+
+  if (result.error) {
+    return result.error;
+  }
+
+  const deletedTitle = result.item.title;
+
+  await deleteItemFromGoogleSheets(result.item.id);
+
+  return [
+    `已刪除第 ${result.itemNumber} 個${label}：`,
+    deletedTitle,
+  ].join("\n");
+}
+
+// === LINE 小工具：處理修改 ===
+async function handleEditCommand({
+  sourceKey,
+  numberText,
+  newTitle,
+  type,
+  label,
+}) {
+  const result = await findItemByNumber({
+    type,
+    numberText,
+    label,
+  });
+
+  if (result.error) {
+    return result.error;
+  }
+
+  // 一行式修改：修改任務 1 新文字
+  if (newTitle && newTitle.trim()) {
+    const updatedItem = await updateItemToGoogleSheets(result.item.id, {
+      title: newTitle.trim(),
+    });
+
+    return [
+      `已更新第 ${result.itemNumber} 個${label}：`,
+      updatedItem.title || newTitle.trim(),
+    ].join("\n");
+  }
+
+  // 兩步式修改：修改任務 1 → 下一句輸入新文字
+  pendingActions.set(sourceKey, {
+    action: "edit",
+    type,
+    label,
+    itemNumber: result.itemNumber,
+    itemId: result.item.id,
+    oldTitle: result.item.title,
+    createdAt: Date.now(),
+  });
+
+  return [
+    `請輸入第 ${result.itemNumber} 個${label}的新文字：`,
+    "",
+    `目前內容：${result.item.title}`,
+    "",
+    "如果不想修改，請輸入：取消修改",
+  ].join("\n");
+}
+
 // === LINE 小工具：處理文字指令 ===
-async function handleLineTextCommand(userText) {
-  let replyText = `管理局收到：${userText}`;
+async function handleLineTextCommand({ sourceKey, userText }) {
+  const pendingReply = await handlePendingActionIfNeeded(sourceKey, userText);
 
-  // === 指令：說明 ===
-  if (userText === "說明" || userText === "help" || userText === "Help") {
-    replyText = [
-      "不努力時間有限管理局 指令小抄：",
+  if (pendingReply) {
+    return pendingReply;
+  }
+
+  // === 查看類 ===
+  if (
+    userText === "攻略" ||
+    userText === "說明" ||
+    userText === "help" ||
+    userText === "Help"
+  ) {
+    return getGuideText();
+  }
+
+  if (
+    userText === "用量" ||
+    userText === "用量小抄" ||
+    userText === "訊息用量"
+  ) {
+    return getUsageText();
+  }
+
+  if (userText === "清單") {
+    const board = await getTaskBoardForLine();
+    return formatTaskBoardForLine(board);
+  }
+
+  // === 新增類 ===
+  if (userText.startsWith("新增任務")) {
+    return handleCreateCommand({
+      userText,
+      command: "新增任務",
+      type: "task",
+      label: "任務",
+      example: "練習 LINE Bot",
+    });
+  }
+
+  if (userText.startsWith("新增標準")) {
+    return handleCreateCommand({
+      userText,
+      command: "新增標準",
+      type: "standard",
+      label: "完成標準",
+      example: "可以用 LINE 新增任務",
+    });
+  }
+
+  // === 完成 / 取消任務 ===
+  let match = userText.match(/^完成任務\s*(\d+)$/);
+
+  if (match) {
+    return handleDoneCommand({
+      numberText: match[1],
+      type: "task",
+      label: "任務",
+      done: true,
+    });
+  }
+
+  match = userText.match(/^取消任務\s*(\d+)$/);
+
+  if (match) {
+    return handleDoneCommand({
+      numberText: match[1],
+      type: "task",
+      label: "任務",
+      done: false,
+    });
+  }
+
+  // === 完成 / 取消標準 ===
+  match = userText.match(/^完成標準\s*(\d+)$/);
+
+  if (match) {
+    return handleDoneCommand({
+      numberText: match[1],
+      type: "standard",
+      label: "完成標準",
+      done: true,
+    });
+  }
+
+  match = userText.match(/^取消標準\s*(\d+)$/);
+
+  if (match) {
+    return handleDoneCommand({
+      numberText: match[1],
+      type: "standard",
+      label: "完成標準",
+      done: false,
+    });
+  }
+
+  // === 修改任務 ===
+  match = userText.match(/^修改任務\s*(\d+)(?:\s+(.+))?$/);
+
+  if (match) {
+    return handleEditCommand({
+      sourceKey,
+      numberText: match[1],
+      newTitle: match[2],
+      type: "task",
+      label: "任務",
+    });
+  }
+
+  // === 修改標準 ===
+  match = userText.match(/^修改標準\s*(\d+)(?:\s+(.+))?$/);
+
+  if (match) {
+    return handleEditCommand({
+      sourceKey,
+      numberText: match[1],
+      newTitle: match[2],
+      type: "standard",
+      label: "完成標準",
+    });
+  }
+
+  // === 刪除任務 ===
+  match = userText.match(/^刪除任務\s*(\d+)$/);
+
+  if (match) {
+    return handleDeleteCommand({
+      numberText: match[1],
+      type: "task",
+      label: "任務",
+    });
+  }
+
+  // === 刪除標準 ===
+  match = userText.match(/^刪除標準\s*(\d+)$/);
+
+  if (match) {
+    return handleDeleteCommand({
+      numberText: match[1],
+      type: "standard",
+      label: "完成標準",
+    });
+  }
+
+  // === 格式提醒 ===
+  if (
+    userText.startsWith("完成") ||
+    userText.startsWith("取消") ||
+    userText.startsWith("修改") ||
+    userText.startsWith("刪除")
+  ) {
+    return [
+      "本局看得出你想辦事，但格式有點歪。",
       "",
-      "清單",
-      "查看本週任務",
+      "請參考：",
+      "完成任務 數字",
+      "取消任務 數字",
+      "修改任務 數字",
+      "刪除任務 數字",
       "",
-      "新增 任務內容",
-      "例如：新增 練習 LINE Bot",
+      "完成標準 數字",
+      "取消標準 數字",
+      "修改標準 數字",
+      "刪除標準 數字",
       "",
-      "完成 編號",
-      "例如：完成 1",
+      "例：",
+      "完成任務 1",
+      "完成任務 10",
+      "修改標準 2",
       "",
-      "取消 編號",
-      "例如：取消 1",
-      "",
-      "改 編號 新文字",
-      "例如：改 1 練習 LINE 指令",
-      "",
-      "刪除 編號",
-      "例如：刪除 1",
+      "也可以輸入：攻略",
     ].join("\n");
   }
 
-  // === 指令：清單 ===
-  else if (userText === "清單") {
-    const tasks = await getTasksForLine();
-    replyText = formatTaskListForLine(tasks);
-  }
-
-  // === 指令：新增 任務內容 ===
-  else if (userText.startsWith("新增 ")) {
-    const title = userText.replace(/^新增\s+/, "").trim();
-
-    if (!title) {
-      replyText = "請輸入任務內容，例如：新增 練習 GitHub Pages";
-    } else {
-      const createdItem = await createItemToGoogleSheets({
-        type: "task",
-        title,
-      });
-
-      replyText = [
-        "已新增任務：",
-        `☐ ${createdItem.title}`,
-        "",
-        "可以輸入「清單」查看目前任務。",
-      ].join("\n");
-    }
-  }
-
-  // === 指令：完成 1 ===
-  else if (userText.startsWith("完成 ")) {
-    const numberText = userText.replace(/^完成\s+/, "").trim();
-    const result = await findTaskByNumber(numberText);
-
-    if (result.error) {
-      replyText = result.error;
-    } else {
-      const updatedItem = await updateItemToGoogleSheets(result.task.id, {
-        done: true,
-      });
-
-      replyText = [
-        `已完成第 ${result.taskNumber} 項：`,
-        `☑ ${updatedItem.title}`,
-      ].join("\n");
-    }
-  }
-
-  // === 指令：取消 1 ===
-  else if (userText.startsWith("取消 ")) {
-    const numberText = userText.replace(/^取消\s+/, "").trim();
-    const result = await findTaskByNumber(numberText);
-
-    if (result.error) {
-      replyText = result.error;
-    } else {
-      const updatedItem = await updateItemToGoogleSheets(result.task.id, {
-        done: false,
-      });
-
-      replyText = [
-        `已取消完成第 ${result.taskNumber} 項：`,
-        `☐ ${updatedItem.title}`,
-      ].join("\n");
-    }
-  }
-
-  // === 指令：改 1 新文字 ===
-  else if (userText.startsWith("改 ")) {
-    const match = userText.match(/^改\s+(\d+)\s+(.+)$/);
-
-    if (!match) {
-      replyText = "格式不對，請輸入：改 1 新任務文字";
-    } else {
-      const numberText = match[1];
-      const newTitle = match[2].trim();
-
-      const result = await findTaskByNumber(numberText);
-
-      if (result.error) {
-        replyText = result.error;
-      } else if (!newTitle) {
-        replyText = "請輸入新的任務文字，例如：改 1 練習 LINE Bot";
-      } else {
-        const updatedItem = await updateItemToGoogleSheets(result.task.id, {
-          title: newTitle,
-        });
-
-        replyText = [
-          `已更新第 ${result.taskNumber} 項：`,
-          updatedItem.title,
-        ].join("\n");
-      }
-    }
-  }
-
-  // === 指令：刪除 1 ===
-  else if (userText.startsWith("刪除 ")) {
-    const numberText = userText.replace(/^刪除\s+/, "").trim();
-    const result = await findTaskByNumber(numberText);
-
-    if (result.error) {
-      replyText = result.error;
-    } else {
-      const deletedTitle = result.task.title;
-
-      await deleteItemFromGoogleSheets(result.task.id);
-
-      replyText = [
-        `已刪除第 ${result.taskNumber} 項：`,
-        deletedTitle,
-      ].join("\n");
-    }
-  }
-
-  // === 其他文字：回提示 ===
-  else {
-    replyText = [
-      `管理局收到：${userText}`,
-      "",
-      "目前可用指令：",
-      "清單",
-      "新增 任務內容",
-      "完成 1",
-      "取消 1",
-      "改 1 新文字",
-      "刪除 1",
-      "",
-      "也可以輸入：說明",
-    ].join("\n");
-  }
-
-  return replyText;
+  // === 其他文字 ===
+  return [
+    `管理局收到：${userText}`,
+    "",
+    "目前可用指令：",
+    "清單",
+    "攻略",
+    "用量小抄",
+    "新增任務 任務內容",
+    "新增標準 完成標準內容",
+    "完成任務 數字",
+    "取消任務 數字",
+    "修改任務 數字",
+    "刪除任務 數字",
+    "完成標準 數字",
+    "取消標準 數字",
+    "修改標準 數字",
+    "刪除標準 數字",
+  ].join("\n");
 }
 
 // === 首頁測試 ===
@@ -412,16 +799,19 @@ app.post("/line/webhook", async (req, res) => {
         continue;
       }
 
+      const sourceKey = getLineSourceKey(event);
       const userText = event.message.text.trim();
       const replyToken = event.replyToken;
 
-      const replyText = await handleLineTextCommand(userText);
+      const replyText = await handleLineTextCommand({
+        sourceKey,
+        userText,
+      });
 
       await replyToLine(replyToken, replyText);
     } catch (error) {
       console.error("處理 LINE Webhook 發生錯誤：", error);
 
-      // 如果處理指令時出錯，盡量回覆一個安全訊息給使用者
       if (event.replyToken) {
         await replyToLine(
           event.replyToken,
