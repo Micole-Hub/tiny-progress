@@ -103,10 +103,14 @@ window.fetch = async function (input, options = {}) {
   }
 };
 
+// === API 設定 ===
+// 注意：這裡只放 Render 後端主網址，不要加 /items
 const API_BASE_URL = "https://no-effort-time-bureau.onrender.com";
 
+// === 前端狀態 ===
 let items = [];
 
+// === DOM 元素 ===
 const taskList = document.querySelector("#taskList");
 const standardList = document.querySelector("#standardList");
 
@@ -119,6 +123,10 @@ const addTaskBtn = document.querySelector("#addTaskBtn");
 const standardInput = document.querySelector("#standardInput");
 const addStandardBtn = document.querySelector("#addStandardBtn");
 
+// 重新整理資料按鈕
+const refreshBtn = document.getElementById("refreshBtn");
+
+// === 資料工具函式 ===
 function getItemsByType(type) {
   return items.filter(function (item) {
     return item.type === type;
@@ -169,6 +177,7 @@ function insertItemAtIndex(item, index) {
   ];
 }
 
+// === 畫面渲染 ===
 function createEmptyMessage(text) {
   const emptyItem = document.createElement("li");
   emptyItem.className = "empty-message";
@@ -303,6 +312,7 @@ function renderAll() {
   renderProgress();
 }
 
+// === 讀取資料 ===
 async function loadItems() {
   try {
     const response = await fetch(`${API_BASE_URL}/items`);
@@ -318,10 +328,33 @@ async function loadItems() {
     renderAll();
   } catch (error) {
     console.error("讀取任務資料失敗：", error);
-    alert("讀取後端資料失敗。請確認後端有沒有開啟。");
+    alert("讀取後端資料失敗。請確認 Render 後端是否正常運作。");
 
     items = [];
     renderAll();
+  }
+}
+
+// === 重新整理資料 ===
+async function refreshItems() {
+  if (!refreshBtn) {
+    await loadItems();
+    return;
+  }
+
+  try {
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = "重新整理中...";
+
+    await loadItems();
+
+    refreshBtn.textContent = "重新整理資料";
+  } catch (error) {
+    console.error("重新整理資料失敗：", error);
+    alert("重新整理資料失敗，請稍後再試。");
+    refreshBtn.textContent = "重新整理資料";
+  } finally {
+    refreshBtn.disabled = false;
   }
 }
 
@@ -383,7 +416,7 @@ async function addItem(type, inputElement) {
     inputElement.value = title;
     renderAll();
 
-    alert("新增失敗，已恢復畫面。請確認後端有沒有正常開啟。");
+    alert("新增失敗，已恢復畫面。請確認 Render 後端是否正常運作。");
   }
 }
 
@@ -430,7 +463,7 @@ async function updateItem(id, updates) {
     replaceItem(previousItem);
     renderAll();
 
-    alert("更新失敗，已恢復原本狀態。請確認後端有沒有正常開啟。");
+    alert("更新失敗，已恢復原本狀態。請確認 Render 後端是否正常運作。");
   }
 }
 
@@ -467,7 +500,7 @@ async function deleteItem(id) {
     insertItemAtIndex(previousItem, previousIndex);
     renderAll();
 
-    alert("刪除失敗，已恢復原本資料。請確認後端有沒有正常開啟。");
+    alert("刪除失敗，已恢復原本資料。請確認 Render 後端是否正常運作。");
   }
 }
 
@@ -479,11 +512,16 @@ function addStandard() {
   addItem("standard", standardInput);
 }
 
+// === 初始化 ===
 function initApp() {
   loadItems();
 
   addTaskBtn.addEventListener("click", addTask);
   addStandardBtn.addEventListener("click", addStandard);
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", refreshItems);
+  }
 
   taskInput.addEventListener("keydown", function (event) {
     if (event.key === "Enter") {
