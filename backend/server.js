@@ -134,6 +134,13 @@ async function deleteItemFromGoogleSheets(id) {
 app.get("/", (req, res) => {
   res.send("不努力時間有限管理局 API 開張中");
 });
+// LINE Webhook：先建立最小入口，讓 LINE 可以打到後端
+app.post("/line/webhook", (req, res) => {
+  console.log("收到 LINE Webhook：", req.body);
+
+  // 先回 200，代表後端有收到 LINE 的請求
+  res.status(200).send("OK");
+});
 
 // === Read：讀取所有 items ===
 app.get("/items", async (req, res) => {
