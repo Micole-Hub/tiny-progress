@@ -8,6 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const GOOGLE_SHEETS_API_URL = process.env.GOOGLE_SHEETS_API_URL;
 const GOOGLE_SHEETS_API_SECRET = process.env.GOOGLE_SHEETS_API_SECRET;
+const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN; // LINE Bot 回覆訊息用
 
 if (!GOOGLE_SHEETS_API_URL) {
   throw new Error("缺少環境變數 GOOGLE_SHEETS_API_URL，請檢查 backend/.env");
@@ -134,13 +135,7 @@ async function deleteItemFromGoogleSheets(id) {
 app.get("/", (req, res) => {
   res.send("不努力時間有限管理局 API 開張中");
 });
-// LINE Webhook：先建立最小入口，讓 LINE 可以打到後端
-app.post("/line/webhook", (req, res) => {
-  console.log("收到 LINE Webhook：", req.body);
-
-  // 先回 200，代表後端有收到 LINE 的請求
-  res.status(200).send("OK");
-});
+// LINE Webhook：先建立最小入口，讓 LINE 可以打到後端讓 LINE Bot 回覆測試訊息
 
 // === Read：讀取所有 items ===
 app.get("/items", async (req, res) => {
