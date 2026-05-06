@@ -53,21 +53,6 @@ function normalizeCategory(value) {
   return category;
 }
 
-// === 共用工具：分類正規化 ===
-function normalizeCategory(value) {
-  const category = String(value || "").trim();
-
-  if (!category) {
-    return DEFAULT_CATEGORY;
-  }
-
-  if (!CATEGORY_OPTIONS.includes(category)) {
-    throw new Error("category 只能是：" + CATEGORY_OPTIONS.join("、"));
-  }
-
-  return category;
-}
-
 // === 共用工具：難度正規化 ===
 function normalizeDifficulty(value) {
   const difficulty = String(value || "").trim();
@@ -444,9 +429,13 @@ function getGuideText() {
     "",
     "也可以帶分類和難度：",
     "新增任務 任務內容 / 分類 / 難度",
+    "新增任務 任務內容｜分類｜難度",
+    "新增任務 任務內容，分類，難度",
+    "新增任務 任務內容、分類、難度",
+    "",
     "例：新增任務 練習 CSS Flex / 程式學習 / 適中",
-    "例：新增任務 散步 10 分鐘 / 身心穩定 / 簡單",
-    "例：新增任務 找一個喜歡的網站版型 / 興趣探索 / 簡單",
+    "例：新增任務 散步 10 分鐘｜身心穩定｜簡單",
+    "例：新增任務 找一個喜歡的網站版型、興趣探索、簡單",
     "",
     "【新增本週完成標準】",
     "完成標準不是今天完成什麼，而是用來判斷整個本週是否達標。",
@@ -601,21 +590,30 @@ function parseCreateText({ userText, command }) {
   let rawText = userText.replace(new RegExp(`^${command}\\s*`), "").trim();
   rawText = rawText.replace(/^[：:]/, "").trim();
 
+  if (!rawText) {
+    return {
+      title: "",
+      category: DEFAULT_CATEGORY,
+      difficulty: DEFAULT_DIFFICULTY,
+    };
+  }
+
+  // 支援多種明確分隔符號：
+  // /、｜、|、，、,、、
+  // 不支援純空白分隔，避免任務名稱被誤判
+  const delimiterPattern = /\s*[\/｜|，,、]\s*/;
+
   const parts = rawText
-    .split("/")
+    .split(delimiterPattern)
     .map(function (part) {
       return part.trim();
     })
     .filter(Boolean);
 
-  const title = parts[0] || "";
-  const category = parts[1] || DEFAULT_CATEGORY;
-  const difficulty = parts[2] || DEFAULT_DIFFICULTY;
-
   return {
-    title,
-    category,
-    difficulty,
+    title: parts[0] || "",
+    category: parts[1] || DEFAULT_CATEGORY,
+    difficulty: parts[2] || DEFAULT_DIFFICULTY,
   };
 }
 
@@ -635,6 +633,7 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
       "",
       "任務也可以加分類與難度：",
       "例：新增任務 練習 CSS / 程式學習 / 適中",
+      "例：新增任務 練習 CSS｜程式學習｜適中",
     ].join("\n");
   }
 
@@ -652,6 +651,7 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
       "",
       "範例：",
       "新增任務 練習 CSS / 程式學習 / 適中",
+      "新增任務 練習 CSS｜程式學習｜適中",
     ].join("\n");
   }
 
@@ -741,7 +741,6 @@ async function handleEditCommand({
     return result.error;
   }
 
-  // 一行式修改：修改任務 1 新文字
   if (newTitle && newTitle.trim()) {
     const updatedItem = await updateItemToGoogleSheets(result.item.id, {
       title: newTitle.trim(),
@@ -753,7 +752,6 @@ async function handleEditCommand({
     ].join("\n");
   }
 
-  // 兩步式修改：修改任務 1 → 下一句輸入新文字
   pendingActions.set(sourceKey, {
     action: "edit",
     type,
@@ -798,7 +796,6 @@ function parseFlexibleNumber(numberText) {
     return digitMap[text];
   }
 
-  // 支援：十、十一、二十、二十三
   if (text.includes("十")) {
     const parts = text.split("十");
     const tenPart = parts[0];
@@ -858,7 +855,6 @@ function buildLineOperationCommand(actionText, targetText, numberText, newTitle)
 
 // === LINE 小工具：解析完成 / 取消 / 修改 / 刪除指令 ===
 function parseLineOperationCommand(userText) {
-  // 格式一：完成任務3、完成任務 3、修改標準2 新文字
   let match = userText.match(
     /^(完成|已完成|取消|修改|刪除)\s*(任務|完成標準|標準)\s*(\d+|[零一二三四五六七八九十兩]+)(?:\s+(.+))?$/
   );
@@ -867,7 +863,6 @@ function parseLineOperationCommand(userText) {
     return buildLineOperationCommand(match[1], match[2], match[3], match[4]);
   }
 
-  // 格式二：完成第3個任務、已完成第三個任務、刪除第 2 個標準
   match = userText.match(
     /^(完成|已完成|取消|修改|刪除)\s*第?\s*(\d+|[零一二三四五六七八九十兩]+)\s*個?\s*(任務|完成標準|標準)(?:\s+(.+))?$/
   );
@@ -900,6 +895,7 @@ function getFormatReminderText() {
     "刪除第二個標準",
     "",
     "新增任務 練習 CSS / 程式學習 / 適中",
+    "新增任務 練習 CSS｜程式學習｜適中",
     "",
     getLineCommandHintText(),
   ].join("\n");
@@ -922,7 +918,6 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     return pendingReply;
   }
 
-  // === 查看類 ===
   if (
     userText === "攻略" ||
     userText === "說明" ||
@@ -945,7 +940,6 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     return formatTaskBoardForLine(board);
   }
 
-  // === 新增類：任務 ===
   if (userText.startsWith("新增一個任務")) {
     return handleCreateCommand({
       userText,
@@ -966,7 +960,6 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     });
   }
 
-  // === 新增類：完成標準 ===
   if (userText.startsWith("新增一個完成標準")) {
     return handleCreateCommand({
       userText,
@@ -997,7 +990,6 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     });
   }
 
-  // === 完成 / 取消 / 修改 / 刪除：支援自然語句 ===
   const operation = parseLineOperationCommand(userText);
 
   if (operation) {
@@ -1042,7 +1034,6 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     }
   }
 
-  // === 格式提醒：看起來想操作，但格式不完整或看不懂 ===
   if (
     userText.startsWith("完成") ||
     userText.startsWith("已完成") ||
@@ -1054,7 +1045,6 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     return getFormatReminderText();
   }
 
-  // === 其他文字：不要回「管理局收到」，避免誤會已經處理 ===
   return getUnknownCommandText();
 }
 
@@ -1071,7 +1061,6 @@ app.post("/line/webhook", async (req, res) => {
 
   for (const event of events) {
     try {
-      // 目前只處理文字訊息，貼圖、圖片、加入好友事件先略過
       if (event.type !== "message" || event.message.type !== "text") {
         continue;
       }
@@ -1098,7 +1087,6 @@ app.post("/line/webhook", async (req, res) => {
     }
   }
 
-  // 告訴 LINE：後端已收到 webhook
   res.status(200).send("OK");
 });
 

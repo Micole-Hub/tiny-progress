@@ -114,6 +114,20 @@ const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
 const DEFAULT_CATEGORY = "程式學習";
 const DEFAULT_DIFFICULTY = "簡單";
 
+// === 每日金句 ===
+const DAILY_QUOTES = [
+  "不要一開張又關門",
+  "今天只辦一件，也算營業",
+  "先打開，勝過腦內完工",
+  "不用燃燒自己，只要點一盞小燈",
+  "進度很小也算有動，管理局有紀錄",
+  "本週不求神速，只求不要失聯",
+  "先做簡單的，讓困難的自己排隊",
+  "不是你不行，是任務太大包，請切片",
+  "今天的你只要開工，不用登基",
+  "拖延可以理解，但不能無限展延",
+];
+
 // === 前端狀態 ===
 let items = [];
 
@@ -132,8 +146,82 @@ const addTaskBtn = document.querySelector("#addTaskBtn");
 const standardInput = document.querySelector("#standardInput");
 const addStandardBtn = document.querySelector("#addStandardBtn");
 
-// 重新整理資料按鈕
 const refreshBtn = document.getElementById("refreshBtn");
+
+const weekStartText = document.querySelector("#weekStartText");
+const weekEndText = document.querySelector("#weekEndText");
+const dailyQuote = document.querySelector("#dailyQuote");
+
+// === 日期工具函式 ===
+function padNumber(number) {
+  return String(number).padStart(2, "0");
+}
+
+function formatDateForDisplay(date) {
+  const year = date.getFullYear();
+  const month = padNumber(date.getMonth() + 1);
+  const day = padNumber(date.getDate());
+
+  return `${year}/${month}/${day}`;
+}
+
+function formatDateForDatetime(date) {
+  const year = date.getFullYear();
+  const month = padNumber(date.getMonth() + 1);
+  const day = padNumber(date.getDate());
+
+  return `${year}-${month}-${day}`;
+}
+
+function getCurrentWeekRange(baseDate = new Date()) {
+  const date = new Date(baseDate);
+  const day = date.getDay();
+
+  // JavaScript 的週日是 0，所以週日要往前推 6 天才是週一
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+
+  const monday = new Date(date);
+  monday.setDate(date.getDate() + diffToMonday);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  return {
+    weekStart: monday,
+    weekEnd: sunday,
+  };
+}
+
+function renderWeekRange() {
+  if (!weekStartText || !weekEndText) return;
+
+  const range = getCurrentWeekRange();
+
+  weekStartText.textContent = formatDateForDisplay(range.weekStart);
+  weekStartText.setAttribute("datetime", formatDateForDatetime(range.weekStart));
+
+  weekEndText.textContent = formatDateForDisplay(range.weekEnd);
+  weekEndText.setAttribute("datetime", formatDateForDatetime(range.weekEnd));
+}
+
+// === 金句工具函式 ===
+function getDayOfYear(date = new Date()) {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const diff = date - start;
+  const oneDay = 1000 * 60 * 60 * 24;
+
+  return Math.floor(diff / oneDay);
+}
+
+function renderDailyQuote() {
+  if (!dailyQuote) return;
+
+  const dayOfYear = getDayOfYear();
+  const quoteIndex = dayOfYear % DAILY_QUOTES.length;
+  const quote = DAILY_QUOTES[quoteIndex];
+
+  dailyQuote.textContent = `本日金句：${quote}`;
+}
 
 // === 資料工具函式 ===
 function normalizeCategory(value) {
@@ -205,7 +293,6 @@ function replaceItem(updatedItem) {
   });
 }
 
-// 用指定 id 替換成後端真正回傳的 item
 function replaceItemById(targetId, newItem) {
   const normalizedNewItem = normalizeItem(newItem);
 
@@ -218,7 +305,6 @@ function replaceItemById(targetId, newItem) {
   });
 }
 
-// 失敗時把刪掉的 item 放回原本位置
 function insertItemAtIndex(item, index) {
   const safeIndex = Math.max(0, index);
 
@@ -282,7 +368,6 @@ function createCheckItem(item, displayNumber) {
   const meta = document.createElement("div");
   meta.className = "item-meta";
 
-  // 任務才顯示分類與難度，完成標準先保持簡潔
   if (normalizedItem.type === "task") {
     const categoryChip = document.createElement("span");
     categoryChip.className = "chip chip-category";
@@ -499,7 +584,6 @@ async function addItem(type, inputElement, options = {}) {
   const category = normalizeCategory(options.category);
   const difficulty = normalizeDifficulty(options.difficulty);
 
-  // 先做一筆暫時資料，讓畫面立刻出現
   const tempItem = {
     id: "temp-" + Date.now(),
     type,
@@ -537,13 +621,11 @@ async function addItem(type, inputElement, options = {}) {
 
     const newItem = await response.json();
 
-    // 後端成功後，用真正的 Google Sheets item 替換暫時資料
     replaceItemById(tempItem.id, newItem);
     renderAll();
   } catch (error) {
     console.error("新增資料失敗：", error);
 
-    // 失敗時移除暫時資料，並把輸入內容還給使用者
     items = items.filter(function (item) {
       return item.id !== tempItem.id;
     });
@@ -569,7 +651,6 @@ async function updateItem(id, updates) {
     updatedAt: new Date().toISOString(),
   });
 
-  // 先更新畫面
   replaceItem(optimisticItem);
   renderAll();
 
@@ -588,13 +669,11 @@ async function updateItem(id, updates) {
 
     const updatedItem = await response.json();
 
-    // 後端成功後，用 Google Sheets 回傳的正式資料校正一次
     replaceItem(updatedItem);
     renderAll();
   } catch (error) {
     console.error("更新資料失敗：", error);
 
-    // 失敗時回復成更新前的狀態
     replaceItem(previousItem);
     renderAll();
 
@@ -611,7 +690,6 @@ async function deleteItem(id) {
     return;
   }
 
-  // 先從畫面移除
   items = items.filter(function (item) {
     return item.id !== id;
   });
@@ -626,12 +704,9 @@ async function deleteItem(id) {
     if (!response.ok) {
       throw new Error("刪除失敗");
     }
-
-    // 刪除成功不用再重新 fetch，因為畫面已經先移除了
   } catch (error) {
     console.error("刪除資料失敗：", error);
 
-    // 失敗時放回原本位置
     insertItemAtIndex(previousItem, previousIndex);
     renderAll();
 
@@ -655,6 +730,8 @@ function addStandard() {
 
 // === 初始化 ===
 function initApp() {
+  renderWeekRange();
+  renderDailyQuote();
   loadItems();
 
   addTaskBtn.addEventListener("click", addTask);
