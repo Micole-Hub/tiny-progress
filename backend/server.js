@@ -168,6 +168,14 @@ async function getTaskBoardForLine() {
   };
 }
 
+// === LINE 小工具：清單底部固定提示 ===
+function getLineCommandHintText() {
+  return [
+    "需要操作說明請輸入：攻略",
+    "想看用量請輸入：用量小抄",
+  ].join("\n");
+}
+
 // === LINE 小工具：格式化單一區塊 ===
 function formatLineSection(title, items, emptyText) {
   if (items.length === 0) {
@@ -180,15 +188,6 @@ function formatLineSection(title, items, emptyText) {
   });
 
   return [title, "", ...lines].join("\n");
-}
-
-// === LINE 小工具：格式化完整清單 ===
-// === LINE 小工具：清單底部固定提示 ===
-function getLineCommandHintText() {
-  return [
-    "需要操作說明請輸入：攻略",
-    "想看用量請輸入：用量小抄",
-  ].join("\n");
 }
 
 // === LINE 小工具：格式化完整清單 ===
@@ -278,7 +277,7 @@ function getGuideText() {
     "📋 不努力時間有限管理局｜辦事攻略",
     "",
     "本局目前受理以下指令。",
-    "請注意：指令、數字、內容中間建議加空格，比較不容易出錯。",
+    "指令可以用正式格式，也可以用比較自然的講法。",
     "",
     "【查看】",
     "清單",
@@ -290,73 +289,61 @@ function getGuideText() {
     "用量小抄",
     "查看 LINE 訊息用量說明",
     "",
-    "【任務辦理】",
+    "【新增】",
     "新增任務 任務內容",
-    "意思：新增一個任務",
-    "例：新增任務 練習 LINE Bot",
+    "例：新增任務 練習 CSS",
+    "例：新增任務：練習 CSS",
+    "例：新增一個任務：練習 CSS",
     "",
+    "新增標準 完成標準內容",
+    "例：新增標準 可以說明今天學到什麼",
+    "例：新增一個標準：可以說明今天學到什麼",
+    "",
+    "【任務辦理】",
     "完成任務 數字",
-    "意思：幫指定編號的任務打勾",
-    "例：完成任務 1",
-    "例：完成任務 10",
+    "例：完成任務 3",
+    "例：完成任務3",
+    "例：完成第 3 個任務",
+    "例：完成第三個任務",
+    "例：已完成第三個任務",
     "",
     "取消任務 數字",
-    "意思：取消指定編號任務的打勾，也就是把它改回未完成",
-    "例：取消任務 1",
-    "例：取消任務 10",
+    "例：取消任務3",
+    "例：取消第三個任務",
     "",
     "修改任務 數字",
     "意思：修改指定編號任務的文字，本局會再問你新文字",
-    "例：修改任務 1",
-    "例：修改任務 10",
+    "例：修改任務3",
+    "例：修改第三個任務",
     "",
     "修改任務 數字 新文字",
     "意思：也可以一行直接修改完成",
     "例：修改任務 1 練習 LINE 指令 CRUD",
     "",
     "刪除任務 數字",
-    "意思：刪除指定編號的任務",
-    "例：刪除任務 1",
-    "例：刪除任務 10",
+    "例：刪除任務3",
+    "例：刪除第三個任務",
     "",
     "【完成標準辦理】",
-    "新增標準 完成標準內容",
-    "意思：新增一個完成標準",
-    "例：新增標準 可以用 LINE 新增任務",
-    "",
     "完成標準 數字",
-    "意思：幫指定編號的完成標準打勾",
-    "例：完成標準 1",
-    "例：完成標準 10",
+    "例：完成標準2",
+    "例：完成第二個標準",
     "",
     "取消標準 數字",
-    "意思：取消指定編號完成標準的打勾，也就是把它改回未完成",
-    "例：取消標準 1",
-    "例：取消標準 10",
+    "例：取消標準2",
+    "例：取消第二個標準",
     "",
     "修改標準 數字",
-    "意思：修改指定編號完成標準的文字，本局會再問你新文字",
-    "例：修改標準 1",
-    "例：修改標準 10",
-    "",
-    "修改標準 數字 新文字",
-    "意思：也可以一行直接修改完成",
-    "例：修改標準 1 可以從 LINE 修改完成標準",
+    "例：修改標準2",
+    "例：修改第二個標準",
     "",
     "刪除標準 數字",
-    "意思：刪除指定編號的完成標準",
-    "例：刪除標準 1",
-    "例：刪除標準 10",
+    "例：刪除標準2",
+    "例：刪除第二個標準",
     "",
     "【修改中止】",
     "取消修改",
     "意思：如果本局正在等你輸入新文字，可以取消這次修改",
-    "",
-    "⚠️ 格式提醒：",
-    "✅ 新增任務 練習 JavaScript",
-    "✅ 完成任務 10",
-    "✅ 修改標準 2",
-    "❌ 新增任務練習 JavaScript",
     "",
     "本局溫馨提醒：",
     "不要一開張又關門。",
@@ -458,7 +445,13 @@ async function handlePendingActionIfNeeded(sourceKey, userText) {
 
 // === LINE 小工具：處理新增 ===
 async function handleCreateCommand({ userText, command, type, label, example }) {
-  const title = userText.replace(new RegExp(`^${command}\\s*`), "").trim();
+  // 支援：
+  // 新增任務練習 CSS
+  // 新增任務 練習 CSS
+  // 新增任務：練習 CSS
+  // 新增一個任務：練習 CSS
+  let title = userText.replace(new RegExp(`^${command}\\s*`), "").trim();
+  title = title.replace(/^[：:]/, "").trim();
 
   if (!title) {
     return [
@@ -467,7 +460,7 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
       `正確格式：${command} ${label}內容`,
       `例：${command} ${example}`,
       "",
-      "提醒：指令和內容中間建議加空格。",
+      "提醒：指令和內容中間建議加空格，或用冒號也可以。",
     ].join("\n");
   }
 
@@ -581,6 +574,145 @@ async function handleEditCommand({
   ].join("\n");
 }
 
+// === LINE 小工具：把中文數字轉成阿拉伯數字 ===
+function parseFlexibleNumber(numberText) {
+  const text = String(numberText || "").trim().replace(/兩/g, "二");
+
+  if (/^\d+$/.test(text)) {
+    return Number(text);
+  }
+
+  const digitMap = {
+    零: 0,
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+  };
+
+  if (text.length === 1 && digitMap[text] !== undefined) {
+    return digitMap[text];
+  }
+
+  // 支援：十、十一、二十、二十三
+  if (text.includes("十")) {
+    const parts = text.split("十");
+    const tenPart = parts[0];
+    const onePart = parts[1];
+
+    const tens = tenPart === "" ? 1 : digitMap[tenPart];
+    const ones = onePart === "" ? 0 : digitMap[onePart];
+
+    if (tens === undefined || ones === undefined) {
+      return null;
+    }
+
+    return tens * 10 + ones;
+  }
+
+  return null;
+}
+
+// === LINE 小工具：把自然語句解析成操作指令 ===
+function buildLineOperationCommand(actionText, targetText, numberText, newTitle) {
+  const number = parseFlexibleNumber(numberText);
+
+  if (!Number.isInteger(number) || number <= 0) {
+    return {
+      error: "請輸入正確的編號，例如：完成第 3 個任務",
+    };
+  }
+
+  const isTask = targetText.includes("任務");
+
+  let action = "";
+
+  if (actionText === "完成" || actionText === "已完成") {
+    action = "done";
+  }
+
+  if (actionText === "取消") {
+    action = "cancel";
+  }
+
+  if (actionText === "修改") {
+    action = "edit";
+  }
+
+  if (actionText === "刪除") {
+    action = "delete";
+  }
+
+  return {
+    action,
+    numberText: String(number),
+    newTitle,
+    type: isTask ? "task" : "standard",
+    label: isTask ? "任務" : "完成標準",
+  };
+}
+
+// === LINE 小工具：解析完成 / 取消 / 修改 / 刪除指令 ===
+function parseLineOperationCommand(userText) {
+  // 格式一：完成任務3、完成任務 3、修改標準2 新文字
+  let match = userText.match(
+    /^(完成|已完成|取消|修改|刪除)\s*(任務|完成標準|標準)\s*(\d+|[零一二三四五六七八九十兩]+)(?:\s+(.+))?$/
+  );
+
+  if (match) {
+    return buildLineOperationCommand(match[1], match[2], match[3], match[4]);
+  }
+
+  // 格式二：完成第3個任務、已完成第三個任務、刪除第 2 個標準
+  match = userText.match(
+    /^(完成|已完成|取消|修改|刪除)\s*第?\s*(\d+|[零一二三四五六七八九十兩]+)\s*個?\s*(任務|完成標準|標準)(?:\s+(.+))?$/
+  );
+
+  if (match) {
+    return buildLineOperationCommand(match[1], match[3], match[2], match[4]);
+  }
+
+  return null;
+}
+
+// === LINE 小工具：格式錯誤提醒 ===
+function getFormatReminderText() {
+  return [
+    "本局看得出你想辦事，但格式有點歪，所以沒有處理任何資料。",
+    "",
+    "可以這樣輸入：",
+    "完成任務3",
+    "完成第 3 個任務",
+    "完成第三個任務",
+    "已完成第三個任務",
+    "",
+    "取消任務3",
+    "修改任務3",
+    "刪除任務3",
+    "",
+    "完成標準2",
+    "取消第二個標準",
+    "修改第 2 個標準",
+    "刪除第二個標準",
+    "",
+    getLineCommandHintText(),
+  ].join("\n");
+}
+
+// === LINE 小工具：未知文字提醒 ===
+function getUnknownCommandText() {
+  return [
+    "本局看不懂這個指令，所以沒有處理任何資料。",
+    "",
+    getLineCommandHintText(),
+  ].join("\n");
+}
+
 // === LINE 小工具：處理文字指令 ===
 async function handleLineTextCommand({ sourceKey, userText }) {
   const pendingReply = await handlePendingActionIfNeeded(sourceKey, userText);
@@ -612,7 +744,17 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     return formatTaskBoardForLine(board);
   }
 
-  // === 新增類 ===
+  // === 新增類：任務 ===
+  if (userText.startsWith("新增一個任務")) {
+    return handleCreateCommand({
+      userText,
+      command: "新增一個任務",
+      type: "task",
+      label: "任務",
+      example: "練習 LINE Bot",
+    });
+  }
+
   if (userText.startsWith("新增任務")) {
     return handleCreateCommand({
       userText,
@@ -620,6 +762,27 @@ async function handleLineTextCommand({ sourceKey, userText }) {
       type: "task",
       label: "任務",
       example: "練習 LINE Bot",
+    });
+  }
+
+  // === 新增類：完成標準 ===
+  if (userText.startsWith("新增一個完成標準")) {
+    return handleCreateCommand({
+      userText,
+      command: "新增一個完成標準",
+      type: "standard",
+      label: "完成標準",
+      example: "可以用 LINE 新增任務",
+    });
+  }
+
+  if (userText.startsWith("新增一個標準")) {
+    return handleCreateCommand({
+      userText,
+      command: "新增一個標準",
+      type: "standard",
+      label: "完成標準",
+      example: "可以用 LINE 新增任務",
     });
   }
 
@@ -633,149 +796,65 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     });
   }
 
-  // === 完成 / 取消任務 ===
-  let match = userText.match(/^完成任務\s*(\d+)$/);
+  // === 完成 / 取消 / 修改 / 刪除：支援自然語句 ===
+  const operation = parseLineOperationCommand(userText);
 
-  if (match) {
-    return handleDoneCommand({
-      numberText: match[1],
-      type: "task",
-      label: "任務",
-      done: true,
-    });
+  if (operation) {
+    if (operation.error) {
+      return operation.error;
+    }
+
+    if (operation.action === "done") {
+      return handleDoneCommand({
+        numberText: operation.numberText,
+        type: operation.type,
+        label: operation.label,
+        done: true,
+      });
+    }
+
+    if (operation.action === "cancel") {
+      return handleDoneCommand({
+        numberText: operation.numberText,
+        type: operation.type,
+        label: operation.label,
+        done: false,
+      });
+    }
+
+    if (operation.action === "edit") {
+      return handleEditCommand({
+        sourceKey,
+        numberText: operation.numberText,
+        newTitle: operation.newTitle,
+        type: operation.type,
+        label: operation.label,
+      });
+    }
+
+    if (operation.action === "delete") {
+      return handleDeleteCommand({
+        numberText: operation.numberText,
+        type: operation.type,
+        label: operation.label,
+      });
+    }
   }
 
-  match = userText.match(/^取消任務\s*(\d+)$/);
-
-  if (match) {
-    return handleDoneCommand({
-      numberText: match[1],
-      type: "task",
-      label: "任務",
-      done: false,
-    });
-  }
-
-  // === 完成 / 取消標準 ===
-  match = userText.match(/^完成標準\s*(\d+)$/);
-
-  if (match) {
-    return handleDoneCommand({
-      numberText: match[1],
-      type: "standard",
-      label: "完成標準",
-      done: true,
-    });
-  }
-
-  match = userText.match(/^取消標準\s*(\d+)$/);
-
-  if (match) {
-    return handleDoneCommand({
-      numberText: match[1],
-      type: "standard",
-      label: "完成標準",
-      done: false,
-    });
-  }
-
-  // === 修改任務 ===
-  match = userText.match(/^修改任務\s*(\d+)(?:\s+(.+))?$/);
-
-  if (match) {
-    return handleEditCommand({
-      sourceKey,
-      numberText: match[1],
-      newTitle: match[2],
-      type: "task",
-      label: "任務",
-    });
-  }
-
-  // === 修改標準 ===
-  match = userText.match(/^修改標準\s*(\d+)(?:\s+(.+))?$/);
-
-  if (match) {
-    return handleEditCommand({
-      sourceKey,
-      numberText: match[1],
-      newTitle: match[2],
-      type: "standard",
-      label: "完成標準",
-    });
-  }
-
-  // === 刪除任務 ===
-  match = userText.match(/^刪除任務\s*(\d+)$/);
-
-  if (match) {
-    return handleDeleteCommand({
-      numberText: match[1],
-      type: "task",
-      label: "任務",
-    });
-  }
-
-  // === 刪除標準 ===
-  match = userText.match(/^刪除標準\s*(\d+)$/);
-
-  if (match) {
-    return handleDeleteCommand({
-      numberText: match[1],
-      type: "standard",
-      label: "完成標準",
-    });
-  }
-
-  // === 格式提醒 ===
+  // === 格式提醒：看起來想操作，但格式不完整或看不懂 ===
   if (
     userText.startsWith("完成") ||
+    userText.startsWith("已完成") ||
     userText.startsWith("取消") ||
     userText.startsWith("修改") ||
-    userText.startsWith("刪除")
+    userText.startsWith("刪除") ||
+    userText.startsWith("新增")
   ) {
-    return [
-      "本局看得出你想辦事，但格式有點歪。",
-      "",
-      "請參考：",
-      "完成任務 數字",
-      "取消任務 數字",
-      "修改任務 數字",
-      "刪除任務 數字",
-      "",
-      "完成標準 數字",
-      "取消標準 數字",
-      "修改標準 數字",
-      "刪除標準 數字",
-      "",
-      "例：",
-      "完成任務 1",
-      "完成任務 10",
-      "修改標準 2",
-      "",
-      "也可以輸入：攻略",
-    ].join("\n");
+    return getFormatReminderText();
   }
 
-  // === 其他文字 ===
-  return [
-    `管理局收到：${userText}`,
-    "",
-    "目前可用指令：",
-    "清單",
-    "攻略",
-    "用量小抄",
-    "新增任務 任務內容",
-    "新增標準 完成標準內容",
-    "完成任務 數字",
-    "取消任務 數字",
-    "修改任務 數字",
-    "刪除任務 數字",
-    "完成標準 數字",
-    "取消標準 數字",
-    "修改標準 數字",
-    "刪除標準 數字",
-  ].join("\n");
+  // === 其他文字：不要回「管理局收到」，避免誤會已經處理 ===
+  return getUnknownCommandText();
 }
 
 // === 首頁測試 ===
