@@ -183,6 +183,15 @@ function formatLineSection(title, items, emptyText) {
 }
 
 // === LINE 小工具：格式化完整清單 ===
+// === LINE 小工具：清單底部固定提示 ===
+function getLineCommandHintText() {
+  return [
+    "需要操作說明請輸入：攻略",
+    "想看用量請輸入：用量小抄",
+  ].join("\n");
+}
+
+// === LINE 小工具：格式化完整清單 ===
 function formatTaskBoardForLine({ tasks, standards }) {
   const taskSection = formatLineSection(
     "本週任務：",
@@ -203,19 +212,7 @@ function formatTaskBoardForLine({ tasks, standards }) {
     "",
     standardSection,
     "",
-    "可用指令：",
-    "攻略",
-    "新增任務 任務內容",
-    "新增標準 完成標準內容",
-    "完成任務 數字",
-    "取消任務 數字",
-    "修改任務 數字",
-    "刪除任務 數字",
-    "完成標準 數字",
-    "取消標準 數字",
-    "修改標準 數字",
-    "刪除標準 數字",
-    "用量小抄",
+    getLineCommandHintText(),
   ].join("\n");
 }
 
