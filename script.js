@@ -107,6 +107,13 @@ window.fetch = async function (input, options = {}) {
 // 注意：這裡只放 Render 後端主網址，不要加 /items
 const API_BASE_URL = "https://no-effort-time-bureau.onrender.com";
 
+// === 分類與難度設定 ===
+const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
+const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
+
+const DEFAULT_CATEGORY = "程式學習";
+const DEFAULT_DIFFICULTY = "簡單";
+
 // === 前端狀態 ===
 let items = [];
 
@@ -118,6 +125,8 @@ const taskProgress = document.querySelector("#taskProgress");
 const standardProgress = document.querySelector("#standardProgress");
 
 const taskInput = document.querySelector("#taskInput");
+const taskCategory = document.querySelector("#taskCategory");
+const taskDifficulty = document.querySelector("#taskDifficulty");
 const addTaskBtn = document.querySelector("#addTaskBtn");
 
 const standardInput = document.querySelector("#standardInput");
@@ -127,9 +136,48 @@ const addStandardBtn = document.querySelector("#addStandardBtn");
 const refreshBtn = document.getElementById("refreshBtn");
 
 // === 資料工具函式 ===
+function normalizeCategory(value) {
+  const category = String(value || "").trim();
+
+  if (CATEGORY_OPTIONS.includes(category)) {
+    return category;
+  }
+
+  return DEFAULT_CATEGORY;
+}
+
+function normalizeDifficulty(value) {
+  const difficulty = String(value || "").trim();
+
+  if (DIFFICULTY_OPTIONS.includes(difficulty)) {
+    return difficulty;
+  }
+
+  return DEFAULT_DIFFICULTY;
+}
+
+function normalizeItem(item) {
+  return {
+    ...item,
+    category: normalizeCategory(item.category),
+    difficulty: normalizeDifficulty(item.difficulty),
+  };
+}
+
 function getItemsByType(type) {
   return items.filter(function (item) {
     return item.type === type;
+  });
+}
+
+function getTasksSortedByCategory() {
+  const tasks = getItemsByType("task");
+
+  return [...tasks].sort(function (a, b) {
+    const categoryA = normalizeCategory(a.category);
+    const categoryB = normalizeCategory(b.category);
+
+    return CATEGORY_OPTIONS.indexOf(categoryA) - CATEGORY_OPTIONS.indexOf(categoryB);
   });
 }
 
@@ -146,33 +194,37 @@ function findItemIndexById(id) {
 }
 
 function replaceItem(updatedItem) {
+  const normalizedUpdatedItem = normalizeItem(updatedItem);
+
   items = items.map(function (item) {
-    if (item.id === updatedItem.id) {
-      return updatedItem;
+    if (item.id === normalizedUpdatedItem.id) {
+      return normalizedUpdatedItem;
     }
 
     return item;
   });
 }
 
-// Step 60：用指定 id 替換成後端真正回傳的 item
+// 用指定 id 替換成後端真正回傳的 item
 function replaceItemById(targetId, newItem) {
+  const normalizedNewItem = normalizeItem(newItem);
+
   items = items.map(function (item) {
     if (item.id === targetId) {
-      return newItem;
+      return normalizedNewItem;
     }
 
     return item;
   });
 }
 
-// Step 60：失敗時把刪掉的 item 放回原本位置
+// 失敗時把刪掉的 item 放回原本位置
 function insertItemAtIndex(item, index) {
   const safeIndex = Math.max(0, index);
 
   items = [
     ...items.slice(0, safeIndex),
-    item,
+    normalizeItem(item),
     ...items.slice(safeIndex),
   ];
 }
@@ -186,17 +238,76 @@ function createEmptyMessage(text) {
   return emptyItem;
 }
 
-function createCheckItem(item) {
+function createCategoryHeading(category) {
+  const heading = document.createElement("li");
+  heading.className = "category-heading";
+  heading.textContent = `【${category}】`;
+
+  return heading;
+}
+
+function getDifficultyClass(difficulty) {
+  if (difficulty === "簡單") return "easy";
+  if (difficulty === "適中") return "medium";
+  if (difficulty === "困難") return "hard";
+  return "";
+}
+
+function createCheckItem(item, displayNumber) {
+  const normalizedItem = normalizeItem(item);
+
   const itemElement = document.createElement("li");
-  itemElement.className = item.done ? "task-item is-done" : "task-item";
+  itemElement.className = normalizedItem.done
+    ? "task-item is-done"
+    : "task-item";
 
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
-  checkbox.checked = item.done;
+  checkbox.checked = normalizedItem.done;
+
+  const content = document.createElement("div");
+  content.className = "item-content";
+
+  const topLine = document.createElement("div");
+  topLine.className = "item-topline";
+
+  const number = document.createElement("span");
+  number.className = "item-number";
+  number.textContent = displayNumber ? String(displayNumber) : "";
 
   const title = document.createElement("span");
   title.className = "item-title";
-  title.textContent = item.title;
+  title.textContent = normalizedItem.title;
+
+  const meta = document.createElement("div");
+  meta.className = "item-meta";
+
+  // 任務才顯示分類與難度，完成標準先保持簡潔
+  if (normalizedItem.type === "task") {
+    const categoryChip = document.createElement("span");
+    categoryChip.className = "chip chip-category";
+    categoryChip.textContent = normalizedItem.category;
+
+    const difficultyChip = document.createElement("span");
+    difficultyChip.className =
+      "chip chip-difficulty " + getDifficultyClass(normalizedItem.difficulty);
+    difficultyChip.textContent = normalizedItem.difficulty;
+
+    meta.appendChild(categoryChip);
+    meta.appendChild(difficultyChip);
+  }
+
+  topLine.appendChild(number);
+
+  if (normalizedItem.type === "task") {
+    topLine.appendChild(meta);
+  }
+
+  content.appendChild(topLine);
+  content.appendChild(title);
+
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
 
   const editBtn = document.createElement("button");
   editBtn.className = "text-btn";
@@ -209,13 +320,13 @@ function createCheckItem(item) {
   deleteBtn.textContent = "刪除";
 
   checkbox.addEventListener("change", async function () {
-    await updateItem(item.id, {
+    await updateItem(normalizedItem.id, {
       done: checkbox.checked,
     });
   });
 
   editBtn.addEventListener("click", async function () {
-    const newTitle = prompt("請輸入新的內容：", item.title);
+    const newTitle = prompt("請輸入新的內容：", normalizedItem.title);
 
     if (newTitle === null) {
       return;
@@ -228,16 +339,16 @@ function createCheckItem(item) {
       return;
     }
 
-    await updateItem(item.id, {
+    await updateItem(normalizedItem.id, {
       title: trimmedTitle,
     });
   });
 
   deleteBtn.addEventListener("click", async function () {
     const message =
-      item.type === "task"
+      normalizedItem.type === "task"
         ? "確定要刪除這項本週任務嗎？"
-        : "確定要刪除這項完成標準嗎？";
+        : "確定要刪除這項本週完成標準嗎？";
 
     const shouldDelete = confirm(message);
 
@@ -245,19 +356,21 @@ function createCheckItem(item) {
       return;
     }
 
-    await deleteItem(item.id);
+    await deleteItem(normalizedItem.id);
   });
 
+  actions.appendChild(editBtn);
+  actions.appendChild(deleteBtn);
+
   itemElement.appendChild(checkbox);
-  itemElement.appendChild(title);
-  itemElement.appendChild(editBtn);
-  itemElement.appendChild(deleteBtn);
+  itemElement.appendChild(content);
+  itemElement.appendChild(actions);
 
   return itemElement;
 }
 
 function renderTasks() {
-  const tasks = getItemsByType("task");
+  const tasks = getTasksSortedByCategory();
 
   taskList.innerHTML = "";
 
@@ -268,8 +381,23 @@ function renderTasks() {
     return;
   }
 
-  tasks.forEach(function (task) {
-    taskList.appendChild(createCheckItem(task));
+  let displayNumber = 1;
+
+  CATEGORY_OPTIONS.forEach(function (category) {
+    const categoryTasks = tasks.filter(function (task) {
+      return normalizeCategory(task.category) === category;
+    });
+
+    if (categoryTasks.length === 0) {
+      return;
+    }
+
+    taskList.appendChild(createCategoryHeading(category));
+
+    categoryTasks.forEach(function (task) {
+      taskList.appendChild(createCheckItem(task, displayNumber));
+      displayNumber += 1;
+    });
   });
 }
 
@@ -280,13 +408,13 @@ function renderStandards() {
 
   if (standards.length === 0) {
     standardList.appendChild(
-      createEmptyMessage("目前還沒有完成標準，小心變成模糊努力。")
+      createEmptyMessage("目前還沒有本週完成標準，小心變成模糊努力。")
     );
     return;
   }
 
-  standards.forEach(function (standard) {
-    standardList.appendChild(createCheckItem(standard));
+  standards.forEach(function (standard, index) {
+    standardList.appendChild(createCheckItem(standard, index + 1));
   });
 }
 
@@ -323,7 +451,7 @@ async function loadItems() {
 
     const data = await response.json();
 
-    items = data;
+    items = data.map(normalizeItem);
 
     renderAll();
   } catch (error) {
@@ -358,8 +486,8 @@ async function refreshItems() {
   }
 }
 
-// Step 60：新增改成樂觀更新
-async function addItem(type, inputElement) {
+// === 新增資料：樂觀更新 ===
+async function addItem(type, inputElement, options = {}) {
   const title = inputElement.value.trim();
 
   if (title === "") {
@@ -368,11 +496,16 @@ async function addItem(type, inputElement) {
 
   const now = new Date().toISOString();
 
+  const category = normalizeCategory(options.category);
+  const difficulty = normalizeDifficulty(options.difficulty);
+
   // 先做一筆暫時資料，讓畫面立刻出現
   const tempItem = {
     id: "temp-" + Date.now(),
-    type: type,
-    title: title,
+    type,
+    title,
+    category,
+    difficulty,
     done: false,
     weekStart: "",
     weekEnd: "",
@@ -391,8 +524,10 @@ async function addItem(type, inputElement) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        type: type,
-        title: title,
+        type,
+        title,
+        category,
+        difficulty,
       }),
     });
 
@@ -420,7 +555,7 @@ async function addItem(type, inputElement) {
   }
 }
 
-// Step 60：更新改成樂觀更新
+// === 更新資料：樂觀更新 ===
 async function updateItem(id, updates) {
   const previousItem = findItemById(id);
 
@@ -428,11 +563,11 @@ async function updateItem(id, updates) {
     return;
   }
 
-  const optimisticItem = {
+  const optimisticItem = normalizeItem({
     ...previousItem,
     ...updates,
     updatedAt: new Date().toISOString(),
-  };
+  });
 
   // 先更新畫面
   replaceItem(optimisticItem);
@@ -467,7 +602,7 @@ async function updateItem(id, updates) {
   }
 }
 
-// Step 60：刪除改成樂觀更新
+// === 刪除資料：樂觀更新 ===
 async function deleteItem(id) {
   const previousItem = findItemById(id);
   const previousIndex = findItemIndexById(id);
@@ -505,11 +640,17 @@ async function deleteItem(id) {
 }
 
 function addTask() {
-  addItem("task", taskInput);
+  addItem("task", taskInput, {
+    category: taskCategory.value,
+    difficulty: taskDifficulty.value,
+  });
 }
 
 function addStandard() {
-  addItem("standard", standardInput);
+  addItem("standard", standardInput, {
+    category: DEFAULT_CATEGORY,
+    difficulty: DEFAULT_DIFFICULTY,
+  });
 }
 
 // === 初始化 ===

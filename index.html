@@ -1,73 +1,116 @@
 <!DOCTYPE html>
-<html lang="Zh-TW">
+<html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>不努力時間有限管理局</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="script.js" defer></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>不努力時間有限管理局</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
 </head>
+
 <body>
-    <main class="app">
-        <header class="hero">    
-        <p class="eyebrow">本週營業中</p>
-        <h1>不努力時間有限管理局</h1>
-        <p class="quote">本週金句：不努力那就躺平吧!</p>
-        <button id="refreshBtn" type="button">
+  <main class="app">
+    <header class="hero">
+      <p class="eyebrow">本週營業中</p>
+
+      <h1>不努力時間有限管理局</h1>
+
+      <p class="quote">本週金句：不要一開張又關門</p>
+
+      <button id="refreshBtn" class="refresh-btn" type="button">
         重新整理資料
-    </button>
-        <div class="week-range">
+      </button>
+
+      <div class="week-range">
         <span>本週期間</span>
         <time datetime="2026-05-04">2026/05/04</time>
         <span>～</span>
         <time datetime="2026-05-10">2026/05/10</time>
-    </div>
-        </header>
+      </div>
+    </header>
 
-        <section class="progress-card">
-            <h2>本週進度</h2>
+    <section class="progress-card">
+      <div class="section-header">
+        <h2>本週進度</h2>
+        <p class="section-note">管理局只看本週，不翻舊帳。</p>
+      </div>
 
-            <div class="progress-list">
-                <p>
-                <span>本週任務</span>
-                <strong id="taskProgress">1 / 2</strong>
-                </p>
+      <div class="progress-list">
+        <p>
+          <span>本週任務</span>
+          <strong id="taskProgress">0 / 0</strong>
+        </p>
 
-                <p>
-                <span>完成標準</span>
-                <strong id="standardProgress">0 / 2</strong>
-                </p>
-            </div>
-        </section>
-
-        <section class="task-section">
-            <div class="section-header">
-                <h2>本週任務</h2>
-                </div>
-
-                <div class="add-form">
-                <input id="taskInput" type="text" placeholder="輸入本週任務，例如：練習 CSS Flex" />
-                <button id="addTaskBtn" class="add-btn" type="button">新增</button>
-                </div>
-
-    <ul class="item-list" id="taskList">
-  <!-- 之後本週任務會由 JavaScript 自動產生 -->
-</ul>
+        <p>
+          <span>本週完成標準</span>
+          <strong id="standardProgress">0 / 0</strong>
+        </p>
+      </div>
     </section>
-        <section class="standard-section">
-            <div class="section-header">
-                <h2>完成標準</h2>
-  </div>
 
-  <div class="add-form">
-    <input id="standardInput" type="text" placeholder="輸入完成標準，例如：可以說明今天學到什麼" />
-    <button id="addStandardBtn" class="add-btn" type="button">新增</button>
-  </div>
+    <section class="task-section">
+      <div class="section-header">
+        <div>
+          <h2>本週任務</h2>
+          <p class="section-note">可以亂序新增，管理局會自動分類。</p>
+        </div>
+      </div>
 
-  <ul class="item-list" id="standardList">
-    <!-- 之後完成標準會由 JavaScript 自動產生 -->
-  </ul>
-</section>
-</main>
+      <div class="add-form task-add-form">
+        <input
+          id="taskInput"
+          type="text"
+          placeholder="輸入本週任務，例如：練習 CSS Flex"
+        />
+
+        <select id="taskCategory" aria-label="任務分類">
+          <option value="程式學習">程式學習</option>
+          <option value="身心穩定">身心穩定</option>
+          <option value="興趣探索">興趣探索</option>
+        </select>
+
+        <select id="taskDifficulty" aria-label="任務難度">
+          <option value="簡單">簡單</option>
+          <option value="適中">適中</option>
+          <option value="困難">困難</option>
+        </select>
+
+        <button id="addTaskBtn" class="add-btn" type="button">
+          新增
+        </button>
+      </div>
+
+      <ul class="item-list" id="taskList">
+        <!-- 本週任務會由 JavaScript 自動產生 -->
+      </ul>
+    </section>
+
+    <section class="standard-section">
+      <div class="section-header">
+        <div>
+          <h2>本週完成標準</h2>
+          <p class="section-note">
+            這不是今天做了什麼，而是判斷整週是否達標。
+          </p>
+        </div>
+      </div>
+
+      <div class="add-form">
+        <input
+          id="standardInput"
+          type="text"
+          placeholder="輸入本週完成標準，例如：本週至少完成 3 個程式學習任務"
+        />
+
+        <button id="addStandardBtn" class="add-btn" type="button">
+          新增
+        </button>
+      </div>
+
+      <ul class="item-list" id="standardList">
+        <!-- 本週完成標準會由 JavaScript 自動產生 -->
+      </ul>
+    </section>
+  </main>
 </body>
 </html>
