@@ -43,22 +43,14 @@ body {
   min-height: 100vh;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
-  background:
-    radial-gradient(circle at 10% 0%, rgba(184, 95, 75, 0.12), transparent 28%),
-    radial-gradient(circle at 95% 10%, rgba(143, 167, 131, 0.18), transparent 26%),
-    linear-gradient(180deg, #f9f4eb 0%, var(--bg) 100%);
+
+  /* 改成純色紙張底，減少眼睛負擔 */
+  background: #f4efe6;
 }
 
+/* 先關掉紙紋格線，避免背景太浮、看久不舒服 */
 body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.34;
-  background-image:
-    linear-gradient(rgba(80, 67, 55, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(80, 67, 55, 0.025) 1px, transparent 1px);
-  background-size: 22px 22px;
+  content: none;
 }
 
 button,
