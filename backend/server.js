@@ -17,6 +17,12 @@ const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const pendingActions = new Map();
 const PENDING_ACTION_TTL_MS = 10 * 60 * 1000; // 10 分鐘後視為過期
 
+const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
+const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
+
+const DEFAULT_CATEGORY = "程式學習";
+const DEFAULT_DIFFICULTY = "簡單";
+
 if (!GOOGLE_SHEETS_API_URL) {
   throw new Error(
     "缺少環境變數 GOOGLE_SHEETS_API_URL，請檢查 backend/.env 或 Render 環境變數"
@@ -31,6 +37,77 @@ if (!GOOGLE_SHEETS_API_SECRET) {
 
 app.use(cors());
 app.use(express.json());
+
+// === 共用工具：分類正規化 ===
+function normalizeCategory(value) {
+  const category = String(value || "").trim();
+
+  if (!category) {
+    return DEFAULT_CATEGORY;
+  }
+
+  if (!CATEGORY_OPTIONS.includes(category)) {
+    throw new Error("category 只能是：" + CATEGORY_OPTIONS.join("、"));
+  }
+
+  return category;
+}
+
+// === 共用工具：分類正規化 ===
+function normalizeCategory(value) {
+  const category = String(value || "").trim();
+
+  if (!category) {
+    return DEFAULT_CATEGORY;
+  }
+
+  if (!CATEGORY_OPTIONS.includes(category)) {
+    throw new Error("category 只能是：" + CATEGORY_OPTIONS.join("、"));
+  }
+
+  return category;
+}
+
+// === 共用工具：難度正規化 ===
+function normalizeDifficulty(value) {
+  const difficulty = String(value || "").trim();
+
+  if (!difficulty) {
+    return DEFAULT_DIFFICULTY;
+  }
+
+  if (!DIFFICULTY_OPTIONS.includes(difficulty)) {
+    throw new Error("difficulty 只能是：" + DIFFICULTY_OPTIONS.join("、"));
+  }
+
+  return difficulty;
+}
+
+// === 共用工具：整理 item，避免舊資料缺欄位時畫面壞掉 ===
+function normalizeItem(item) {
+  return {
+    ...item,
+    category: normalizeCategory(item.category),
+    difficulty: normalizeDifficulty(item.difficulty),
+  };
+}
+
+// === 共用工具：任務排序，讓 LINE 清單和編號邏輯一致 ===
+function sortTasksByCategory(tasks) {
+  return [...tasks].sort(function (a, b) {
+    const categoryA = normalizeCategory(a.category);
+    const categoryB = normalizeCategory(b.category);
+
+    const indexA = CATEGORY_OPTIONS.indexOf(categoryA);
+    const indexB = CATEGORY_OPTIONS.indexOf(categoryB);
+
+    if (indexA !== indexB) {
+      return indexA - indexB;
+    }
+
+    return 0;
+  });
+}
 
 // === 產生帶 secret 的 Google Sheets API URL，用於 GET 讀取 ===
 function buildGoogleSheetsGetUrl() {
@@ -53,11 +130,16 @@ async function fetchItemsFromGoogleSheets() {
     throw new Error(data.message || "Google Apps Script 回傳失敗");
   }
 
-  return data.items;
+  return data.items.map(normalizeItem);
 }
 
 // === 共用函式：新增 item 到 Google Sheets ===
-async function createItemToGoogleSheets({ type, title }) {
+async function createItemToGoogleSheets({
+  type,
+  title,
+  category,
+  difficulty,
+}) {
   const response = await fetch(GOOGLE_SHEETS_API_URL, {
     method: "POST",
     headers: {
@@ -69,6 +151,8 @@ async function createItemToGoogleSheets({ type, title }) {
       item: {
         type,
         title,
+        category: normalizeCategory(category),
+        difficulty: normalizeDifficulty(difficulty),
         done: false,
       },
     }),
@@ -84,11 +168,21 @@ async function createItemToGoogleSheets({ type, title }) {
     throw new Error(data.message || "Google Apps Script 新增資料失敗");
   }
 
-  return data.item;
+  return normalizeItem(data.item);
 }
 
 // === 共用函式：更新 item 到 Google Sheets ===
 async function updateItemToGoogleSheets(id, updates) {
+  const safeUpdates = { ...updates };
+
+  if (safeUpdates.category !== undefined) {
+    safeUpdates.category = normalizeCategory(safeUpdates.category);
+  }
+
+  if (safeUpdates.difficulty !== undefined) {
+    safeUpdates.difficulty = normalizeDifficulty(safeUpdates.difficulty);
+  }
+
   const response = await fetch(GOOGLE_SHEETS_API_URL, {
     method: "POST",
     headers: {
@@ -98,7 +192,7 @@ async function updateItemToGoogleSheets(id, updates) {
       secret: GOOGLE_SHEETS_API_SECRET,
       action: "update",
       id,
-      updates,
+      updates: safeUpdates,
     }),
   });
 
@@ -112,7 +206,7 @@ async function updateItemToGoogleSheets(id, updates) {
     throw new Error(data.message || "Google Apps Script 更新資料失敗");
   }
 
-  return data.item;
+  return normalizeItem(data.item);
 }
 
 // === 共用函式：刪除 item from Google Sheets ===
@@ -139,7 +233,7 @@ async function deleteItemFromGoogleSheets(id) {
     throw new Error(data.message || "Google Apps Script 刪除資料失敗");
   }
 
-  return data.item;
+  return normalizeItem(data.item);
 }
 
 // === LINE 小工具：取得使用者識別 key，用來記住修改狀態 ===
@@ -155,16 +249,28 @@ function getLineSourceKey(event) {
 // === LINE 小工具：取得某一類資料 ===
 async function getItemsByType(type) {
   const items = await fetchItemsFromGoogleSheets();
-  return items.filter((item) => item.type === type);
+  const filteredItems = items.filter((item) => item.type === type);
+
+  if (type === "task") {
+    return sortTasksByCategory(filteredItems);
+  }
+
+  return filteredItems;
 }
 
 // === LINE 小工具：取得任務與完成標準 ===
 async function getTaskBoardForLine() {
   const items = await fetchItemsFromGoogleSheets();
 
+  const tasks = sortTasksByCategory(
+    items.filter((item) => item.type === "task")
+  );
+
+  const standards = items.filter((item) => item.type === "standard");
+
   return {
-    tasks: items.filter((item) => item.type === "task"),
-    standards: items.filter((item) => item.type === "standard"),
+    tasks,
+    standards,
   };
 }
 
@@ -176,7 +282,42 @@ function getLineCommandHintText() {
   ].join("\n");
 }
 
-// === LINE 小工具：格式化單一區塊 ===
+// === LINE 小工具：格式化任務分類區塊，任務編號維持連續 ===
+function formatTaskSectionByCategory(tasks) {
+  if (tasks.length === 0) {
+    return ["本週任務：", "", "目前沒有任務。"].join("\n");
+  }
+
+  const lines = ["本週任務：", ""];
+
+  let taskNumber = 1;
+
+  CATEGORY_OPTIONS.forEach(function (category) {
+    const categoryTasks = tasks.filter(function (task) {
+      return normalizeCategory(task.category) === category;
+    });
+
+    if (categoryTasks.length === 0) {
+      return;
+    }
+
+    lines.push(`【${category}】`);
+
+    categoryTasks.forEach(function (task) {
+      const checkbox = task.done ? "☑" : "☐";
+      const difficulty = normalizeDifficulty(task.difficulty);
+
+      lines.push(`${taskNumber}. ${checkbox} ${task.title}（${difficulty}）`);
+      taskNumber += 1;
+    });
+
+    lines.push("");
+  });
+
+  return lines.join("\n").trim();
+}
+
+// === LINE 小工具：格式化完成標準區塊 ===
 function formatLineSection(title, items, emptyText) {
   if (items.length === 0) {
     return [title, "", emptyText].join("\n");
@@ -192,16 +333,12 @@ function formatLineSection(title, items, emptyText) {
 
 // === LINE 小工具：格式化完整清單 ===
 function formatTaskBoardForLine({ tasks, standards }) {
-  const taskSection = formatLineSection(
-    "本週任務：",
-    tasks,
-    "目前沒有任務。"
-  );
+  const taskSection = formatTaskSectionByCategory(tasks);
 
   const standardSection = formatLineSection(
-    "完成標準：",
+    "本週完成標準：",
     standards,
-    "目前沒有完成標準。"
+    "目前沒有本週完成標準。"
   );
 
   return [
@@ -281,7 +418,7 @@ function getGuideText() {
     "",
     "【查看】",
     "清單",
-    "查看本週任務與完成標準",
+    "查看本週任務與本週完成標準",
     "",
     "攻略",
     "查看這份辦事攻略",
@@ -289,19 +426,35 @@ function getGuideText() {
     "用量小抄",
     "查看 LINE 訊息用量說明",
     "",
-    "【新增】",
+    "【分類】",
+    "目前分類只有三種：",
+    "程式學習",
+    "身心穩定",
+    "興趣探索",
+    "",
+    "【難度】",
+    "目前難度只有三種：",
+    "簡單",
+    "適中",
+    "困難",
+    "",
+    "【新增任務】",
     "新增任務 任務內容",
     "例：新增任務 練習 CSS",
-    "例：新增任務：練習 CSS",
-    "例：新增一個任務：練習 CSS",
     "",
-    "新增標準 完成標準內容",
-    "例：新增標準 可以說明今天學到什麼",
-    "例：新增一個標準：可以說明今天學到什麼",
+    "也可以帶分類和難度：",
+    "新增任務 任務內容 / 分類 / 難度",
+    "例：新增任務 練習 CSS Flex / 程式學習 / 適中",
+    "例：新增任務 散步 10 分鐘 / 身心穩定 / 簡單",
+    "例：新增任務 找一個喜歡的網站版型 / 興趣探索 / 簡單",
+    "",
+    "【新增本週完成標準】",
+    "完成標準不是今天完成什麼，而是用來判斷整個本週是否達標。",
+    "例：新增標準 本週至少完成 3 個程式學習任務",
+    "例：新增標準 本週能說明 CSS Flex 的基本用法",
     "",
     "【任務辦理】",
     "完成任務 數字",
-    "例：完成任務 3",
     "例：完成任務3",
     "例：完成第 3 個任務",
     "例：完成第三個任務",
@@ -324,7 +477,7 @@ function getGuideText() {
     "例：刪除任務3",
     "例：刪除第三個任務",
     "",
-    "【完成標準辦理】",
+    "【本週完成標準辦理】",
     "完成標準 數字",
     "例：完成標準2",
     "例：完成第二個標準",
@@ -443,35 +596,81 @@ async function handlePendingActionIfNeeded(sourceKey, userText) {
   ].join("\n");
 }
 
+// === LINE 小工具：解析新增文字裡的分類與難度 ===
+function parseCreateText({ userText, command }) {
+  let rawText = userText.replace(new RegExp(`^${command}\\s*`), "").trim();
+  rawText = rawText.replace(/^[：:]/, "").trim();
+
+  const parts = rawText
+    .split("/")
+    .map(function (part) {
+      return part.trim();
+    })
+    .filter(Boolean);
+
+  const title = parts[0] || "";
+  const category = parts[1] || DEFAULT_CATEGORY;
+  const difficulty = parts[2] || DEFAULT_DIFFICULTY;
+
+  return {
+    title,
+    category,
+    difficulty,
+  };
+}
+
 // === LINE 小工具：處理新增 ===
 async function handleCreateCommand({ userText, command, type, label, example }) {
-  // 支援：
-  // 新增任務練習 CSS
-  // 新增任務 練習 CSS
-  // 新增任務：練習 CSS
-  // 新增一個任務：練習 CSS
-  let title = userText.replace(new RegExp(`^${command}\\s*`), "").trim();
-  title = title.replace(/^[：:]/, "").trim();
+  const parsed = parseCreateText({
+    userText,
+    command,
+  });
 
-  if (!title) {
+  if (!parsed.title) {
     return [
       `請輸入${label}內容。`,
       "",
       `正確格式：${command} ${label}內容`,
       `例：${command} ${example}`,
       "",
-      "提醒：指令和內容中間建議加空格，或用冒號也可以。",
+      "任務也可以加分類與難度：",
+      "例：新增任務 練習 CSS / 程式學習 / 適中",
+    ].join("\n");
+  }
+
+  let category;
+  let difficulty;
+
+  try {
+    category = normalizeCategory(parsed.category);
+    difficulty = normalizeDifficulty(parsed.difficulty);
+  } catch (error) {
+    return [
+      "新增格式裡的分類或難度不正確，所以沒有新增資料。",
+      "",
+      error.message,
+      "",
+      "範例：",
+      "新增任務 練習 CSS / 程式學習 / 適中",
     ].join("\n");
   }
 
   const createdItem = await createItemToGoogleSheets({
     type,
-    title,
+    title: parsed.title,
+    category,
+    difficulty,
   });
+
+  const metaText =
+    createdItem.type === "task"
+      ? `分類：${createdItem.category}｜難度：${createdItem.difficulty}`
+      : "這是本週完成標準，用來檢查整週是否達標。";
 
   return [
     `已新增${label}：`,
-    `☐ ${createdItem.title || title}`,
+    `☐ ${createdItem.title || parsed.title}`,
+    metaText,
     "",
     "可以輸入「清單」查看目前案件板。",
   ].join("\n");
@@ -700,6 +899,8 @@ function getFormatReminderText() {
     "修改第 2 個標準",
     "刪除第二個標準",
     "",
+    "新增任務 練習 CSS / 程式學習 / 適中",
+    "",
     getLineCommandHintText(),
   ].join("\n");
 }
@@ -772,7 +973,7 @@ async function handleLineTextCommand({ sourceKey, userText }) {
       command: "新增一個完成標準",
       type: "standard",
       label: "完成標準",
-      example: "可以用 LINE 新增任務",
+      example: "本週至少完成 3 個程式學習任務",
     });
   }
 
@@ -782,7 +983,7 @@ async function handleLineTextCommand({ sourceKey, userText }) {
       command: "新增一個標準",
       type: "standard",
       label: "完成標準",
-      example: "可以用 LINE 新增任務",
+      example: "本週至少完成 3 個程式學習任務",
     });
   }
 
@@ -792,7 +993,7 @@ async function handleLineTextCommand({ sourceKey, userText }) {
       command: "新增標準",
       type: "standard",
       label: "完成標準",
-      example: "可以用 LINE 新增任務",
+      example: "本週至少完成 3 個程式學習任務",
     });
   }
 
@@ -919,7 +1120,7 @@ app.get("/items", async (req, res) => {
 // === Create：新增 item ===
 app.post("/items", async (req, res) => {
   try {
-    const { type, title } = req.body;
+    const { type, title, category, difficulty } = req.body;
 
     if (!type || !title) {
       return res.status(400).json({
@@ -933,7 +1134,12 @@ app.post("/items", async (req, res) => {
       });
     }
 
-    const createdItem = await createItemToGoogleSheets({ type, title });
+    const createdItem = await createItemToGoogleSheets({
+      type,
+      title,
+      category,
+      difficulty,
+    });
 
     res.status(201).json(createdItem);
   } catch (error) {
@@ -947,11 +1153,11 @@ app.post("/items", async (req, res) => {
 });
 
 // === Update：更新 item ===
-// 用於打勾 / 取消打勾 / 編輯標題
+// 用於打勾 / 取消打勾 / 編輯標題 / 更新分類 / 更新難度
 app.patch("/items/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, done } = req.body;
+    const { title, done, category, difficulty } = req.body;
 
     const updates = {};
 
@@ -961,6 +1167,14 @@ app.patch("/items/:id", async (req, res) => {
 
     if (done !== undefined) {
       updates.done = done;
+    }
+
+    if (category !== undefined) {
+      updates.category = category;
+    }
+
+    if (difficulty !== undefined) {
+      updates.difficulty = difficulty;
     }
 
     if (Object.keys(updates).length === 0) {
