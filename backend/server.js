@@ -94,6 +94,20 @@ function sortTasksByCategory(tasks) {
   });
 }
 
+// === 共用工具：把內部 label 轉成對外顯示文字 ===
+function getDisplayLabel(label) {
+  if (label === "完成標準") {
+    return "本週驗收標準";
+  }
+
+  return label;
+}
+
+// === 共用工具：溫柔公文感收尾句 ===
+function getGentleFooterText() {
+  return "今日有學，即可記上一筆。";
+}
+
 // === 產生帶 secret 的 Google Sheets API URL，用於 GET 讀取 ===
 function buildGoogleSheetsGetUrl() {
   const url = new URL(GOOGLE_SHEETS_API_URL);
@@ -262,15 +276,15 @@ async function getTaskBoardForLine() {
 // === LINE 小工具：清單底部固定提示 ===
 function getLineCommandHintText() {
   return [
-    "需要操作說明請輸入：攻略",
-    "想看用量請輸入：用量小抄",
+    "需要辦事攻略請輸入：攻略",
+    "想看用量小抄請輸入：用量小抄",
   ].join("\n");
 }
 
 // === LINE 小工具：格式化任務分類區塊，任務編號維持連續 ===
 function formatTaskSectionByCategory(tasks) {
   if (tasks.length === 0) {
-    return ["本週任務：", "", "目前沒有任務。"].join("\n");
+    return ["本週任務：", "", "本週尚未立案也無妨，放一個小任務，心就有方向。"].join("\n");
   }
 
   const lines = ["本週任務：", ""];
@@ -321,9 +335,9 @@ function formatTaskBoardForLine({ tasks, standards }) {
   const taskSection = formatTaskSectionByCategory(tasks);
 
   const standardSection = formatLineSection(
-    "本週完成標準：",
+    "本週驗收標準：",
     standards,
-    "目前沒有本週完成標準。"
+    "本週標準尚未成文，寫下一個方向，就是溫柔啟程。"
   );
 
   return [
@@ -337,13 +351,56 @@ function formatTaskBoardForLine({ tasks, standards }) {
   ].join("\n");
 }
 
+// === LINE 小工具：格式化指定難度任務 ===
+function formatTasksByDifficultyForLine(tasks, difficulty) {
+  const filteredTasks = tasks.filter(function (task) {
+    return normalizeDifficulty(task.difficulty) === difficulty;
+  });
+
+  if (filteredTasks.length === 0) {
+    return [
+      `📌 本週${difficulty}任務`,
+      "",
+      `目前沒有${difficulty}任務。`,
+      "",
+      "沒有案件也無妨，今日先讓心有方向。",
+      "",
+      "需要完整清單請輸入：清單",
+    ].join("\n");
+  }
+
+  const lines = filteredTasks.map(function (task, index) {
+    const checkbox = task.done ? "☑" : "☐";
+    const category = normalizeCategory(task.category);
+
+    return `${index + 1}. ${checkbox} ${task.title}（${category}）`;
+  });
+
+  return [
+    `📌 本週${difficulty}任務`,
+    "",
+    ...lines,
+    "",
+    "步子再小，也算靠岸。",
+    "",
+    "需要完整清單請輸入：清單",
+  ].join("\n");
+}
+
 // === LINE 小工具：把編號轉成真正的 item ===
 async function findItemByNumber({ type, numberText, label }) {
   const itemNumber = Number(numberText);
+  const displayLabel = getDisplayLabel(label);
 
   if (!Number.isInteger(itemNumber) || itemNumber <= 0) {
     return {
-      error: `請輸入正確的${label}編號，例如：完成${label} 數字`,
+      error: [
+        `這份公文還缺少正確的${displayLabel}編號，本局未更動資料。`,
+        "",
+        "可以這樣輸入：",
+        `完成${label}3`,
+        `完成第三個${label}`,
+      ].join("\n"),
     };
   }
 
@@ -352,7 +409,11 @@ async function findItemByNumber({ type, numberText, label }) {
 
   if (!targetItem) {
     return {
-      error: `找不到第 ${itemNumber} 個${label}，請先輸入「清單」確認編號。`,
+      error: [
+        `本局目前查無第 ${itemNumber} 個${displayLabel}。`,
+        "",
+        "可以先輸入「清單」確認編號，慢慢來，案件會排好。",
+      ].join("\n"),
     };
   }
 
@@ -398,100 +459,87 @@ function getGuideText() {
   return [
     "📋 不努力時間有限管理局｜辦事攻略",
     "",
-    "本局目前受理以下指令。",
-    "指令可以用正式格式，也可以用比較自然的講法。",
+    "管理局小櫃台受理以下案件。",
+    "格式不用完美，補齊即可辦理。",
     "",
-    "【查看】",
-    "清單",
-    "查看本週任務與本週完成標準",
+    "━━━━━━━━━━━━",
+    "🔎 一、查看案件",
+    "━━━━━━━━━━━━",
+    "📌 清單",
+    "查看本週任務與本週驗收標準",
     "",
-    "攻略",
-    "查看這份辦事攻略",
+    "📌 簡單任務",
+    "查看難度為「簡單」的任務",
     "",
-    "用量小抄",
-    "查看 LINE 訊息用量說明",
+    "📌 適中任務",
+    "查看難度為「適中」的任務",
     "",
-    "【分類】",
-    "目前分類只有三種：",
-    "程式學習",
-    "身心穩定",
-    "興趣探索",
+    "📌 困難任務",
+    "查看難度為「困難」的任務",
     "",
-    "【難度】",
-    "目前難度只有三種：",
-    "簡單",
-    "適中",
-    "困難",
-    "",
-    "【新增任務】",
-    "新增任務 任務內容",
+    "━━━━━━━━━━━━",
+    "📝 二、新增案件",
+    "━━━━━━━━━━━━",
+    "📌 新增任務 任務內容",
     "例：新增任務 練習 CSS",
     "",
-    "也可以帶分類和難度：",
-    "新增任務 任務內容 / 分類 / 難度",
-    "新增任務 任務內容｜分類｜難度",
-    "新增任務 任務內容，分類，難度",
-    "新增任務 任務內容、分類、難度",
+    "📌 新增任務 任務內容｜分類｜難度",
+    "例：新增任務 練習 CSS Flex｜程式學習｜適中",
     "",
-    "例：新增任務 練習 CSS Flex / 程式學習 / 適中",
-    "例：新增任務 散步 10 分鐘｜身心穩定｜簡單",
-    "例：新增任務 找一個喜歡的網站版型、興趣探索、簡單",
+    "可用分類：",
+    "・程式學習",
+    "・身心穩定",
+    "・興趣探索",
     "",
-    "【新增本週完成標準】",
-    "完成標準不是今天完成什麼，而是用來判斷整個本週是否達標。",
-    "例：新增標準 本週至少完成 3 個程式學習任務",
-    "例：新增標準 本週能說明 CSS Flex 的基本用法",
+    "可用難度：",
+    "・簡單",
+    "・適中",
+    "・困難",
     "",
-    "【任務辦理】",
-    "完成任務 數字",
-    "例：完成任務3",
-    "例：完成第 3 個任務",
-    "例：完成第三個任務",
-    "例：已完成第三個任務",
+    "━━━━━━━━━━━━",
+    "✅ 三、辦理任務",
+    "━━━━━━━━━━━━",
+    "📌 完成任務3",
+    "📌 完成第三個任務",
+    "📌 已完成第 3 個任務",
     "",
-    "取消任務 數字",
-    "例：取消任務3",
-    "例：取消第三個任務",
+    "📌 取消任務3",
+    "撤回已辦理狀態",
     "",
-    "修改任務 數字",
-    "意思：修改指定編號任務的文字，本局會再問你新文字",
-    "例：修改任務3",
-    "例：修改第三個任務",
+    "📌 修改任務3",
+    "本局會請你輸入新文字",
     "",
-    "修改任務 數字 新文字",
-    "意思：也可以一行直接修改完成",
-    "例：修改任務 1 練習 LINE 指令 CRUD",
+    "📌 刪除任務3",
+    "將該任務撤案",
     "",
-    "刪除任務 數字",
-    "例：刪除任務3",
-    "例：刪除第三個任務",
+    "━━━━━━━━━━━━",
+    "━━━━━━━━━━━━",
+"📎 四、本週驗收標準",
+"━━━━━━━━━━━━",
+"📌 新增標準 本週能說明一個學到的觀念",
+"📌 新增標準 本週有整理一次學習筆記",
+"📌 新增標準 本週有完成一個小練習",
+"",
+"📌 完成標準2",
+"📌 取消標準2",
+"📌 修改標準2",
+"📌 刪除標準2",
+"",
+"驗收標準是看見本週靠近了哪裡，",
+"不是拿來規定自己完成幾個。",
+    "🛑 五、修訂中止",
+    "━━━━━━━━━━━━",
+    "📌 取消修改",
+    "若本局正在等你輸入新文字，",
+    "可用此指令取消修訂。",
     "",
-    "【本週完成標準辦理】",
-    "完成標準 數字",
-    "例：完成標準2",
-    "例：完成第二個標準",
-    "",
-    "取消標準 數字",
-    "例：取消標準2",
-    "例：取消第二個標準",
-    "",
-    "修改標準 數字",
-    "例：修改標準2",
-    "例：修改第二個標準",
-    "",
-    "刪除標準 數字",
-    "例：刪除標準2",
-    "例：刪除第二個標準",
-    "",
-    "【修改中止】",
-    "取消修改",
-    "意思：如果本局正在等你輸入新文字，可以取消這次修改",
-    "",
-    "本局溫馨提醒：",
-    "不要一開張又關門。",
+    "━━━━━━━━━━━━",
+    "🌿 本局提醒",
+    "━━━━━━━━━━━━",
+    "今日有學，即可記上一筆。",
+    "步子再小，也算靠岸。",
   ].join("\n");
 }
-
 // === LINE 小工具：用量小抄 ===
 function getUsageText() {
   return [
@@ -508,7 +556,7 @@ function getUsageText() {
     "- 點選圖文選單後，Bot 立刻回覆",
     "",
     "這類通常是 reply message。",
-    "意思是：你先敲櫃台，管理局立刻回你。",
+    "意思是：你先敲櫃台，管理局小櫃台立刻回你。",
     "",
     "【會計入訊息額度】",
     "Bot 主動傳給你：",
@@ -536,9 +584,7 @@ function getUsageText() {
     "",
     "所以一人使用，每天提醒 1 次很安全。",
     "",
-    "本局溫馨提醒：",
-    "你主動問，不太燒額度。",
-    "管理局主動找你，才要算郵資。",
+    "本局提醒：你主動問，不太燒額度；管理局主動找你，才要算郵資。",
   ].join("\n");
 }
 
@@ -550,9 +596,11 @@ async function handlePendingActionIfNeeded(sourceKey, userText) {
     return null;
   }
 
+  const displayLabel = getDisplayLabel(pending.label);
+
   if (userText === "取消修改") {
     pendingActions.delete(sourceKey);
-    return "已取消這次修改。本局把待辦公文收回抽屜了。";
+    return "已取消這次修訂。本局把待辦公文收回抽屜了。";
   }
 
   const isExpired = Date.now() - pending.createdAt > PENDING_ACTION_TTL_MS;
@@ -561,16 +609,18 @@ async function handlePendingActionIfNeeded(sourceKey, userText) {
     pendingActions.delete(sourceKey);
 
     return [
-      "這次修改已經逾時，請重新操作。",
+      "這次修訂已經逾時，本局未更動資料。",
       "",
-      `例：修改${pending.label} 數字`,
+      `可以重新輸入：修改${pending.label} 數字`,
+      "",
+      "慢慢來，案件不會責備你。",
     ].join("\n");
   }
 
   const newTitle = userText.trim();
 
   if (!newTitle) {
-    return `請輸入新的${pending.label}文字，或輸入「取消修改」。`;
+    return `請輸入新的${displayLabel}文字，或輸入「取消修改」。`;
   }
 
   const updatedItem = await updateItemToGoogleSheets(pending.itemId, {
@@ -580,8 +630,10 @@ async function handlePendingActionIfNeeded(sourceKey, userText) {
   pendingActions.delete(sourceKey);
 
   return [
-    `已更新第 ${pending.itemNumber} 個${pending.label}：`,
+    `已修訂第 ${pending.itemNumber} 個${displayLabel}：`,
     updatedItem.title || newTitle,
+    "",
+    "本局已更新公文內容，請安心續辦。",
   ].join("\n");
 }
 
@@ -624,11 +676,13 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
     command,
   });
 
+  const displayLabel = getDisplayLabel(label);
+
   if (!parsed.title) {
     return [
-      `請輸入${label}內容。`,
+      `這份立案公文還缺少${displayLabel}內容，本局未更動資料。`,
       "",
-      `正確格式：${command} ${label}內容`,
+      `可以這樣輸入：${command} ${label}內容`,
       `例：${command} ${example}`,
       "",
       "任務也可以加分類與難度：",
@@ -645,11 +699,11 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
     difficulty = normalizeDifficulty(parsed.difficulty);
   } catch (error) {
     return [
-      "新增格式裡的分類或難度不正確，所以沒有新增資料。",
+      "分類或難度需要補正，本局未更動資料。",
       "",
       error.message,
       "",
-      "範例：",
+      "可以這樣輸入：",
       "新增任務 練習 CSS / 程式學習 / 適中",
       "新增任務 練習 CSS｜程式學習｜適中",
     ].join("\n");
@@ -662,15 +716,22 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
     difficulty,
   });
 
+  const titleText =
+    createdItem.type === "task"
+      ? "管理局小櫃台已立案："
+      : "管理局小櫃台已新增本週驗收標準：";
+
   const metaText =
     createdItem.type === "task"
       ? `分類：${createdItem.category}｜難度：${createdItem.difficulty}`
-      : "這是本週完成標準，用來檢查整週是否達標。";
+      : "這份標準會用來看見本週靠近了哪裡。";
 
   return [
-    `已新增${label}：`,
+    titleText,
     `☐ ${createdItem.title || parsed.title}`,
     metaText,
+    "",
+    getGentleFooterText(),
     "",
     "可以輸入「清單」查看目前案件板。",
   ].join("\n");
@@ -693,11 +754,14 @@ async function handleDoneCommand({ numberText, type, label, done }) {
   });
 
   const checkbox = done ? "☑" : "☐";
-  const actionText = done ? "已完成" : "已取消完成";
+  const actionText = done ? "已辦理" : "已撤回辦理";
+  const displayLabel = getDisplayLabel(label);
 
   return [
-    `${actionText}第 ${result.itemNumber} 個${label}：`,
+    `${actionText}第 ${result.itemNumber} 個${displayLabel}：`,
     `${checkbox} ${updatedItem.title || result.item.title}`,
+    "",
+    "步子再小，也算靠岸。",
   ].join("\n");
 }
 
@@ -714,12 +778,15 @@ async function handleDeleteCommand({ numberText, type, label }) {
   }
 
   const deletedTitle = result.item.title;
+  const displayLabel = getDisplayLabel(label);
 
   await deleteItemFromGoogleSheets(result.item.id);
 
   return [
-    `已刪除第 ${result.itemNumber} 個${label}：`,
+    `已撤案第 ${result.itemNumber} 個${displayLabel}：`,
     deletedTitle,
+    "",
+    "本局已更新案件板，資料不再列入本週。",
   ].join("\n");
 }
 
@@ -741,14 +808,18 @@ async function handleEditCommand({
     return result.error;
   }
 
+  const displayLabel = getDisplayLabel(label);
+
   if (newTitle && newTitle.trim()) {
     const updatedItem = await updateItemToGoogleSheets(result.item.id, {
       title: newTitle.trim(),
     });
 
     return [
-      `已更新第 ${result.itemNumber} 個${label}：`,
+      `已修訂第 ${result.itemNumber} 個${displayLabel}：`,
       updatedItem.title || newTitle.trim(),
+      "",
+      "本局已更新公文內容，請安心續辦。",
     ].join("\n");
   }
 
@@ -763,11 +834,11 @@ async function handleEditCommand({
   });
 
   return [
-    `請輸入第 ${result.itemNumber} 個${label}的新文字：`,
+    `請輸入第 ${result.itemNumber} 個${displayLabel}的新文字：`,
     "",
     `目前內容：${result.item.title}`,
     "",
-    "如果不想修改，請輸入：取消修改",
+    "如果暫時不想修訂，請輸入：取消修改",
   ].join("\n");
 }
 
@@ -796,6 +867,7 @@ function parseFlexibleNumber(numberText) {
     return digitMap[text];
   }
 
+  // 支援：十、十一、二十、二十三
   if (text.includes("十")) {
     const parts = text.split("十");
     const tenPart = parts[0];
@@ -820,7 +892,7 @@ function buildLineOperationCommand(actionText, targetText, numberText, newTitle)
 
   if (!Number.isInteger(number) || number <= 0) {
     return {
-      error: "請輸入正確的編號，例如：完成第 3 個任務",
+      error: "這份公文還缺少正確編號，本局未更動資料。可以這樣輸入：完成第 3 個任務",
     };
   }
 
@@ -855,6 +927,7 @@ function buildLineOperationCommand(actionText, targetText, numberText, newTitle)
 
 // === LINE 小工具：解析完成 / 取消 / 修改 / 刪除指令 ===
 function parseLineOperationCommand(userText) {
+  // 格式一：完成任務3、完成任務 3、修改標準2 新文字
   let match = userText.match(
     /^(完成|已完成|取消|修改|刪除)\s*(任務|完成標準|標準)\s*(\d+|[零一二三四五六七八九十兩]+)(?:\s+(.+))?$/
   );
@@ -863,6 +936,7 @@ function parseLineOperationCommand(userText) {
     return buildLineOperationCommand(match[1], match[2], match[3], match[4]);
   }
 
+  // 格式二：完成第3個任務、已完成第三個任務、刪除第 2 個標準
   match = userText.match(
     /^(完成|已完成|取消|修改|刪除)\s*第?\s*(\d+|[零一二三四五六七八九十兩]+)\s*個?\s*(任務|完成標準|標準)(?:\s+(.+))?$/
   );
@@ -874,10 +948,10 @@ function parseLineOperationCommand(userText) {
   return null;
 }
 
-// === LINE 小工具：格式錯誤提醒 ===
+// === LINE 小工具：格式需補正提醒 ===
 function getFormatReminderText() {
   return [
-    "本局看得出你想辦事，但格式有點歪，所以沒有處理任何資料。",
+    "這份公文格式需補正，本局未更動資料。",
     "",
     "可以這樣輸入：",
     "完成任務3",
@@ -897,6 +971,8 @@ function getFormatReminderText() {
     "新增任務 練習 CSS / 程式學習 / 適中",
     "新增任務 練習 CSS｜程式學習｜適中",
     "",
+    "不急著一次寫完，先把格式補齊就好。",
+    "",
     getLineCommandHintText(),
   ].join("\n");
 }
@@ -904,7 +980,11 @@ function getFormatReminderText() {
 // === LINE 小工具：未知文字提醒 ===
 function getUnknownCommandText() {
   return [
-    "本局看不懂這個指令，所以沒有處理任何資料。",
+    "本局目前看不懂這份公文，所以未更動資料。",
+    "",
+    "可以輸入「清單」查看本週案件板，或輸入「攻略」查看辦事方式。",
+    "",
+    "慢慢來，先讓案件排成一列。",
     "",
     getLineCommandHintText(),
   ].join("\n");
@@ -918,6 +998,7 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     return pendingReply;
   }
 
+  // === 查看類 ===
   if (
     userText === "攻略" ||
     userText === "說明" ||
@@ -940,6 +1021,31 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     return formatTaskBoardForLine(board);
   }
 
+  if (
+    userText === "簡單任務" ||
+    userText === "簡單"
+  ) {
+    const tasks = await getItemsByType("task");
+    return formatTasksByDifficultyForLine(tasks, "簡單");
+  }
+
+  if (
+    userText === "適中任務" ||
+    userText === "適中"
+  ) {
+    const tasks = await getItemsByType("task");
+    return formatTasksByDifficultyForLine(tasks, "適中");
+  }
+
+  if (
+    userText === "困難任務" ||
+    userText === "困難"
+  ) {
+    const tasks = await getItemsByType("task");
+    return formatTasksByDifficultyForLine(tasks, "困難");
+  }
+
+  // === 新增類：任務 ===
   if (userText.startsWith("新增一個任務")) {
     return handleCreateCommand({
       userText,
@@ -960,6 +1066,7 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     });
   }
 
+  // === 新增類：完成標準 ===
   if (userText.startsWith("新增一個完成標準")) {
     return handleCreateCommand({
       userText,
@@ -990,6 +1097,7 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     });
   }
 
+  // === 完成 / 取消 / 修改 / 刪除：支援自然語句 ===
   const operation = parseLineOperationCommand(userText);
 
   if (operation) {
@@ -1034,6 +1142,7 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     }
   }
 
+  // === 格式提醒：看起來想操作，但格式不完整或看不懂 ===
   if (
     userText.startsWith("完成") ||
     userText.startsWith("已完成") ||
@@ -1045,12 +1154,13 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     return getFormatReminderText();
   }
 
+  // === 其他文字：不要回「管理局收到」，避免誤會已經處理 ===
   return getUnknownCommandText();
 }
 
 // === 首頁測試 ===
 app.get("/", (req, res) => {
-  res.send("不努力時間有限管理局 API 開張中");
+  res.send("不努力時間有限管理局 API 開張中。本局小櫃台今日值班。");
 });
 
 // === LINE Webhook：處理 LINE 聊天指令 ===
@@ -1061,6 +1171,7 @@ app.post("/line/webhook", async (req, res) => {
 
   for (const event of events) {
     try {
+      // 目前只處理文字訊息，貼圖、圖片、加入好友事件先略過
       if (event.type !== "message" || event.message.type !== "text") {
         continue;
       }
@@ -1081,12 +1192,13 @@ app.post("/line/webhook", async (req, res) => {
       if (event.replyToken) {
         await replyToLine(
           event.replyToken,
-          "管理局櫃台剛剛卡住了，請稍後再試一次。"
+          "管理局小櫃台剛剛卡住了，本局未更動資料。請稍後再試一次。"
         );
       }
     }
   }
 
+  // 告訴 LINE：後端已收到 webhook
   res.status(200).send("OK");
 });
 
