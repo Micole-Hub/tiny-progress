@@ -11,17 +11,17 @@
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">本週營業中</p>
+      <p class="eyebrow">本週小櫃台值班中</p>
 
       <h1>不努力時間有限管理局</h1>
 
-      <p class="quote" id="dailyQuote">
-        本日金句：今天有好好學習，就是一件很好的事情。
+        <p class="quote" id="dailyQuote">
+          本日金句：今日有學，即可記上一筆。
       </p>
 
-      <button id="refreshBtn" class="refresh-btn" type="button">
-        重新整理資料
-      </button>
+        <button id="refreshBtn" class="refresh-btn" type="button">
+            重新整理案件板
+        </button>
 
       <div class="week-range">
         <span>本週期間</span>
@@ -31,30 +31,32 @@
       </div>
     </header>
 
-    <section class="progress-card">
-      <div class="section-header">
-        <h2>本週進度</h2>
-        <p class="section-note">管理局只看本週，不翻舊帳。</p>
-      </div>
+   <section class="progress-card">
+  <div class="section-header">
+    <div>
+      <h2>本週進度</h2>
+      <p class="section-note">本局只記本週靠近了哪裡，不翻舊帳。</p>
+    </div>
+  </div>
 
-      <div class="progress-list">
-        <p>
-          <span>本週任務</span>
-          <strong id="taskProgress">0 / 0</strong>
-        </p>
+  <div class="progress-list">
+    <p>
+      <span>本週任務</span>
+      <strong id="taskProgress">0 / 0</strong>
+    </p>
 
-        <p>
-          <span>本週完成標準</span>
-          <strong id="standardProgress">0 / 0</strong>
-        </p>
-      </div>
-    </section>
+    <p>
+      <span>本週驗收標準</span>
+      <strong id="standardProgress">0 / 0</strong>
+    </p>
+  </div>
+</section>
 
     <section class="task-section">
       <div class="section-header">
         <div>
           <h2>本週任務</h2>
-          <p class="section-note">可以亂序新增，管理局會自動分類。</p>
+          <p class="section-note">本局會依分類排好，陪你一件一件辦。</p>
         </div>
       </div>
 
@@ -62,7 +64,7 @@
         <input
           id="taskInput"
           type="text"
-          placeholder="輸入本週任務，例如：練習 CSS Flex"
+          placeholder="立一個小案件，例如：練習 CSS Flex"
         />
 
         <select id="taskCategory" aria-label="任務分類">
@@ -90,9 +92,9 @@
     <section class="standard-section">
       <div class="section-header">
         <div>
-          <h2>本週完成標準</h2>
+          <h2>本週驗收標準</h2>
           <p class="section-note">
-            這不是今天做了什麼，而是判斷整週是否達標。
+            這不是拿來責備自己，而是看見本週靠近了哪裡。
           </p>
         </div>
       </div>
@@ -101,7 +103,7 @@
         <input
           id="standardInput"
           type="text"
-          placeholder="輸入本週完成標準，例如：本週至少完成 3 個程式學習任務"
+          placeholder="寫一個本週想靠近的方向，例如：本週能說明一個學到的觀念"
         />
 
         <button id="addStandardBtn" class="add-btn" type="button">
