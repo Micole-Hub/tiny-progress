@@ -21,10 +21,10 @@ function ensureLoadingToast() {
 
 // 依照 API 方法顯示不同提示文字
 function getLoadingText(method) {
-  if (method === "POST") return "新增中...";
-  if (method === "PATCH") return "更新中...";
-  if (method === "DELETE") return "刪除中...";
-  return "讀取中...";
+  if (method === "POST") return "本局立案中...";
+  if (method === "PATCH") return "本局修訂中...";
+  if (method === "DELETE") return "本局撤案中...";
+  return "本局讀取案件中...";
 }
 
 // 開始等待狀態
@@ -406,12 +406,12 @@ function createCheckItem(item, displayNumber) {
   const editBtn = document.createElement("button");
   editBtn.className = "text-btn";
   editBtn.type = "button";
-  editBtn.textContent = "編輯";
+  editBtn.textContent = "修訂";
 
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "text-btn danger";
   deleteBtn.type = "button";
-  deleteBtn.textContent = "刪除";
+  deleteBtn.textContent = "撤案";
 
   checkbox.addEventListener("change", async function () {
     await updateItem(normalizedItem.id, {
@@ -420,7 +420,7 @@ function createCheckItem(item, displayNumber) {
   });
 
   editBtn.addEventListener("click", async function () {
-    const newTitle = prompt("請輸入新的內容：", normalizedItem.title);
+    const newTitle = prompt("請輸入修訂後的公文內容", normalizedItem.title);
 
     if (newTitle === null) {
       return;
@@ -429,7 +429,7 @@ function createCheckItem(item, displayNumber) {
     const trimmedTitle = newTitle.trim();
 
     if (trimmedTitle === "") {
-      alert("內容不能是空白。");
+      alert("公文內容不可空白。本局未更動資料。");
       return;
     }
 
@@ -441,8 +441,8 @@ function createCheckItem(item, displayNumber) {
   deleteBtn.addEventListener("click", async function () {
     const message =
       normalizedItem.type === "task"
-        ? "確定要刪除這項本週任務嗎？"
-        : "確定要刪除這項本週完成標準嗎？";
+        ? "確定要將這項本週任務撤案嗎？本局會將它移出案件板。"
+        : "確定要將這項本週驗收標準撤案嗎？本局會將它移出案件板。";
 
     const shouldDelete = confirm(message);
 
@@ -470,7 +470,7 @@ function renderTasks() {
 
   if (tasks.length === 0) {
     taskList.appendChild(
-      createEmptyMessage("今天還沒立案也無妨，放一個小任務，心就有方向。")
+      createEmptyMessage("今天還沒立案也無妨，放一個小任務，就是好的開始。")
     );
     return;
   }
@@ -502,7 +502,7 @@ function renderStandards() {
 
   if (standards.length === 0) {
     standardList.appendChild(
-      createEmptyMessage("不用急著做到滿分，寫下一個方向，就是溫柔啟程。")
+      createEmptyMessage("本週標準尚未成文，寫下一個方向，慢慢前進")
     );
     return;
   }
@@ -550,7 +550,7 @@ async function loadItems() {
     renderAll();
   } catch (error) {
     console.error("讀取任務資料失敗：", error);
-    alert("讀取後端資料失敗。請確認 Render 後端是否正常運作。");
+    alert("本局暫時讀不到案件板，資料未更動。請稍後再重新整理。");
 
     items = [];
     renderAll();
@@ -566,15 +566,15 @@ async function refreshItems() {
 
   try {
     refreshBtn.disabled = true;
-    refreshBtn.textContent = "重新整理中...";
+    refreshBtn.textContent = "案件板整理中..."; // 統一成公文感
 
     await loadItems();
 
-    refreshBtn.textContent = "重新整理資料";
+     refreshBtn.textContent = "重新整理案件板"; // 跟 index.html 按鈕文字一致
   } catch (error) {
     console.error("重新整理資料失敗：", error);
     alert("重新整理資料失敗，請稍後再試。");
-    refreshBtn.textContent = "重新整理資料";
+    refreshBtn.textContent = "重新整理案件板";
   } finally {
     refreshBtn.disabled = false;
   }
@@ -642,8 +642,7 @@ async function addItem(type, inputElement, options = {}) {
     inputElement.value = title;
     renderAll();
 
-    alert("新增失敗，已恢復畫面。請確認 Render 後端是否正常運作。");
-  }
+alert("新增失敗，已恢復畫面。請確認 Render 後端是否正常運作。");  }
 }
 
 // === 更新資料：樂觀更新 ===
@@ -686,8 +685,7 @@ async function updateItem(id, updates) {
     replaceItem(previousItem);
     renderAll();
 
-    alert("更新失敗，已恢復原本狀態。請確認 Render 後端是否正常運作。");
-  }
+alert("本局暫時無法修訂案件，畫面已恢復，資料未更動。請稍後再試。");  }
 }
 
 // === 刪除資料：樂觀更新 ===
@@ -719,8 +717,7 @@ async function deleteItem(id) {
     insertItemAtIndex(previousItem, previousIndex);
     renderAll();
 
-    alert("刪除失敗，已恢復原本資料。請確認 Render 後端是否正常運作。");
-  }
+    alert("本局暫時無法撤案，案件已放回原位，資料未更動。請稍後再試。");  }
 }
 
 function addTask() {
