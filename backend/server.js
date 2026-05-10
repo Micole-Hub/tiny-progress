@@ -1157,7 +1157,73 @@ app.get("/", (req, res) => {
   res.send("不努力時間有限管理局 API 開張中。本局小櫃台今日值班。");
 });
 
+// === GAS Queue Gateway：處理 GAS 轉來的 LINE 文字，回傳真正 replyText ===
+// 注意：這個路由不直接呼叫 LINE API
+// 因為 LINE reply / push 現在由 GAS 統一負責
+app.post("/gas-queue", async (req, res) => {
+  try {
+    console.log("收到 GAS Queue 訊息：", req.body);
+
+    const { source, queueId, userId, messageText } = req.body || {};
+
+    if (source !== "gas_queue") {
+      return res.status(400).json({
+        ok: false,
+        message: "source 必須是 gas_queue",
+      });
+    }
+
+    if (!queueId) {
+      return res.status(400).json({
+        ok: false,
+        message: "缺少 queueId",
+      });
+    }
+
+    if (!userId) {
+      return res.status(400).json({
+        ok: false,
+        message: "缺少 userId",
+      });
+    }
+
+    const userText = String(messageText || "").trim();
+
+    if (!userText) {
+      return res.status(400).json({
+        ok: false,
+        message: "缺少 messageText",
+      });
+    }
+
+    // 用 userId 當成 sourceKey
+    // 這樣「修改任務 3」這種等待下一句的新文字流程，仍可沿用原本邏輯
+    const sourceKey = String(userId).trim();
+
+    const replyText = await handleLineTextCommand({
+      sourceKey,
+      userText,
+    });
+
+    return res.json({
+      ok: true,
+      queueId,
+      replyText,
+    });
+  } catch (error) {
+    console.error("處理 /gas-queue 發生錯誤：", error);
+
+    return res.status(500).json({
+      ok: false,
+      message: "處理 GAS queue 訊息失敗",
+      error: error.message,
+    });
+  }
+});
+
 // === LINE Webhook：處理 LINE 聊天指令 ===
+// 這個舊路由先保留，方便本機測試或未來備用
+// 目前正式 LINE webhook 已經改由 GAS 接收
 app.post("/line/webhook", async (req, res) => {
   console.log("收到 LINE Webhook：", req.body);
 
