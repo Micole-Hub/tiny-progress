@@ -4,6 +4,11 @@
 let activeApiRequestCount = 0;
 let disabledButtonsBeforeBusy = [];
 
+// 取得這次請求的網址
+function getRequestUrl(input) {
+  return typeof input === "string" ? input : input && input.url;
+}
+
 // 建立畫面下方的「處理中」提示
 function ensureLoadingToast() {
   let toast = document.querySelector(".loading-toast");
@@ -19,8 +24,12 @@ function ensureLoadingToast() {
   return toast;
 }
 
-// 依照 API 方法顯示不同提示文字
-function getLoadingText(method) {
+// 依照 API 類型顯示不同提示文字
+function getLoadingText(method, url) {
+  if (url && url.includes("/weeks/complete-current")) {
+    return "本局結案中...";
+  }
+
   if (method === "POST") return "本局立案中...";
   if (method === "PATCH") return "本局修訂中...";
   if (method === "DELETE") return "本局撤案中...";
@@ -39,7 +48,6 @@ function startApiLoading(message) {
   document.body.classList.add("is-busy");
   toast.classList.add("is-show");
 
-  // 只有第一個 API 請求開始時，才記錄原本 disabled 的按鈕
   if (isFirstRequest) {
     disabledButtonsBeforeBusy = Array.from(
       document.querySelectorAll("button:disabled")
@@ -64,7 +72,6 @@ function stopApiLoading() {
   document.body.classList.remove("is-busy");
   toast.classList.remove("is-show");
 
-  // 只恢復「原本不是 disabled」的按鈕
   document.querySelectorAll("button").forEach(function (button) {
     const wasDisabledBeforeBusy = disabledButtonsBeforeBusy.includes(button);
 
@@ -78,11 +85,15 @@ function stopApiLoading() {
 
 // 判斷這次 fetch 是不是我們要追蹤的 API
 function shouldTrackApiRequest(input) {
-  const url = typeof input === "string" ? input : input && input.url;
+  const url = getRequestUrl(input);
 
   if (!url) return false;
 
-  return url.includes("/items") || url.includes("/week-context");
+  return (
+    url.includes("/items") ||
+    url.includes("/week-context") ||
+    url.includes("/weeks/complete-current")
+  );
 }
 
 // 包裝原本的 fetch，讓等待狀態自動套用
@@ -91,12 +102,13 @@ const originalFetch = window.fetch.bind(window);
 window.fetch = async function (input, options = {}) {
   const shouldTrack = shouldTrackApiRequest(input);
   const method = (options.method || "GET").toUpperCase();
+  const url = getRequestUrl(input);
 
   if (!shouldTrack) {
     return originalFetch(input, options);
   }
 
-  startApiLoading(getLoadingText(method));
+  startApiLoading(getLoadingText(method, url));
 
   try {
     const response = await originalFetch(input, options);
@@ -240,7 +252,6 @@ function renderWeekRange() {
 
   const currentWeek = weekContext.currentWeek;
 
-  // 如果 weeks 工作表未來有填 weekStart / weekEnd，就優先顯示 weeks 的日期
   if (currentWeek && currentWeek.weekStart && currentWeek.weekEnd) {
     weekStartText.textContent = currentWeek.weekStart.replaceAll("-", "/");
     weekStartText.setAttribute("datetime", currentWeek.weekStart);
@@ -251,7 +262,6 @@ function renderWeekRange() {
     return;
   }
 
-  // 若 weeks 尚未填日期，先沿用原本的本週日期算法
   const range = getCurrentWeekRange();
 
   weekStartText.textContent = formatDateForDisplay(range.weekStart);
@@ -1029,8 +1039,6 @@ async function addItem(type, inputElement, options = {}) {
     replaceItemById(tempItem.id, newItem);
     renderAll();
 
-    // 後端新增任務後會自動建立驗收標準
-    // 前端重新讀取一次，讓自動標準立刻出現在畫面上
     if (type === "task") {
       await loadItems();
       renderAll();
@@ -1132,6 +1140,54 @@ async function deleteItem(id) {
   }
 }
 
+// === 本週結案 ===
+async function completeCurrentWeek() {
+  const currentWeek = weekContext.currentWeek;
+  const nextWeek = weekContext.nextWeek;
+
+  if (!currentWeek) {
+    alert("目前讀不到本週資料，暫時無法結案。");
+    return;
+  }
+
+  if (!nextWeek) {
+    alert("目前尚未設定下週，暫時無法進入下一週。");
+    return;
+  }
+
+  const shouldComplete = confirm(
+    `確定要將第 ${currentWeek.weekNumber} 週結案，並進入第 ${nextWeek.weekNumber} 週嗎？\n\n結案後，畫面會切換到新的本週。`
+  );
+
+  if (!shouldComplete) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/weeks/complete-current`, {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw new Error("本週結案失敗");
+    }
+
+    const data = await response.json();
+
+    selectedWeekView = "current";
+
+    await Promise.all([loadWeekContext(), loadItems()]);
+    renderAll();
+
+    alert(
+      `第 ${data.completedWeek.weekNumber} 週已結案，現在進入第 ${data.currentWeek.weekNumber} 週。`
+    );
+  } catch (error) {
+    console.error("本週結案失敗：", error);
+    alert("本局暫時無法結案，週次未更動。請稍後再試。");
+  }
+}
+
 function addTask() {
   addItem("task", taskInput, {
     category: taskCategory.value,
@@ -1174,9 +1230,7 @@ async function initApp() {
   }
 
   if (completeWeekBtn) {
-    completeWeekBtn.addEventListener("click", function () {
-      alert("本週結案功能下一步再接上。現在先確認本週 / 下週任務切換是否正常。");
-    });
+    completeWeekBtn.addEventListener("click", completeCurrentWeek);
   }
 
   taskInput.addEventListener("keydown", function (event) {
