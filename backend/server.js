@@ -114,6 +114,37 @@ function buildGoogleSheetsGetUrl() {
   return url.toString();
 }
 
+// === 產生帶 resource 的 Google Sheets API URL ===
+// 例如 resource = "week-context"，就會讀目前週與下週
+function buildGoogleSheetsResourceUrl(resource) {
+  const url = new URL(GOOGLE_SHEETS_API_URL);
+
+  url.searchParams.set("secret", GOOGLE_SHEETS_API_SECRET);
+  url.searchParams.set("resource", resource);
+
+  return url.toString();
+}
+
+// === 共用函式：從 Google Sheets 讀目前週與下週 ===
+async function fetchWeekContextFromGoogleSheets() {
+  const response = await fetch(buildGoogleSheetsResourceUrl("week-context"));
+
+  if (!response.ok) {
+    throw new Error("呼叫 Google Apps Script 週次資料失敗，狀態碼：" + response.status);
+  }
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Google Apps Script 回傳週次資料失敗");
+  }
+
+  return {
+    currentWeek: data.currentWeek,
+    nextWeek: data.nextWeek,
+  };
+}
+
 // === 共用函式：從 Google Sheets 讀 items ===
 async function fetchItemsFromGoogleSheets() {
   const response = await fetch(buildGoogleSheetsGetUrl());
@@ -1258,6 +1289,22 @@ app.post("/line/webhook", async (req, res) => {
   }
 
   res.status(200).send("OK");
+});
+
+// === Read：讀取目前週與下週 ===
+app.get("/week-context", async (req, res) => {
+  try {
+    const context = await fetchWeekContextFromGoogleSheets();
+
+    res.json(context);
+  } catch (error) {
+    console.error("GET /week-context 讀取週次資料發生錯誤：", error);
+
+    res.status(500).json({
+      message: "讀取週次資料失敗",
+      error: error.message,
+    });
+  }
 });
 
 // === Read：讀取所有 items ===
