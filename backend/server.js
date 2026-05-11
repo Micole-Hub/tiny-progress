@@ -137,7 +137,6 @@ function buildGoogleSheetsGetUrl() {
 }
 
 // === 產生帶 resource 的 Google Sheets API URL ===
-// 例如 resource = "week-context"，就會讀目前週與下週
 function buildGoogleSheetsResourceUrl(resource) {
   const url = new URL(GOOGLE_SHEETS_API_URL);
 
@@ -182,6 +181,32 @@ async function fetchItemsFromGoogleSheets() {
   }
 
   return data.items.map(normalizeItem);
+}
+
+// === 共用函式：呼叫 GAS 完成本週結案 ===
+async function completeCurrentWeekInGoogleSheets() {
+  const response = await fetch(GOOGLE_SHEETS_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      secret: GOOGLE_SHEETS_API_SECRET,
+      action: "complete-current-week",
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("呼叫 Google Apps Script 結案失敗，狀態碼：" + response.status);
+  }
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Google Apps Script 結案失敗");
+  }
+
+  return data.result;
 }
 
 // === 共用函式：新增 item 到 Google Sheets ===
@@ -391,8 +416,6 @@ async function deleteItemWithLinkedStandardsFromGoogleSheets(id) {
 
   const deletedLinkedStandards = [];
 
-  // 先刪除關聯 standard，再刪除 task 本身
-  // 這樣可以避免主任務已消失，但關聯標準還殘留在資料表中
   for (const standard of linkedStandards) {
     const deletedStandard = await deleteItemFromGoogleSheets(standard.id);
     deletedLinkedStandards.push(deletedStandard);
@@ -527,7 +550,6 @@ function formatTaskBoardForLine({ tasks, standards }) {
 }
 
 // === LINE 小工具：格式化指定難度任務 ===
-// 注意：這裡保留「清單」中的原始編號，避免使用者完成錯任務
 function formatTasksByDifficultyForLine(tasks, difficulty) {
   const matchedTasks = tasks
     .map(function (task, index) {
@@ -1355,8 +1377,6 @@ app.get("/", (req, res) => {
 });
 
 // === GAS Queue Gateway：處理 GAS 轉來的 LINE 文字，回傳真正 replyText ===
-// 注意：這個路由不直接呼叫 LINE API
-// 因為 LINE reply / push 現在由 GAS 統一負責
 app.post("/gas-queue", async (req, res) => {
   try {
     console.log("收到 GAS Queue 訊息：", req.body);
@@ -1417,8 +1437,6 @@ app.post("/gas-queue", async (req, res) => {
 });
 
 // === LINE Webhook：處理 LINE 聊天指令 ===
-// 這個舊路由先保留，方便本機測試或未來備用
-// 目前正式 LINE webhook 已經改由 GAS 接收
 app.post("/line/webhook", async (req, res) => {
   console.log("收到 LINE Webhook：", req.body);
 
@@ -1466,6 +1484,27 @@ app.get("/week-context", async (req, res) => {
 
     res.status(500).json({
       message: "讀取週次資料失敗",
+      error: error.message,
+    });
+  }
+});
+
+// === Weeks：本週結案，進入下一週 ===
+app.post("/weeks/complete-current", async (req, res) => {
+  try {
+    const result = await completeCurrentWeekInGoogleSheets();
+
+    res.json({
+      message: "本週結案成功",
+      completedWeek: result.completedWeek,
+      currentWeek: result.currentWeek,
+      nextWeek: result.nextWeek,
+    });
+  } catch (error) {
+    console.error("POST /weeks/complete-current 發生錯誤：", error);
+
+    res.status(500).json({
+      message: "本週結案失敗",
       error: error.message,
     });
   }
