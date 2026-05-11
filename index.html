@@ -15,13 +15,13 @@
 
       <h1>不努力時間有限管理局</h1>
 
-        <p class="quote" id="dailyQuote">
-          本日金句：今日有學，即可記上一筆。
+      <p class="quote" id="dailyQuote">
+        本日金句：今日有學，即可記上一筆。
       </p>
 
-        <button id="refreshBtn" class="refresh-btn" type="button">
-            重新整理案件板
-        </button>
+      <button id="refreshBtn" class="refresh-btn" type="button">
+        重新整理案件板
+      </button>
 
       <div class="week-range">
         <span>本週期間</span>
@@ -31,26 +31,83 @@
       </div>
     </header>
 
-   <section class="progress-card">
-  <div class="section-header">
-    <div>
-      <h2>本週進度</h2>
-      <p class="section-note">本局只記本週靠近了哪裡，不翻舊帳。</p>
-    </div>
-  </div>
+    <section class="plan-card" aria-labelledby="planTitle">
+      <div class="section-header">
+        <div>
+          <p class="plan-label">12 週前端學習計畫</p>
 
-  <div class="progress-list">
-    <p>
-      <span>本週任務</span>
-      <strong id="taskProgress">0 / 0</strong>
-    </p>
+          <h2 id="planTitle">
+            第 <span id="currentWeekNumber">-</span> / 12 週
+          </h2>
 
-    <p>
-      <span>本週驗收標準</span>
-      <strong id="standardProgress">0 / 0</strong>
-    </p>
-  </div>
-</section>
+          <p class="section-note" id="planStatusText">
+            讀取週次資料中...
+          </p>
+        </div>
+      </div>
+
+      <div class="week-tabs" aria-label="週次切換">
+        <button
+          id="currentWeekTab"
+          class="week-tab is-active"
+          type="button"
+          data-week-view="current"
+        >
+          本週
+        </button>
+
+        <button
+          id="nextWeekTab"
+          class="week-tab"
+          type="button"
+          data-week-view="next"
+        >
+          下週
+        </button>
+      </div>
+
+      <div class="plan-content">
+        <p class="plan-kicker" id="selectedWeekLabel">
+          本週主題
+        </p>
+
+        <h3 id="selectedWeekTitle">
+          讀取中
+        </h3>
+
+        <div class="achievement-box">
+          <span>本週達成</span>
+          <p id="selectedWeekAchievement">
+            讀取中
+          </p>
+        </div>
+      </div>
+
+      <button id="completeWeekBtn" class="complete-week-btn" type="button">
+        本週結案，進入下一週
+      </button>
+    </section>
+
+    <section class="progress-card">
+      <div class="section-header">
+        <div>
+          <h2>本週進度</h2>
+          <p class="section-note">本局只記本週靠近了哪裡，不翻舊帳。</p>
+        </div>
+      </div>
+
+      <div class="progress-list">
+        <p>
+          <span>本週任務</span>
+          <strong id="taskProgress">0 / 0</strong>
+        </p>
+
+        <p>
+          <span>本週驗收標準</span>
+          <strong id="standardProgress">0 / 0</strong>
+        </p>
+      </div>
+    </section>
 
     <section class="task-section">
       <div class="section-header">

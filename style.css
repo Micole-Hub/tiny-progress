@@ -43,12 +43,9 @@ body {
   min-height: 100vh;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
-
-  /* 改成純色紙張底，減少眼睛負擔 */
   background: #f4efe6;
 }
 
-/* 先關掉紙紋格線，避免背景太浮、看久不舒服 */
 body::before {
   content: none;
 }
@@ -211,6 +208,7 @@ body.is-busy button {
 
 /* === 區塊公文紙 === */
 
+.plan-card,
 .progress-card,
 .task-section,
 .standard-section {
@@ -225,6 +223,7 @@ body.is-busy button {
   box-shadow: var(--soft-shadow);
 }
 
+.plan-card::before,
 .progress-card::before,
 .task-section::before,
 .standard-section::before {
@@ -258,6 +257,150 @@ body.is-busy button {
   color: var(--muted);
   font-size: 14px;
   line-height: 1.55;
+}
+
+/* === 12 週主線卡片 === */
+
+.plan-card {
+  overflow: hidden;
+}
+
+.plan-card::after {
+  content: "12W";
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid rgba(96, 120, 85, 0.28);
+  color: rgba(96, 120, 85, 0.48);
+  font-size: 15px;
+  font-weight: 950;
+  letter-spacing: 0.05em;
+  transform: rotate(8deg);
+  pointer-events: none;
+}
+
+.plan-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--green-soft);
+  color: var(--green-dark);
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+}
+
+.plan-label::before {
+  content: "▣";
+  font-size: 12px;
+}
+
+.week-tabs {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--paper-3);
+  border: 1px solid rgba(223, 210, 194, 0.8);
+}
+
+.week-tab {
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 9px 12px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.week-tab.is-active {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(59, 51, 45, 0.14);
+}
+
+.plan-content {
+  position: relative;
+  z-index: 1;
+  padding: 17px;
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 253, 247, 0.96), rgba(244, 239, 230, 0.9)),
+    var(--paper-2);
+  border: 1px solid rgba(223, 210, 194, 0.92);
+}
+
+.plan-kicker {
+  margin: 0 0 7px;
+  color: var(--stamp);
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+}
+
+.plan-content h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 21px;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+}
+
+.achievement-box {
+  margin-top: 14px;
+  padding: 14px 15px;
+  border-radius: var(--radius-md);
+  background: #fff8e8;
+  border: 1px solid rgba(216, 168, 95, 0.3);
+}
+
+.achievement-box span {
+  display: inline-flex;
+  margin-bottom: 7px;
+  color: #8a5a28;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+}
+
+.achievement-box p {
+  margin: 0;
+  color: #5f4630;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.7;
+}
+
+.complete-week-btn {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  margin-top: 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 11px 16px;
+  background: var(--green-dark);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 950;
+  box-shadow: 0 8px 18px rgba(96, 120, 85, 0.16);
+}
+
+.complete-week-btn:hover {
+  background: var(--stamp);
 }
 
 /* === 本週進度 === */
@@ -629,6 +772,7 @@ body.is-busy button {
   }
 
   .hero,
+  .plan-card,
   .progress-card,
   .task-section,
   .standard-section {
@@ -646,6 +790,22 @@ body.is-busy button {
 
   .hero h1 {
     max-width: 8.4em;
+  }
+
+  .plan-card::after {
+    width: 46px;
+    height: 46px;
+    right: 14px;
+    top: 16px;
+    font-size: 13px;
+  }
+
+  .plan-content {
+    padding: 15px;
+  }
+
+  .plan-content h3 {
+    font-size: 19px;
   }
 
   .task-add-form {
@@ -695,6 +855,10 @@ body.is-busy button {
 
   .hero::after {
     opacity: 0.6;
+  }
+
+  .plan-card::after {
+    opacity: 0.5;
   }
 
   .category-heading::after {
