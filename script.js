@@ -1,5 +1,5 @@
 // === Step 59：全域 API 等待狀態 ===
-// 目的：只要前端呼叫 /items API，就顯示「處理中」，並暫時鎖住按鈕
+// 目的：只要前端呼叫 API，就顯示「處理中」，並暫時鎖住按鈕
 
 let activeApiRequestCount = 0;
 let disabledButtonsBeforeBusy = [];
@@ -24,7 +24,7 @@ function getLoadingText(method) {
   if (method === "POST") return "本局立案中...";
   if (method === "PATCH") return "本局修訂中...";
   if (method === "DELETE") return "本局撤案中...";
-  return "本局讀取案件中...";
+  return "本局讀取資料中...";
 }
 
 // 開始等待狀態
@@ -73,13 +73,13 @@ function stopApiLoading() {
   disabledButtonsBeforeBusy = [];
 }
 
-// 判斷這次 fetch 是不是我們的 /items API
+// 判斷這次 fetch 是不是我們要追蹤的 API
 function shouldTrackApiRequest(input) {
   const url = typeof input === "string" ? input : input && input.url;
 
   if (!url) return false;
 
-  return url.includes("/items");
+  return url.includes("/items") || url.includes("/week-context");
 }
 
 // 包裝原本的 fetch，讓等待狀態自動套用
@@ -113,6 +113,7 @@ const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
 
 const DEFAULT_CATEGORY = "程式學習";
 const DEFAULT_DIFFICULTY = "簡單";
+
 // === 每日金句 ===
 // 方向：溫柔公文感，不否定自己；今日有學，即可立案
 const DAILY_QUOTES = [
@@ -137,8 +138,16 @@ const DAILY_QUOTES = [
   "本局收件：今天有學，就是好案件。",
   "一點點也有重量，慢慢來也有方向。",
 ];
+
 // === 前端狀態 ===
 let items = [];
+
+let weekContext = {
+  currentWeek: null,
+  nextWeek: null,
+};
+
+let selectedWeekView = "current";
 
 // === DOM 元素 ===
 const taskList = document.querySelector("#taskList");
@@ -160,6 +169,19 @@ const refreshBtn = document.getElementById("refreshBtn");
 const weekStartText = document.querySelector("#weekStartText");
 const weekEndText = document.querySelector("#weekEndText");
 const dailyQuote = document.querySelector("#dailyQuote");
+
+// === 12 週主線 DOM ===
+const currentWeekNumber = document.querySelector("#currentWeekNumber");
+const planStatusText = document.querySelector("#planStatusText");
+
+const currentWeekTab = document.querySelector("#currentWeekTab");
+const nextWeekTab = document.querySelector("#nextWeekTab");
+
+const selectedWeekLabel = document.querySelector("#selectedWeekLabel");
+const selectedWeekTitle = document.querySelector("#selectedWeekTitle");
+const selectedWeekAchievement = document.querySelector("#selectedWeekAchievement");
+
+const completeWeekBtn = document.querySelector("#completeWeekBtn");
 
 // === 日期工具函式 ===
 function padNumber(number) {
@@ -204,6 +226,20 @@ function getCurrentWeekRange(baseDate = new Date()) {
 function renderWeekRange() {
   if (!weekStartText || !weekEndText) return;
 
+  const currentWeek = weekContext.currentWeek;
+
+  // 如果 weeks 工作表未來有填 weekStart / weekEnd，就優先顯示 weeks 的日期
+  if (currentWeek && currentWeek.weekStart && currentWeek.weekEnd) {
+    weekStartText.textContent = currentWeek.weekStart.replaceAll("-", "/");
+    weekStartText.setAttribute("datetime", currentWeek.weekStart);
+
+    weekEndText.textContent = currentWeek.weekEnd.replaceAll("-", "/");
+    weekEndText.setAttribute("datetime", currentWeek.weekEnd);
+
+    return;
+  }
+
+  // 若 weeks 尚未填日期，先沿用原本的本週日期算法
   const range = getCurrentWeekRange();
 
   weekStartText.textContent = formatDateForDisplay(range.weekStart);
@@ -230,6 +266,93 @@ function renderDailyQuote() {
   const quote = DAILY_QUOTES[quoteIndex];
 
   dailyQuote.textContent = `本日金句：${quote}`;
+}
+
+// === 12 週主線工具函式 ===
+function getSelectedWeek() {
+  if (selectedWeekView === "next") {
+    return weekContext.nextWeek;
+  }
+
+  return weekContext.currentWeek;
+}
+
+function getSelectedWeekLabelText() {
+  return selectedWeekView === "next" ? "下週主題" : "本週主題";
+}
+
+function getAchievementLabelText() {
+  return selectedWeekView === "next" ? "下週達成" : "本週達成";
+}
+
+function setWeekTabActiveState() {
+  if (!currentWeekTab || !nextWeekTab) return;
+
+  currentWeekTab.classList.toggle("is-active", selectedWeekView === "current");
+  nextWeekTab.classList.toggle("is-active", selectedWeekView === "next");
+}
+
+function renderPlanCard() {
+  if (
+    !currentWeekNumber ||
+    !planStatusText ||
+    !selectedWeekLabel ||
+    !selectedWeekTitle ||
+    !selectedWeekAchievement
+  ) {
+    return;
+  }
+
+  const currentWeek = weekContext.currentWeek;
+  const nextWeek = weekContext.nextWeek;
+  const selectedWeek = getSelectedWeek();
+
+  setWeekTabActiveState();
+
+  if (!currentWeek) {
+    currentWeekNumber.textContent = "-";
+    planStatusText.textContent = "目前讀不到週次資料。";
+    selectedWeekLabel.textContent = "週次主題";
+    selectedWeekTitle.textContent = "尚無資料";
+    selectedWeekAchievement.textContent =
+      "請確認後端 /week-context 是否正常，以及 weeks 工作表是否有 current。";
+    return;
+  }
+
+  currentWeekNumber.textContent = String(currentWeek.weekNumber || "-");
+
+  planStatusText.textContent = nextWeek
+    ? `目前第 ${currentWeek.weekNumber} 週，下週預告第 ${nextWeek.weekNumber} 週。`
+    : `目前第 ${currentWeek.weekNumber} 週，尚未設定下週。`;
+
+  if (!selectedWeek) {
+    selectedWeekLabel.textContent = "下週主題";
+    selectedWeekTitle.textContent = "尚未設定下週";
+    selectedWeekAchievement.textContent =
+      "可以先在 weeks 工作表補上 status = next 的週次。";
+    return;
+  }
+
+  selectedWeekLabel.textContent = getSelectedWeekLabelText();
+  selectedWeekTitle.textContent = selectedWeek.title || "尚未填寫主題";
+
+  const achievementBoxLabel = document.querySelector(".achievement-box span");
+
+  if (achievementBoxLabel) {
+    achievementBoxLabel.textContent = getAchievementLabelText();
+  }
+
+  selectedWeekAchievement.textContent =
+    selectedWeek.achievement || "尚未填寫本週達成。";
+}
+
+function switchWeekView(view) {
+  if (view !== "current" && view !== "next") {
+    return;
+  }
+
+  selectedWeekView = view;
+  renderPlanCard();
 }
 
 // === 資料工具函式 ===
@@ -529,12 +652,44 @@ function renderProgress() {
 }
 
 function renderAll() {
+  renderPlanCard();
+  renderWeekRange();
   renderTasks();
   renderStandards();
   renderProgress();
 }
 
-// === 讀取資料 ===
+// === 讀取週次資料 ===
+async function loadWeekContext() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/week-context`);
+
+    if (!response.ok) {
+      throw new Error("後端週次資料回應失敗");
+    }
+
+    const data = await response.json();
+
+    weekContext = {
+      currentWeek: data.currentWeek || null,
+      nextWeek: data.nextWeek || null,
+    };
+
+    renderPlanCard();
+    renderWeekRange();
+  } catch (error) {
+    console.error("讀取週次資料失敗：", error);
+
+    weekContext = {
+      currentWeek: null,
+      nextWeek: null,
+    };
+
+    renderPlanCard();
+  }
+}
+
+// === 讀取任務資料 ===
 async function loadItems() {
   try {
     const response = await fetch(`${API_BASE_URL}/items`);
@@ -560,17 +715,18 @@ async function loadItems() {
 // === 重新整理資料 ===
 async function refreshItems() {
   if (!refreshBtn) {
-    await loadItems();
+    await Promise.all([loadWeekContext(), loadItems()]);
     return;
   }
 
   try {
     refreshBtn.disabled = true;
-    refreshBtn.textContent = "案件板整理中..."; // 統一成公文感
+    refreshBtn.textContent = "案件板整理中...";
 
+    await loadWeekContext();
     await loadItems();
 
-     refreshBtn.textContent = "重新整理案件板"; // 跟 index.html 按鈕文字一致
+    refreshBtn.textContent = "重新整理案件板";
   } catch (error) {
     console.error("重新整理資料失敗：", error);
     alert("重新整理資料失敗，請稍後再試。");
@@ -600,6 +756,9 @@ async function addItem(type, inputElement, options = {}) {
     category,
     difficulty,
     done: false,
+    weekNumber: weekContext.currentWeek
+      ? weekContext.currentWeek.weekNumber
+      : "",
     weekStart: "",
     weekEnd: "",
     createdAt: now,
@@ -642,7 +801,8 @@ async function addItem(type, inputElement, options = {}) {
     inputElement.value = title;
     renderAll();
 
-alert("新增失敗，已恢復畫面。請確認 Render 後端是否正常運作。");  }
+    alert("新增失敗，已恢復畫面。請確認 Render 後端是否正常運作。");
+  }
 }
 
 // === 更新資料：樂觀更新 ===
@@ -685,7 +845,8 @@ async function updateItem(id, updates) {
     replaceItem(previousItem);
     renderAll();
 
-alert("本局暫時無法修訂案件，畫面已恢復，資料未更動。請稍後再試。");  }
+    alert("本局暫時無法修訂案件，畫面已恢復，資料未更動。請稍後再試。");
+  }
 }
 
 // === 刪除資料：樂觀更新 ===
@@ -717,7 +878,8 @@ async function deleteItem(id) {
     insertItemAtIndex(previousItem, previousIndex);
     renderAll();
 
-    alert("本局暫時無法撤案，案件已放回原位，資料未更動。請稍後再試。");  }
+    alert("本局暫時無法撤案，案件已放回原位，資料未更動。請稍後再試。");
+  }
 }
 
 function addTask() {
@@ -738,6 +900,9 @@ function addStandard() {
 function initApp() {
   renderWeekRange();
   renderDailyQuote();
+  renderPlanCard();
+
+  loadWeekContext();
   loadItems();
 
   addTaskBtn.addEventListener("click", addTask);
@@ -745,6 +910,24 @@ function initApp() {
 
   if (refreshBtn) {
     refreshBtn.addEventListener("click", refreshItems);
+  }
+
+  if (currentWeekTab) {
+    currentWeekTab.addEventListener("click", function () {
+      switchWeekView("current");
+    });
+  }
+
+  if (nextWeekTab) {
+    nextWeekTab.addEventListener("click", function () {
+      switchWeekView("next");
+    });
+  }
+
+  if (completeWeekBtn) {
+    completeWeekBtn.addEventListener("click", function () {
+      alert("本週結案功能下一步再接上。現在先確認本週 / 下週主線卡片能正常顯示。");
+    });
   }
 
   taskInput.addEventListener("keydown", function (event) {
