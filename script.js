@@ -1,606 +1,398 @@
-// === 全域 API 等待狀態 ===
-// 目的：只要前端呼叫 API，就顯示「處理中」，並暫時鎖住按鈕
+require("dotenv").config();
 
-let activeApiRequestCount = 0;
-let disabledButtonsBeforeBusy = [];
+const express = require("express");
+const cors = require("cors");
 
-// 建立畫面下方的「處理中」提示
-function ensureLoadingToast() {
-  let toast = document.querySelector(".loading-toast");
+const app = express();
 
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.className = "loading-toast";
-    toast.setAttribute("aria-live", "polite");
-    toast.textContent = "處理中...";
-    document.body.appendChild(toast);
-  }
+const PORT = process.env.PORT || 3000;
 
-  return toast;
-}
+const GOOGLE_SHEETS_API_URL = process.env.GOOGLE_SHEETS_API_URL;
+const GOOGLE_SHEETS_API_SECRET = process.env.GOOGLE_SHEETS_API_SECRET;
 
-// 依照 API 方法顯示不同提示文字
-function getLoadingText(method) {
-  if (method === "POST") return "本局立案中...";
-  if (method === "PATCH") return "本局修訂中...";
-  if (method === "DELETE") return "本局撤案中...";
-  return "本局讀取資料中...";
-}
+const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
-// 開始等待狀態
-function startApiLoading(message) {
-  const isFirstRequest = activeApiRequestCount === 0;
+// 暫存多步驟操作，例如「修改任務 1」之後等待使用者輸入新文字
+const pendingActions = new Map();
+const PENDING_ACTION_TTL_MS = 10 * 60 * 1000;
 
-  activeApiRequestCount += 1;
-
-  const toast = ensureLoadingToast();
-  toast.textContent = message;
-
-  document.body.classList.add("is-busy");
-  toast.classList.add("is-show");
-
-  // 只有第一個 API 請求開始時，才記錄原本 disabled 的按鈕
-  // 避免第二個同時進來的請求，把「剛剛被鎖住的按鈕」誤判成原本就 disabled
-  if (isFirstRequest) {
-    disabledButtonsBeforeBusy = Array.from(
-      document.querySelectorAll("button:disabled")
-    );
-
-    document.querySelectorAll("button").forEach(function (button) {
-      button.disabled = true;
-    });
-  }
-}
-
-// 結束等待狀態
-function stopApiLoading() {
-  activeApiRequestCount -= 1;
-
-  if (activeApiRequestCount > 0) return;
-
-  activeApiRequestCount = 0;
-
-  const toast = ensureLoadingToast();
-
-  document.body.classList.remove("is-busy");
-  toast.classList.remove("is-show");
-
-  // 只恢復「原本不是 disabled」的按鈕
-  document.querySelectorAll("button").forEach(function (button) {
-    const wasDisabledBeforeBusy = disabledButtonsBeforeBusy.includes(button);
-
-    if (!wasDisabledBeforeBusy) {
-      button.disabled = false;
-    }
-  });
-
-  disabledButtonsBeforeBusy = [];
-}
-
-// 判斷這次 fetch 是不是我們要追蹤的 API
-function shouldTrackApiRequest(input) {
-  const url = typeof input === "string" ? input : input && input.url;
-
-  if (!url) return false;
-
-  return url.includes("/items") || url.includes("/week-context");
-}
-
-// 包裝原本的 fetch，讓等待狀態自動套用
-const originalFetch = window.fetch.bind(window);
-
-window.fetch = async function (input, options = {}) {
-  const shouldTrack = shouldTrackApiRequest(input);
-  const method = (options.method || "GET").toUpperCase();
-
-  if (!shouldTrack) {
-    return originalFetch(input, options);
-  }
-
-  startApiLoading(getLoadingText(method));
-
-  try {
-    const response = await originalFetch(input, options);
-    return response;
-  } finally {
-    stopApiLoading();
-  }
-};
-
-// === API 設定 ===
-// 注意：這裡只放 Render 後端主網址，不要加 /items
-const API_BASE_URL = "https://no-effort-time-bureau.onrender.com";
-
-// === 分類與難度設定 ===
 const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
 const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
 
 const DEFAULT_CATEGORY = "程式學習";
 const DEFAULT_DIFFICULTY = "簡單";
 
-// === 每日金句 ===
-const DAILY_QUOTES = [
-  "本局提醒：今日有學，即可立案；步子再小，也能靠岸。",
-  "今日有光，心就不慌；學得再慢，也在路上。",
-  "一點進度，一點溫度；慢慢累積，也會有路。",
-  "本日案件不求滿分，有願意開始，就是啟程。",
-  "學習不急著成篇，今天一點，也算向前。",
-  "本局備註：不必逞強，穩穩前行，也會發光。",
-  "今日有開張，心就有方向；一點點學，也值得收藏。",
-  "不把自己送去審判，先把努力放進檔案。",
-  "一小步也能立案，一小時也能靠岸。",
-  "本局認定：願意練習，就是有效前進。",
-  "今天不必追趕誰，照顧自己，也是在準備。",
-  "學習不是急件，慢慢養成，也會成篇。",
-  "今日有做，心就有火；今日有學，路就有光。",
-  "不用十天走完十年，今日一點，也能向前。",
-  "本局小章：你有學習，值得記上一筆。",
-  "慢慢寫，慢慢懂，慢慢把自己接回手中。",
-  "今日進度不問長短，有打開心門，就算靠岸。",
-  "不急著變強，先不再受傷；穩穩學習，也會發光。",
-  "本局收件：今天有學，就是好案件。",
-  "一點點也有重量，慢慢來也有方向。",
-];
-
-// === 前端狀態 ===
-let items = [];
-
-let weekContext = {
-  currentWeek: null,
-  nextWeek: null,
-};
-
-let selectedWeekView = "current";
-
-// === DOM 元素 ===
-const taskList = document.querySelector("#taskList");
-const standardList = document.querySelector("#standardList");
-
-const taskProgress = document.querySelector("#taskProgress");
-const standardProgress = document.querySelector("#standardProgress");
-
-const taskInput = document.querySelector("#taskInput");
-const taskCategory = document.querySelector("#taskCategory");
-const taskDifficulty = document.querySelector("#taskDifficulty");
-const addTaskBtn = document.querySelector("#addTaskBtn");
-
-const standardInput = document.querySelector("#standardInput");
-const addStandardBtn = document.querySelector("#addStandardBtn");
-
-const refreshBtn = document.getElementById("refreshBtn");
-
-const weekStartText = document.querySelector("#weekStartText");
-const weekEndText = document.querySelector("#weekEndText");
-const dailyQuote = document.querySelector("#dailyQuote");
-
-// === 12 週主線 DOM ===
-const currentWeekNumber = document.querySelector("#currentWeekNumber");
-const planStatusText = document.querySelector("#planStatusText");
-
-const currentWeekTab = document.querySelector("#currentWeekTab");
-const nextWeekTab = document.querySelector("#nextWeekTab");
-
-const selectedWeekLabel = document.querySelector("#selectedWeekLabel");
-const selectedWeekTitle = document.querySelector("#selectedWeekTitle");
-const selectedWeekAchievement = document.querySelector("#selectedWeekAchievement");
-
-const completeWeekBtn = document.querySelector("#completeWeekBtn");
-
-// === 日期工具函式 ===
-function padNumber(number) {
-  return String(number).padStart(2, "0");
+if (!GOOGLE_SHEETS_API_URL) {
+  throw new Error(
+    "缺少環境變數 GOOGLE_SHEETS_API_URL，請檢查 backend/.env 或 Render 環境變數"
+  );
 }
 
-function formatDateForDisplay(date) {
-  const year = date.getFullYear();
-  const month = padNumber(date.getMonth() + 1);
-  const day = padNumber(date.getDate());
-
-  return `${year}/${month}/${day}`;
+if (!GOOGLE_SHEETS_API_SECRET) {
+  throw new Error(
+    "缺少環境變數 GOOGLE_SHEETS_API_SECRET，請檢查 backend/.env 或 Render 環境變數"
+  );
 }
 
-function formatDateForDatetime(date) {
-  const year = date.getFullYear();
-  const month = padNumber(date.getMonth() + 1);
-  const day = padNumber(date.getDate());
+app.use(cors());
+app.use(express.json());
 
-  return `${year}-${month}-${day}`;
-}
-
-function getCurrentWeekRange(baseDate = new Date()) {
-  const date = new Date(baseDate);
-  const day = date.getDay();
-
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-
-  const monday = new Date(date);
-  monday.setDate(date.getDate() + diffToMonday);
-
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-
-  return {
-    weekStart: monday,
-    weekEnd: sunday,
-  };
-}
-
-function renderWeekRange() {
-  if (!weekStartText || !weekEndText) return;
-
-  const currentWeek = weekContext.currentWeek;
-
-  // 如果 weeks 工作表未來有填 weekStart / weekEnd，就優先顯示 weeks 的日期
-  if (currentWeek && currentWeek.weekStart && currentWeek.weekEnd) {
-    weekStartText.textContent = currentWeek.weekStart.replaceAll("-", "/");
-    weekStartText.setAttribute("datetime", currentWeek.weekStart);
-
-    weekEndText.textContent = currentWeek.weekEnd.replaceAll("-", "/");
-    weekEndText.setAttribute("datetime", currentWeek.weekEnd);
-
-    return;
-  }
-
-  // 若 weeks 尚未填日期，先沿用原本的本週日期算法
-  const range = getCurrentWeekRange();
-
-  weekStartText.textContent = formatDateForDisplay(range.weekStart);
-  weekStartText.setAttribute("datetime", formatDateForDatetime(range.weekStart));
-
-  weekEndText.textContent = formatDateForDisplay(range.weekEnd);
-  weekEndText.setAttribute("datetime", formatDateForDatetime(range.weekEnd));
-}
-
-// === 金句工具函式 ===
-function getDayOfYear(date = new Date()) {
-  const start = new Date(date.getFullYear(), 0, 0);
-  const diff = date - start;
-  const oneDay = 1000 * 60 * 60 * 24;
-
-  return Math.floor(diff / oneDay);
-}
-
-function renderDailyQuote() {
-  if (!dailyQuote) return;
-
-  const dayOfYear = getDayOfYear();
-  const quoteIndex = dayOfYear % DAILY_QUOTES.length;
-  const quote = DAILY_QUOTES[quoteIndex];
-
-  dailyQuote.textContent = `本日金句：${quote}`;
-}
-
-// === 12 週主線工具函式 ===
-function getSelectedWeek() {
-  if (selectedWeekView === "next") {
-    return weekContext.nextWeek;
-  }
-
-  return weekContext.currentWeek;
-}
-
-function getSelectedWeekLabelText() {
-  return selectedWeekView === "next" ? "下週主題" : "本週主題";
-}
-
-function getAchievementLabelText() {
-  return selectedWeekView === "next" ? "下週達成" : "本週達成";
-}
-
-function setWeekTabActiveState() {
-  if (!currentWeekTab || !nextWeekTab) return;
-
-  currentWeekTab.classList.toggle("is-active", selectedWeekView === "current");
-  nextWeekTab.classList.toggle("is-active", selectedWeekView === "next");
-}
-
-function renderPlanCard() {
-  if (
-    !currentWeekNumber ||
-    !planStatusText ||
-    !selectedWeekLabel ||
-    !selectedWeekTitle ||
-    !selectedWeekAchievement
-  ) {
-    return;
-  }
-
-  const currentWeek = weekContext.currentWeek;
-  const nextWeek = weekContext.nextWeek;
-  const selectedWeek = getSelectedWeek();
-
-  setWeekTabActiveState();
-
-  if (!currentWeek) {
-    currentWeekNumber.textContent = "-";
-    planStatusText.textContent = "目前讀不到週次資料。";
-    selectedWeekLabel.textContent = "週次主題";
-    selectedWeekTitle.textContent = "尚無資料";
-    selectedWeekAchievement.textContent =
-      "請確認後端 /week-context 是否正常，以及 weeks 工作表是否有 current。";
-    return;
-  }
-
-  currentWeekNumber.textContent = String(currentWeek.weekNumber || "-");
-
-  planStatusText.textContent = nextWeek
-    ? `目前第 ${currentWeek.weekNumber} 週，下週預告第 ${nextWeek.weekNumber} 週。`
-    : `目前第 ${currentWeek.weekNumber} 週，尚未設定下週。`;
-
-  if (!selectedWeek) {
-    selectedWeekLabel.textContent = "下週主題";
-    selectedWeekTitle.textContent = "尚未設定下週";
-    selectedWeekAchievement.textContent =
-      "可以先在 weeks 工作表補上 status = next 的週次。";
-    return;
-  }
-
-  selectedWeekLabel.textContent = getSelectedWeekLabelText();
-  selectedWeekTitle.textContent = selectedWeek.title || "尚未填寫主題";
-
-  const achievementBoxLabel = document.querySelector(".achievement-box span");
-
-  if (achievementBoxLabel) {
-    achievementBoxLabel.textContent = getAchievementLabelText();
-  }
-
-  selectedWeekAchievement.textContent =
-    selectedWeek.achievement || "尚未填寫本週達成。";
-}
-
-function switchWeekView(view) {
-  if (view !== "current" && view !== "next") {
-    return;
-  }
-
-  selectedWeekView = view;
-  renderPlanCard();
-}
-
-// === 資料工具函式 ===
+// === 共用工具：分類正規化 ===
 function normalizeCategory(value) {
   const category = String(value || "").trim();
 
-  if (CATEGORY_OPTIONS.includes(category)) {
-    return category;
+  if (!category) {
+    return DEFAULT_CATEGORY;
   }
 
-  return DEFAULT_CATEGORY;
+  if (!CATEGORY_OPTIONS.includes(category)) {
+    throw new Error("category 只能是：" + CATEGORY_OPTIONS.join("、"));
+  }
+
+  return category;
 }
 
+// === 共用工具：難度正規化 ===
 function normalizeDifficulty(value) {
   const difficulty = String(value || "").trim();
 
-  if (DIFFICULTY_OPTIONS.includes(difficulty)) {
-    return difficulty;
+  if (!difficulty) {
+    return DEFAULT_DIFFICULTY;
   }
 
-  return DEFAULT_DIFFICULTY;
+  if (!DIFFICULTY_OPTIONS.includes(difficulty)) {
+    throw new Error("difficulty 只能是：" + DIFFICULTY_OPTIONS.join("、"));
+  }
+
+  return difficulty;
 }
 
+// === 共用工具：整理 item，避免舊資料缺欄位時畫面壞掉 ===
 function normalizeItem(item) {
   return {
     ...item,
     category: normalizeCategory(item.category),
     difficulty: normalizeDifficulty(item.difficulty),
+    parentTaskId: String(item.parentTaskId || "").trim(),
   };
 }
 
-function getItemsByType(type) {
-  return items.filter(function (item) {
-    return item.type === type;
-  });
-}
-
-function getTasksSortedByCategory() {
-  const tasks = getItemsByType("task");
-
+// === 共用工具：任務排序，讓 LINE 清單和編號邏輯一致 ===
+function sortTasksByCategory(tasks) {
   return [...tasks].sort(function (a, b) {
     const categoryA = normalizeCategory(a.category);
     const categoryB = normalizeCategory(b.category);
 
-    return CATEGORY_OPTIONS.indexOf(categoryA) - CATEGORY_OPTIONS.indexOf(categoryB);
-  });
-}
+    const indexA = CATEGORY_OPTIONS.indexOf(categoryA);
+    const indexB = CATEGORY_OPTIONS.indexOf(categoryB);
 
-function findItemById(id) {
-  return items.find(function (item) {
-    return item.id === id;
-  });
-}
-
-function findItemIndexById(id) {
-  return items.findIndex(function (item) {
-    return item.id === id;
-  });
-}
-
-function replaceItem(updatedItem) {
-  const normalizedUpdatedItem = normalizeItem(updatedItem);
-
-  items = items.map(function (item) {
-    if (item.id === normalizedUpdatedItem.id) {
-      return normalizedUpdatedItem;
+    if (indexA !== indexB) {
+      return indexA - indexB;
     }
 
-    return item;
+    return 0;
   });
 }
 
-function replaceItemById(targetId, newItem) {
-  const normalizedNewItem = normalizeItem(newItem);
-
-  items = items.map(function (item) {
-    if (item.id === targetId) {
-      return normalizedNewItem;
-    }
-
-    return item;
-  });
-}
-
-function insertItemAtIndex(item, index) {
-  const safeIndex = Math.max(0, index);
-
-  items = [
-    ...items.slice(0, safeIndex),
-    normalizeItem(item),
-    ...items.slice(safeIndex),
-  ];
-}
-
-// === 畫面渲染 ===
-function createEmptyMessage(text) {
-  const emptyItem = document.createElement("li");
-  emptyItem.className = "empty-message";
-  emptyItem.textContent = text;
-
-  return emptyItem;
-}
-
-function createCategoryHeading(category) {
-  const heading = document.createElement("li");
-  heading.className = "category-heading";
-  heading.textContent = `【${category}】`;
-
-  return heading;
-}
-
-function getDifficultyClass(difficulty) {
-  if (difficulty === "簡單") return "easy";
-  if (difficulty === "適中") return "medium";
-  if (difficulty === "困難") return "hard";
-  return "";
-}
-
-function createCheckItem(item, displayNumber) {
-  const normalizedItem = normalizeItem(item);
-
-  const itemElement = document.createElement("li");
-  itemElement.className = normalizedItem.done
-    ? "task-item is-done"
-    : "task-item";
-
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
-  checkbox.checked = normalizedItem.done;
-
-  const content = document.createElement("div");
-  content.className = "item-content";
-
-  const topLine = document.createElement("div");
-  topLine.className = "item-topline";
-
-  const number = document.createElement("span");
-  number.className = "item-number";
-  number.textContent = displayNumber ? String(displayNumber) : "";
-
-  const title = document.createElement("span");
-  title.className = "item-title";
-  title.textContent = normalizedItem.title;
-
-  const meta = document.createElement("div");
-  meta.className = "item-meta";
-
-  if (normalizedItem.type === "task") {
-    const categoryChip = document.createElement("span");
-    categoryChip.className = "chip chip-category";
-    categoryChip.textContent = normalizedItem.category;
-
-    const difficultyChip = document.createElement("span");
-    difficultyChip.className =
-      "chip chip-difficulty " + getDifficultyClass(normalizedItem.difficulty);
-    difficultyChip.textContent = normalizedItem.difficulty;
-
-    meta.appendChild(categoryChip);
-    meta.appendChild(difficultyChip);
+// === 共用工具：對外顯示名稱 ===
+function getDisplayLabel(label) {
+  if (label === "完成標準") {
+    return "本週驗收標準";
   }
 
-  topLine.appendChild(number);
-
-  if (normalizedItem.type === "task") {
-    topLine.appendChild(meta);
-  }
-
-  content.appendChild(topLine);
-  content.appendChild(title);
-
-  const actions = document.createElement("div");
-  actions.className = "item-actions";
-
-  const editBtn = document.createElement("button");
-  editBtn.className = "text-btn";
-  editBtn.type = "button";
-  editBtn.textContent = "修訂";
-
-  const deleteBtn = document.createElement("button");
-  deleteBtn.className = "text-btn danger";
-  deleteBtn.type = "button";
-  deleteBtn.textContent = "撤案";
-
-  checkbox.addEventListener("change", async function () {
-    await updateItem(normalizedItem.id, {
-      done: checkbox.checked,
-    });
-  });
-
-  editBtn.addEventListener("click", async function () {
-    const newTitle = prompt("請輸入修訂後的公文內容", normalizedItem.title);
-
-    if (newTitle === null) {
-      return;
-    }
-
-    const trimmedTitle = newTitle.trim();
-
-    if (trimmedTitle === "") {
-      alert("公文內容不可空白。本局未更動資料。");
-      return;
-    }
-
-    await updateItem(normalizedItem.id, {
-      title: trimmedTitle,
-    });
-  });
-
-  deleteBtn.addEventListener("click", async function () {
-    const message =
-      normalizedItem.type === "task"
-        ? "確定要將這項本週任務撤案嗎？本局會將它移出案件板。"
-        : "確定要將這項本週驗收標準撤案嗎？本局會將它移出案件板。";
-
-    const shouldDelete = confirm(message);
-
-    if (!shouldDelete) {
-      return;
-    }
-
-    await deleteItem(normalizedItem.id);
-  });
-
-  actions.appendChild(editBtn);
-  actions.appendChild(deleteBtn);
-
-  itemElement.appendChild(checkbox);
-  itemElement.appendChild(content);
-  itemElement.appendChild(actions);
-
-  return itemElement;
+  return label;
 }
 
-function renderTasks() {
-  const tasks = getTasksSortedByCategory();
+// === 共用工具：溫柔公文感收尾句 ===
+function getGentleFooterText() {
+  return "今日有學，即可記上一筆。";
+}
 
-  taskList.innerHTML = "";
+// === 產生帶 secret 的 Google Sheets API URL，用於 GET 讀取 ===
+function buildGoogleSheetsGetUrl() {
+  const url = new URL(GOOGLE_SHEETS_API_URL);
+  url.searchParams.set("secret", GOOGLE_SHEETS_API_SECRET);
+  return url.toString();
+}
 
+// === 產生帶 resource 的 Google Sheets API URL ===
+function buildGoogleSheetsResourceUrl(resource) {
+  const url = new URL(GOOGLE_SHEETS_API_URL);
+
+  url.searchParams.set("secret", GOOGLE_SHEETS_API_SECRET);
+  url.searchParams.set("resource", resource);
+
+  return url.toString();
+}
+
+// === 共用函式：從 Google Sheets 讀目前週與下週 ===
+async function fetchWeekContextFromGoogleSheets() {
+  const response = await fetch(buildGoogleSheetsResourceUrl("week-context"));
+
+  if (!response.ok) {
+    throw new Error("呼叫 Google Apps Script 週次資料失敗，狀態碼：" + response.status);
+  }
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Google Apps Script 回傳週次資料失敗");
+  }
+
+  return {
+    currentWeek: data.currentWeek,
+    nextWeek: data.nextWeek,
+  };
+}
+
+// === 共用函式：從 Google Sheets 讀 items ===
+async function fetchItemsFromGoogleSheets() {
+  const response = await fetch(buildGoogleSheetsGetUrl());
+
+  if (!response.ok) {
+    throw new Error("呼叫 Google Apps Script 失敗，狀態碼：" + response.status);
+  }
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Google Apps Script 回傳失敗");
+  }
+
+  return data.items.map(normalizeItem);
+}
+
+// === 共用函式：新增 item 到 Google Sheets ===
+async function createItemToGoogleSheets({
+  type,
+  title,
+  category,
+  difficulty,
+  parentTaskId,
+  weekNumber,
+}) {
+  const item = {
+    type,
+    title,
+    category: normalizeCategory(category),
+    difficulty: normalizeDifficulty(difficulty),
+    done: false,
+    parentTaskId: String(parentTaskId || "").trim(),
+  };
+
+  if (weekNumber !== undefined && weekNumber !== null && weekNumber !== "") {
+    item.weekNumber = weekNumber;
+  }
+
+  const response = await fetch(GOOGLE_SHEETS_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      secret: GOOGLE_SHEETS_API_SECRET,
+      action: "create",
+      item,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("呼叫 Google Apps Script 新增失敗，狀態碼：" + response.status);
+  }
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Google Apps Script 新增資料失敗");
+  }
+
+  return normalizeItem(data.item);
+}
+
+// === 自動驗收標準：依任務難度產生標準文字 ===
+function buildAutoStandardTitle(taskTitle, difficulty) {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
+
+  if (normalizedDifficulty === "簡單") {
+    return `能完成「${taskTitle}」，並留下簡單紀錄。`;
+  }
+
+  if (normalizedDifficulty === "適中") {
+    return `能完成「${taskTitle}」，並用一句話說明學到的觀念。`;
+  }
+
+  if (normalizedDifficulty === "困難") {
+    return `能完成「${taskTitle}」的主要成果，並記錄至少 1 個卡住點與解法。`;
+  }
+
+  return `能完成「${taskTitle}」，並留下本週學習紀錄。`;
+}
+
+// === 自動驗收標準：建立與 task 關聯的 standard ===
+async function createAutoStandardForTask(task) {
+  if (!task || task.type !== "task" || !task.id) {
+    throw new Error("建立自動驗收標準時缺少有效 task");
+  }
+
+  const standardTitle = buildAutoStandardTitle(task.title, task.difficulty);
+
+  return createItemToGoogleSheets({
+    type: "standard",
+    title: standardTitle,
+    category: task.category,
+    difficulty: task.difficulty,
+    parentTaskId: task.id,
+    weekNumber: task.weekNumber,
+  });
+}
+
+// === 自動驗收標準：安全建立，避免標準失敗時讓 task 看起來像新增失敗 ===
+async function tryCreateAutoStandardForTask(task) {
+  try {
+    const autoStandard = await createAutoStandardForTask(task);
+
+    return {
+      autoStandard,
+      error: null,
+    };
+  } catch (error) {
+    console.error("自動建立驗收標準失敗：", error);
+
+    return {
+      autoStandard: null,
+      error: error.message,
+    };
+  }
+}
+
+// === 共用函式：更新 item 到 Google Sheets ===
+async function updateItemToGoogleSheets(id, updates) {
+  const safeUpdates = { ...updates };
+
+  if (safeUpdates.category !== undefined) {
+    safeUpdates.category = normalizeCategory(safeUpdates.category);
+  }
+
+  if (safeUpdates.difficulty !== undefined) {
+    safeUpdates.difficulty = normalizeDifficulty(safeUpdates.difficulty);
+  }
+
+  if (safeUpdates.parentTaskId !== undefined) {
+    safeUpdates.parentTaskId = String(safeUpdates.parentTaskId || "").trim();
+  }
+
+  const response = await fetch(GOOGLE_SHEETS_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      secret: GOOGLE_SHEETS_API_SECRET,
+      action: "update",
+      id,
+      updates: safeUpdates,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("呼叫 Google Apps Script 更新失敗，狀態碼：" + response.status);
+  }
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Google Apps Script 更新資料失敗");
+  }
+
+  return normalizeItem(data.item);
+}
+
+// === 共用函式：刪除 item from Google Sheets ===
+async function deleteItemFromGoogleSheets(id) {
+  const response = await fetch(GOOGLE_SHEETS_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      secret: GOOGLE_SHEETS_API_SECRET,
+      action: "delete",
+      id,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("呼叫 Google Apps Script 刪除失敗，狀態碼：" + response.status);
+  }
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Google Apps Script 刪除資料失敗");
+  }
+
+  return normalizeItem(data.item);
+}
+
+// === LINE 小工具：取得使用者識別 key，用來記住修改狀態 ===
+function getLineSourceKey(event) {
+  return (
+    event.source?.userId ||
+    event.source?.groupId ||
+    event.source?.roomId ||
+    "unknown-source"
+  );
+}
+
+// === LINE 小工具：取得某一類資料 ===
+async function getItemsByType(type) {
+  const items = await fetchItemsFromGoogleSheets();
+  const filteredItems = items.filter((item) => item.type === type);
+
+  if (type === "task") {
+    return sortTasksByCategory(filteredItems);
+  }
+
+  return filteredItems;
+}
+
+// === LINE 小工具：取得任務與驗收標準 ===
+async function getTaskBoardForLine() {
+  const items = await fetchItemsFromGoogleSheets();
+
+  const tasks = sortTasksByCategory(
+    items.filter((item) => item.type === "task")
+  );
+
+  const standards = items.filter((item) => item.type === "standard");
+
+  return {
+    tasks,
+    standards,
+  };
+}
+
+// === LINE 小工具：清單底部固定提示 ===
+function getLineCommandHintText() {
+  return [
+    "需要辦事攻略請輸入：攻略",
+    "想看用量小抄請輸入：用量小抄",
+  ].join("\n");
+}
+
+// === LINE 小工具：格式化任務分類區塊，任務編號維持連續 ===
+function formatTaskSectionByCategory(tasks) {
   if (tasks.length === 0) {
-    taskList.appendChild(
-      createEmptyMessage("今天還沒立案也無妨，放一個小任務，就是好的開始。")
-    );
-    return;
+    return [
+      "本週任務：",
+      "",
+      "本週尚未立案也無妨，放一個小任務，就是好的開始。",
+    ].join("\n");
   }
 
-  let displayNumber = 1;
+  const lines = ["本週任務：", ""];
+
+  let taskNumber = 1;
 
   CATEGORY_OPTIONS.forEach(function (category) {
     const categoryTasks = tasks.filter(function (task) {
@@ -611,336 +403,1138 @@ function renderTasks() {
       return;
     }
 
-    taskList.appendChild(createCategoryHeading(category));
+    lines.push(`【${category}】`);
 
     categoryTasks.forEach(function (task) {
-      taskList.appendChild(createCheckItem(task, displayNumber));
-      displayNumber += 1;
+      const checkbox = task.done ? "☑" : "☐";
+      const difficulty = normalizeDifficulty(task.difficulty);
+
+      lines.push(`${taskNumber}. ${checkbox} ${task.title}（${difficulty}）`);
+      taskNumber += 1;
     });
+
+    lines.push("");
   });
+
+  return lines.join("\n").trim();
 }
 
-function renderStandards() {
-  const standards = getItemsByType("standard");
-
-  standardList.innerHTML = "";
-
-  if (standards.length === 0) {
-    standardList.appendChild(
-      createEmptyMessage("本週標準尚未成文，寫下一個方向，慢慢前進")
-    );
-    return;
+// === LINE 小工具：格式化驗收標準區塊 ===
+function formatLineSection(title, items, emptyText) {
+  if (items.length === 0) {
+    return [title, "", emptyText].join("\n");
   }
 
-  standards.forEach(function (standard, index) {
-    standardList.appendChild(createCheckItem(standard, index + 1));
-  });
-}
-
-function renderProgress() {
-  const tasks = getItemsByType("task");
-  const standards = getItemsByType("standard");
-
-  const doneTasks = tasks.filter(function (task) {
-    return task.done;
+  const lines = items.map((item, index) => {
+    const checkbox = item.done ? "☑" : "☐";
+    return `${index + 1}. ${checkbox} ${item.title}`;
   });
 
-  const doneStandards = standards.filter(function (standard) {
-    return standard.done;
+  return [title, "", ...lines].join("\n");
+}
+
+// === LINE 小工具：格式化完整清單 ===
+function formatTaskBoardForLine({ tasks, standards }) {
+  const taskSection = formatTaskSectionByCategory(tasks);
+
+  const standardSection = formatLineSection(
+    "本週驗收標準：",
+    standards,
+    "本週標準尚未成文，寫下一個方向，慢慢前進"
+  );
+
+  return [
+    "📋 不努力時間有限管理局｜本週案件板",
+    "",
+    taskSection,
+    "",
+    standardSection,
+    "",
+    getLineCommandHintText(),
+  ].join("\n");
+}
+
+// === LINE 小工具：格式化指定難度任務 ===
+function formatTasksByDifficultyForLine(tasks, difficulty) {
+  const matchedTasks = tasks
+    .map(function (task, index) {
+      return {
+        task,
+        originalNumber: index + 1,
+      };
+    })
+    .filter(function (entry) {
+      return normalizeDifficulty(entry.task.difficulty) === difficulty;
+    });
+
+  if (matchedTasks.length === 0) {
+    return [
+      `📌 本週${difficulty}任務`,
+      "",
+      `目前沒有${difficulty}任務。`,
+      "",
+      "沒有案件也無妨，已經很棒。",
+      "",
+      "需要完整清單請輸入：清單",
+    ].join("\n");
+  }
+
+  const lines = matchedTasks.map(function (entry) {
+    const checkbox = entry.task.done ? "☑" : "☐";
+    const category = normalizeCategory(entry.task.category);
+
+    return `${entry.originalNumber}. ${checkbox} ${entry.task.title}（${category}）`;
   });
 
-  taskProgress.textContent = `${doneTasks.length} / ${tasks.length}`;
-  standardProgress.textContent = `${doneStandards.length} / ${standards.length}`;
+  return [
+    `📌 本週${difficulty}任務`,
+    "",
+    ...lines,
+    "",
+    "以上編號沿用完整清單，可直接輸入：完成任務 編號",
+    "步子再小，也算靠岸。",
+    "",
+    "需要完整清單請輸入：清單",
+  ].join("\n");
 }
 
-function renderAll() {
-  renderPlanCard();
-  renderWeekRange();
-  renderTasks();
-  renderStandards();
-  renderProgress();
-}
+// === LINE 小工具：把編號轉成真正的 item ===
+async function findItemByNumber({ type, numberText, label }) {
+  const itemNumber = Number(numberText);
+  const displayLabel = getDisplayLabel(label);
 
-// === 讀取週次資料 ===
-async function loadWeekContext() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/week-context`);
-
-    if (!response.ok) {
-      throw new Error("後端週次資料回應失敗");
-    }
-
-    const data = await response.json();
-
-    weekContext = {
-      currentWeek: data.currentWeek || null,
-      nextWeek: data.nextWeek || null,
+  if (!Number.isInteger(itemNumber) || itemNumber <= 0) {
+    return {
+      error: [
+        `這份公文還缺少正確的${displayLabel}編號，本局未更動資料。`,
+        "",
+        "可以這樣輸入：",
+        `完成${label}3`,
+        `完成第三個${label}`,
+      ].join("\n"),
     };
+  }
 
-    renderPlanCard();
-    renderWeekRange();
-  } catch (error) {
-    console.error("讀取週次資料失敗：", error);
+  const items = await getItemsByType(type);
+  const targetItem = items[itemNumber - 1];
 
-    weekContext = {
-      currentWeek: null,
-      nextWeek: null,
+  if (!targetItem) {
+    return {
+      error: [
+        `本局目前查無第 ${itemNumber} 個${displayLabel}。`,
+        "",
+        "可以先輸入「清單」確認編號，慢慢來，案件會排好。",
+      ].join("\n"),
     };
-
-    renderPlanCard();
   }
+
+  return {
+    itemNumber,
+    item: targetItem,
+    items,
+  };
 }
 
-// === 讀取任務資料 ===
-async function loadItems() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/items`);
-
-    if (!response.ok) {
-      throw new Error("後端回應失敗");
-    }
-
-    const data = await response.json();
-
-    items = data.map(normalizeItem);
-
-    renderAll();
-  } catch (error) {
-    console.error("讀取任務資料失敗：", error);
-    alert("本局暫時讀不到案件板，資料未更動。請稍後再重新整理。");
-
-    items = [];
-    renderAll();
-  }
-}
-
-// === 重新整理資料 ===
-async function refreshItems() {
-  if (!refreshBtn) {
-    await Promise.all([loadWeekContext(), loadItems()]);
+// === LINE 小工具：回覆 LINE 訊息 ===
+async function replyToLine(replyToken, replyText) {
+  if (!LINE_CHANNEL_ACCESS_TOKEN) {
+    console.error("缺少 LINE_CHANNEL_ACCESS_TOKEN，無法回覆 LINE 訊息");
     return;
   }
 
-  try {
-    refreshBtn.disabled = true;
-    refreshBtn.textContent = "案件板整理中...";
+  const lineResponse = await fetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [
+        {
+          type: "text",
+          text: replyText,
+        },
+      ],
+    }),
+  });
 
-    await Promise.all([loadWeekContext(), loadItems()]);
-
-    refreshBtn.textContent = "重新整理案件板";
-  } catch (error) {
-    console.error("重新整理資料失敗：", error);
-    alert("重新整理資料失敗，請稍後再試。");
-    refreshBtn.textContent = "重新整理案件板";
-  } finally {
-    refreshBtn.disabled = false;
+  if (!lineResponse.ok) {
+    const errorText = await lineResponse.text();
+    console.error("LINE Reply API 回覆失敗：", lineResponse.status, errorText);
   }
 }
 
-// === 新增資料：樂觀更新 ===
-async function addItem(type, inputElement, options = {}) {
-  const title = inputElement.value.trim();
+// === LINE 小工具：攻略 ===
+function getGuideText() {
+  return [
+    "📋 不努力時間有限管理局｜辦事攻略",
+    "",
+    "管理局小櫃台受理以下案件。",
+    "格式不用完美，補齊即可辦理。",
+    "",
+    "━━━━━━━━━━━━",
+    "🔎 一、查看案件",
+    "━━━━━━━━━━━━",
+    "📌 清單",
+    "查看本週任務與本週驗收標準",
+    "",
+    "📌 簡單任務",
+    "查看難度為「簡單」的任務",
+    "",
+    "📌 適中任務",
+    "查看難度為「適中」的任務",
+    "",
+    "📌 困難任務",
+    "查看難度為「困難」的任務",
+    "",
+    "━━━━━━━━━━━━",
+    "📝 二、新增案件",
+    "━━━━━━━━━━━━",
+    "📌 新增任務 任務內容",
+    "例：新增任務 練習 CSS",
+    "",
+    "📌 新增任務 任務內容｜分類｜難度",
+    "例：新增任務 練習 CSS Flex｜程式學習｜適中",
+    "",
+    "新增任務時，本局會自動建立一筆關聯驗收標準。",
+    "",
+    "可用分類：",
+    "・程式學習",
+    "・身心穩定",
+    "・興趣探索",
+    "",
+    "可用難度：",
+    "・簡單",
+    "・適中",
+    "・困難",
+    "",
+    "━━━━━━━━━━━━",
+    "✅ 三、辦理任務",
+    "━━━━━━━━━━━━",
+    "📌 完成任務3",
+    "📌 完成第三個任務",
+    "📌 已完成第 3 個任務",
+    "",
+    "📌 取消任務3",
+    "撤回已辦理狀態",
+    "",
+    "📌 修改任務3",
+    "本局會請你輸入新文字",
+    "",
+    "📌 刪除任務3",
+    "將該任務撤案",
+    "",
+    "━━━━━━━━━━━━",
+    "📎 四、本週驗收標準",
+    "━━━━━━━━━━━━",
+    "📌 新增標準 本週能說明一個學到的觀念",
+    "📌 新增標準 本週有整理一次學習筆記",
+    "📌 新增標準 本週有完成一個小練習",
+    "",
+    "📌 完成標準2",
+    "📌 取消標準2",
+    "📌 修改標準2",
+    "📌 刪除標準2",
+    "",
+    "驗收標準是看見本週靠近了哪裡，",
+    "不是拿來規定自己完成幾個。",
+    "",
+    "━━━━━━━━━━━━",
+    "🛑 五、修訂中止",
+    "━━━━━━━━━━━━",
+    "📌 取消修改",
+    "若本局正在等你輸入新文字，",
+    "可用此指令取消修訂。",
+    "",
+    "━━━━━━━━━━━━",
+    "🌿 本局提醒",
+    "━━━━━━━━━━━━",
+    "今日有學，即可記上一筆。",
+    "步子再小，也算靠岸。",
+  ].join("\n");
+}
 
-  if (title === "") {
-    return;
+// === LINE 小工具：用量小抄 ===
+function getUsageText() {
+  return [
+    "📮 不努力時間有限管理局｜LINE 用量小抄",
+    "",
+    "【通常不太吃每月訊息額度】",
+    "你主動傳訊息，Bot 立刻回覆：",
+    "- 清單",
+    "- 攻略",
+    "- 用量小抄",
+    "- 新增任務 任務內容",
+    "- 完成任務 數字",
+    "- 修改任務 數字",
+    "- 點選圖文選單後，Bot 立刻回覆",
+    "",
+    "這類通常是 reply message。",
+    "意思是：你先敲櫃台，管理局小櫃台立刻回你。",
+    "",
+    "【會計入訊息額度】",
+    "Bot 主動傳給你：",
+    "- 每日提醒",
+    "- 主動補提醒",
+    "- 主動通知你還沒完成",
+    "- 群發 / 廣播",
+    "",
+    "這類通常是 push message。",
+    "意思是：管理局主動派公文到你家。",
+    "",
+    "【目前本局規則】",
+    "- 每天主動提醒最多 1 則",
+    "- 你自己打指令，Bot 立刻回覆，走 reply",
+    "- 不做群發",
+    "- 不做廣播",
+    "- 不亂發主動通知",
+    "",
+    "【一人使用估算】",
+    "每天提醒 1 次：約 30 則 / 月",
+    "",
+    "輕用量方案目前：",
+    "月費 0 元",
+    "免費訊息 200 則 / 月",
+    "",
+    "所以一人使用，每天提醒 1 次很安全。",
+    "",
+    "本局提醒：你主動問，不太燒額度；管理局主動找你，才要算郵資。",
+  ].join("\n");
+}
+
+// === LINE 小工具：處理等待中的修改 ===
+async function handlePendingActionIfNeeded(sourceKey, userText) {
+  const pending = pendingActions.get(sourceKey);
+
+  if (!pending) {
+    return null;
   }
 
-  const now = new Date().toISOString();
+  const displayLabel = getDisplayLabel(pending.label);
 
-  const category = normalizeCategory(options.category);
-  const difficulty = normalizeDifficulty(options.difficulty);
+  if (userText === "取消修改") {
+    pendingActions.delete(sourceKey);
+    return "已取消這次修訂。本局把待辦公文收回抽屜了。";
+  }
 
-  const tempItem = {
-    id: "temp-" + Date.now(),
+  const isExpired = Date.now() - pending.createdAt > PENDING_ACTION_TTL_MS;
+
+  if (isExpired) {
+    pendingActions.delete(sourceKey);
+
+    return [
+      "這次修訂已經逾時，本局未更動資料。",
+      "",
+      `可以重新輸入：修改${pending.label} 數字`,
+      "",
+      "慢慢來，案件不會責備你。",
+    ].join("\n");
+  }
+
+  const newTitle = userText.trim();
+
+  if (!newTitle) {
+    return `請輸入新的${displayLabel}文字，或輸入「取消修改」。`;
+  }
+
+  const updatedItem = await updateItemToGoogleSheets(pending.itemId, {
+    title: newTitle,
+  });
+
+  pendingActions.delete(sourceKey);
+
+  return [
+    `已修訂第 ${pending.itemNumber} 個${displayLabel}：`,
+    updatedItem.title || newTitle,
+    "",
+    "本局已更新公文內容，請安心續辦。",
+  ].join("\n");
+}
+
+// === LINE 小工具：解析新增文字裡的分類與難度 ===
+function parseCreateText({ userText, command }) {
+  let rawText = userText.replace(new RegExp(`^${command}\\s*`), "").trim();
+  rawText = rawText.replace(/^[：:]/, "").trim();
+
+  if (!rawText) {
+    return {
+      title: "",
+      category: DEFAULT_CATEGORY,
+      difficulty: DEFAULT_DIFFICULTY,
+    };
+  }
+
+  const delimiterPattern = /\s*[\/｜|，,、]\s*/;
+
+  const parts = rawText
+    .split(delimiterPattern)
+    .map(function (part) {
+      return part.trim();
+    })
+    .filter(Boolean);
+
+  return {
+    title: parts[0] || "",
+    category: parts[1] || DEFAULT_CATEGORY,
+    difficulty: parts[2] || DEFAULT_DIFFICULTY,
+  };
+}
+
+// === LINE 小工具：處理新增 ===
+async function handleCreateCommand({ userText, command, type, label, example }) {
+  const parsed = parseCreateText({
+    userText,
+    command,
+  });
+
+  const displayLabel = getDisplayLabel(label);
+
+  if (!parsed.title) {
+    return [
+      `這份立案公文還缺少${displayLabel}內容，本局未更動資料。`,
+      "",
+      `可以這樣輸入：${command} ${label}內容`,
+      `例：${command} ${example}`,
+      "",
+      "任務也可以加分類與難度：",
+      "例：新增任務 練習 CSS / 程式學習 / 適中",
+      "例：新增任務 練習 CSS｜程式學習｜適中",
+    ].join("\n");
+  }
+
+  let category;
+  let difficulty;
+
+  try {
+    category = normalizeCategory(parsed.category);
+    difficulty = normalizeDifficulty(parsed.difficulty);
+  } catch (error) {
+    return [
+      "分類或難度需要補正，本局未更動資料。",
+      "",
+      error.message,
+      "",
+      "可以這樣輸入：",
+      "新增任務 練習 CSS / 程式學習 / 適中",
+      "新增任務 練習 CSS｜程式學習｜適中",
+    ].join("\n");
+  }
+
+  const createdItem = await createItemToGoogleSheets({
     type,
-    title,
+    title: parsed.title,
     category,
     difficulty,
-    done: false,
-    weekNumber: weekContext.currentWeek
-      ? weekContext.currentWeek.weekNumber
-      : "",
-    weekStart: "",
-    weekEnd: "",
-    createdAt: now,
-    updatedAt: now,
+  });
+
+  let autoStandardResult = {
+    autoStandard: null,
+    error: null,
   };
 
-  items.push(tempItem);
-  inputElement.value = "";
-  renderAll();
+  if (createdItem.type === "task") {
+    autoStandardResult = await tryCreateAutoStandardForTask(createdItem);
+  }
 
+  const titleText =
+    createdItem.type === "task"
+      ? "管理局小櫃台已立案："
+      : "管理局小櫃台已新增本週驗收標準：";
+
+  const metaText =
+    createdItem.type === "task"
+      ? `分類：${createdItem.category}｜難度：${createdItem.difficulty}`
+      : "這份標準會用來看見本週靠近了哪裡。";
+
+  const lines = [
+    titleText,
+    `☐ ${createdItem.title || parsed.title}`,
+    metaText,
+  ];
+
+  if (createdItem.type === "task") {
+    lines.push("");
+
+    if (autoStandardResult.autoStandard) {
+      lines.push("本局已自動建立關聯驗收標準：");
+      lines.push(`☐ ${autoStandardResult.autoStandard.title}`);
+    } else {
+      lines.push("自動驗收標準暫時建立失敗，可稍後手動新增。");
+      lines.push(`原因：${autoStandardResult.error || "未知錯誤"}`);
+    }
+  }
+
+  lines.push("");
+  lines.push(getGentleFooterText());
+  lines.push("");
+  lines.push("可以輸入「清單」查看目前案件板。");
+
+  return lines.join("\n");
+}
+
+// === LINE 小工具：處理完成 / 取消 ===
+async function handleDoneCommand({ numberText, type, label, done }) {
+  const result = await findItemByNumber({
+    type,
+    numberText,
+    label,
+  });
+
+  if (result.error) {
+    return result.error;
+  }
+
+  const updatedItem = await updateItemToGoogleSheets(result.item.id, {
+    done,
+  });
+
+  const checkbox = done ? "☑" : "☐";
+  const actionText = done ? "已辦理" : "已撤回辦理";
+  const displayLabel = getDisplayLabel(label);
+
+  return [
+    `${actionText}第 ${result.itemNumber} 個${displayLabel}：`,
+    `${checkbox} ${updatedItem.title || result.item.title}`,
+    "",
+    "步子再小，也算靠岸。",
+  ].join("\n");
+}
+
+// === LINE 小工具：處理刪除 ===
+async function handleDeleteCommand({ numberText, type, label }) {
+  const result = await findItemByNumber({
+    type,
+    numberText,
+    label,
+  });
+
+  if (result.error) {
+    return result.error;
+  }
+
+  const deletedTitle = result.item.title;
+  const displayLabel = getDisplayLabel(label);
+
+  await deleteItemFromGoogleSheets(result.item.id);
+
+  return [
+    `已撤案第 ${result.itemNumber} 個${displayLabel}：`,
+    deletedTitle,
+    "",
+    "本局已更新案件板，資料不再列入本週。",
+  ].join("\n");
+}
+
+// === LINE 小工具：處理修改 ===
+async function handleEditCommand({
+  sourceKey,
+  numberText,
+  newTitle,
+  type,
+  label,
+}) {
+  const result = await findItemByNumber({
+    type,
+    numberText,
+    label,
+  });
+
+  if (result.error) {
+    return result.error;
+  }
+
+  const displayLabel = getDisplayLabel(label);
+
+  if (newTitle && newTitle.trim()) {
+    const updatedItem = await updateItemToGoogleSheets(result.item.id, {
+      title: newTitle.trim(),
+    });
+
+    return [
+      `已修訂第 ${result.itemNumber} 個${displayLabel}：`,
+      updatedItem.title || newTitle.trim(),
+      "",
+      "本局已更新公文內容，請安心續辦。",
+    ].join("\n");
+  }
+
+  pendingActions.set(sourceKey, {
+    action: "edit",
+    type,
+    label,
+    itemNumber: result.itemNumber,
+    itemId: result.item.id,
+    oldTitle: result.item.title,
+    createdAt: Date.now(),
+  });
+
+  return [
+    `請輸入第 ${result.itemNumber} 個${displayLabel}的新文字：`,
+    "",
+    `目前內容：${result.item.title}`,
+    "",
+    "如果暫時不想修訂，請輸入：取消修改",
+  ].join("\n");
+}
+
+// === LINE 小工具：把中文數字轉成阿拉伯數字 ===
+function parseFlexibleNumber(numberText) {
+  const text = String(numberText || "").trim().replace(/兩/g, "二");
+
+  if (/^\d+$/.test(text)) {
+    return Number(text);
+  }
+
+  const digitMap = {
+    零: 0,
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+  };
+
+  if (text.length === 1 && digitMap[text] !== undefined) {
+    return digitMap[text];
+  }
+
+  if (text.includes("十")) {
+    const parts = text.split("十");
+    const tenPart = parts[0];
+    const onePart = parts[1];
+
+    const tens = tenPart === "" ? 1 : digitMap[tenPart];
+    const ones = onePart === "" ? 0 : digitMap[onePart];
+
+    if (tens === undefined || ones === undefined) {
+      return null;
+    }
+
+    return tens * 10 + ones;
+  }
+
+  return null;
+}
+
+// === LINE 小工具：把自然語句解析成操作指令 ===
+function buildLineOperationCommand(actionText, targetText, numberText, newTitle) {
+  const number = parseFlexibleNumber(numberText);
+
+  if (!Number.isInteger(number) || number <= 0) {
+    return {
+      error:
+        "這份公文還缺少正確編號，本局未更動資料。可以這樣輸入：完成第 3 個任務",
+    };
+  }
+
+  const isTask = targetText.includes("任務");
+
+  let action = "";
+
+  if (actionText === "完成" || actionText === "已完成") {
+    action = "done";
+  }
+
+  if (actionText === "取消") {
+    action = "cancel";
+  }
+
+  if (actionText === "修改") {
+    action = "edit";
+  }
+
+  if (actionText === "刪除") {
+    action = "delete";
+  }
+
+  return {
+    action,
+    numberText: String(number),
+    newTitle,
+    type: isTask ? "task" : "standard",
+    label: isTask ? "任務" : "完成標準",
+  };
+}
+
+// === LINE 小工具：解析完成 / 取消 / 修改 / 刪除指令 ===
+function parseLineOperationCommand(userText) {
+  let match = userText.match(
+    /^(完成|已完成|取消|修改|刪除)\s*(任務|完成標準|標準)\s*(\d+|[零一二三四五六七八九十兩]+)(?:\s+(.+))?$/
+  );
+
+  if (match) {
+    return buildLineOperationCommand(match[1], match[2], match[3], match[4]);
+  }
+
+  match = userText.match(
+    /^(完成|已完成|取消|修改|刪除)\s*第?\s*(\d+|[零一二三四五六七八九十兩]+)\s*個?\s*(任務|完成標準|標準)(?:\s+(.+))?$/
+  );
+
+  if (match) {
+    return buildLineOperationCommand(match[1], match[3], match[2], match[4]);
+  }
+
+  return null;
+}
+
+// === LINE 小工具：格式需補正提醒 ===
+function getFormatReminderText() {
+  return [
+    "這份公文格式需補正，本局未更動資料。",
+    "",
+    "可以這樣輸入：",
+    "完成任務3",
+    "完成第 3 個任務",
+    "完成第三個任務",
+    "已完成第三個任務",
+    "",
+    "取消任務3",
+    "修改任務3",
+    "刪除任務3",
+    "",
+    "完成標準2",
+    "取消第二個標準",
+    "修改第 2 個標準",
+    "刪除第二個標準",
+    "",
+    "新增任務 練習 CSS / 程式學習 / 適中",
+    "新增任務 練習 CSS｜程式學習｜適中",
+    "",
+    "不急著一次寫完，先把格式補齊就好。",
+    "",
+    getLineCommandHintText(),
+  ].join("\n");
+}
+
+// === LINE 小工具：未知文字提醒 ===
+function getUnknownCommandText() {
+  return [
+    "本局目前看不懂這份公文，所以未更動資料。",
+    "",
+    "可以輸入「清單」查看本週案件板，或輸入「攻略」查看辦事方式。",
+    "",
+    "慢慢來，先讓案件排成一列。",
+    "",
+    getLineCommandHintText(),
+  ].join("\n");
+}
+
+// === LINE 小工具：處理文字指令 ===
+async function handleLineTextCommand({ sourceKey, userText }) {
+  const pendingReply = await handlePendingActionIfNeeded(sourceKey, userText);
+
+  if (pendingReply) {
+    return pendingReply;
+  }
+
+  if (
+    userText === "攻略" ||
+    userText === "說明" ||
+    userText === "help" ||
+    userText === "Help"
+  ) {
+    return getGuideText();
+  }
+
+  if (
+    userText === "用量" ||
+    userText === "用量小抄" ||
+    userText === "訊息用量"
+  ) {
+    return getUsageText();
+  }
+
+  if (userText === "清單" || userText === "全部清單") {
+    const board = await getTaskBoardForLine();
+    return formatTaskBoardForLine(board);
+  }
+
+  if (userText === "簡單任務" || userText === "簡單") {
+    const tasks = await getItemsByType("task");
+    return formatTasksByDifficultyForLine(tasks, "簡單");
+  }
+
+  if (userText === "適中任務" || userText === "適中") {
+    const tasks = await getItemsByType("task");
+    return formatTasksByDifficultyForLine(tasks, "適中");
+  }
+
+  if (userText === "困難任務" || userText === "困難") {
+    const tasks = await getItemsByType("task");
+    return formatTasksByDifficultyForLine(tasks, "困難");
+  }
+
+  if (userText.startsWith("新增一個任務")) {
+    return handleCreateCommand({
+      userText,
+      command: "新增一個任務",
+      type: "task",
+      label: "任務",
+      example: "練習 LINE Bot",
+    });
+  }
+
+  if (userText.startsWith("新增任務")) {
+    return handleCreateCommand({
+      userText,
+      command: "新增任務",
+      type: "task",
+      label: "任務",
+      example: "練習 LINE Bot",
+    });
+  }
+
+  if (userText.startsWith("新增一個完成標準")) {
+    return handleCreateCommand({
+      userText,
+      command: "新增一個完成標準",
+      type: "standard",
+      label: "完成標準",
+      example: "本週能說明一個學到的觀念",
+    });
+  }
+
+  if (userText.startsWith("新增一個標準")) {
+    return handleCreateCommand({
+      userText,
+      command: "新增一個標準",
+      type: "standard",
+      label: "完成標準",
+      example: "本週能說明一個學到的觀念",
+    });
+  }
+
+  if (userText.startsWith("新增標準")) {
+    return handleCreateCommand({
+      userText,
+      command: "新增標準",
+      type: "standard",
+      label: "完成標準",
+      example: "本週能說明一個學到的觀念",
+    });
+  }
+
+  const operation = parseLineOperationCommand(userText);
+
+  if (operation) {
+    if (operation.error) {
+      return operation.error;
+    }
+
+    if (operation.action === "done") {
+      return handleDoneCommand({
+        numberText: operation.numberText,
+        type: operation.type,
+        label: operation.label,
+        done: true,
+      });
+    }
+
+    if (operation.action === "cancel") {
+      return handleDoneCommand({
+        numberText: operation.numberText,
+        type: operation.type,
+        label: operation.label,
+        done: false,
+      });
+    }
+
+    if (operation.action === "edit") {
+      return handleEditCommand({
+        sourceKey,
+        numberText: operation.numberText,
+        newTitle: operation.newTitle,
+        type: operation.type,
+        label: operation.label,
+      });
+    }
+
+    if (operation.action === "delete") {
+      return handleDeleteCommand({
+        numberText: operation.numberText,
+        type: operation.type,
+        label: operation.label,
+      });
+    }
+  }
+
+  if (
+    userText.startsWith("完成") ||
+    userText.startsWith("已完成") ||
+    userText.startsWith("取消") ||
+    userText.startsWith("修改") ||
+    userText.startsWith("刪除") ||
+    userText.startsWith("新增")
+  ) {
+    return getFormatReminderText();
+  }
+
+  return getUnknownCommandText();
+}
+
+// === 首頁測試 ===
+app.get("/", (req, res) => {
+  res.send("不努力時間有限管理局 API 開張中。本局小櫃台今日值班。");
+});
+
+// === GAS Queue Gateway：處理 GAS 轉來的 LINE 文字，回傳真正 replyText ===
+app.post("/gas-queue", async (req, res) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/items`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        type,
-        title,
-        category,
-        difficulty,
-      }),
-    });
+    console.log("收到 GAS Queue 訊息：", req.body);
 
-    if (!response.ok) {
-      throw new Error("新增失敗");
+    const { source, queueId, userId, messageText } = req.body || {};
+
+    if (source !== "gas_queue") {
+      return res.status(400).json({
+        ok: false,
+        message: "source 必須是 gas_queue",
+      });
     }
 
-    const newItem = await response.json();
+    if (!queueId) {
+      return res.status(400).json({
+        ok: false,
+        message: "缺少 queueId",
+      });
+    }
 
-    replaceItemById(tempItem.id, newItem);
-    renderAll();
-  } catch (error) {
-    console.error("新增資料失敗：", error);
+    if (!userId) {
+      return res.status(400).json({
+        ok: false,
+        message: "缺少 userId",
+      });
+    }
 
-    items = items.filter(function (item) {
-      return item.id !== tempItem.id;
+    const userText = String(messageText || "").trim();
+
+    if (!userText) {
+      return res.status(400).json({
+        ok: false,
+        message: "缺少 messageText",
+      });
+    }
+
+    const sourceKey = String(userId).trim();
+
+    const replyText = await handleLineTextCommand({
+      sourceKey,
+      userText,
     });
 
-    inputElement.value = title;
-    renderAll();
+    return res.json({
+      ok: true,
+      queueId,
+      replyText,
+    });
+  } catch (error) {
+    console.error("處理 /gas-queue 發生錯誤：", error);
 
-    alert("新增失敗，已恢復畫面。請確認 Render 後端是否正常運作。");
+    return res.status(500).json({
+      ok: false,
+      message: "處理 GAS queue 訊息失敗",
+      error: error.message,
+    });
   }
-}
+});
 
-// === 更新資料：樂觀更新 ===
-async function updateItem(id, updates) {
-  const previousItem = findItemById(id);
+// === LINE Webhook：處理 LINE 聊天指令 ===
+// 這個舊路由先保留，方便本機測試或未來備用
+// 目前正式 LINE webhook 已經改由 GAS 接收
+app.post("/line/webhook", async (req, res) => {
+  console.log("收到 LINE Webhook：", req.body);
 
-  if (!previousItem) {
-    return;
+  const events = req.body.events || [];
+
+  for (const event of events) {
+    try {
+      if (event.type !== "message" || event.message.type !== "text") {
+        continue;
+      }
+
+      const sourceKey = getLineSourceKey(event);
+      const userText = event.message.text.trim();
+      const replyToken = event.replyToken;
+
+      const replyText = await handleLineTextCommand({
+        sourceKey,
+        userText,
+      });
+
+      await replyToLine(replyToken, replyText);
+    } catch (error) {
+      console.error("處理 LINE Webhook 發生錯誤：", error);
+
+      if (event.replyToken) {
+        await replyToLine(
+          event.replyToken,
+          "管理局小櫃台剛剛卡住了，本局未更動資料。請稍後再試一次。"
+        );
+      }
+    }
   }
 
-  const optimisticItem = normalizeItem({
-    ...previousItem,
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  });
+  res.status(200).send("OK");
+});
 
-  replaceItem(optimisticItem);
-  renderAll();
-
+// === Read：讀取目前週與下週 ===
+app.get("/week-context", async (req, res) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/items/${id}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(updates),
-    });
+    const context = await fetchWeekContextFromGoogleSheets();
 
-    if (!response.ok) {
-      throw new Error("更新失敗");
-    }
-
-    const updatedItem = await response.json();
-
-    replaceItem(updatedItem);
-    renderAll();
+    res.json(context);
   } catch (error) {
-    console.error("更新資料失敗：", error);
+    console.error("GET /week-context 讀取週次資料發生錯誤：", error);
 
-    replaceItem(previousItem);
-    renderAll();
-
-    alert("本局暫時無法修訂案件，畫面已恢復，資料未更動。請稍後再試。");
+    res.status(500).json({
+      message: "讀取週次資料失敗",
+      error: error.message,
+    });
   }
-}
+});
 
-// === 刪除資料：樂觀更新 ===
-async function deleteItem(id) {
-  const previousItem = findItemById(id);
-  const previousIndex = findItemIndexById(id);
-
-  if (!previousItem || previousIndex === -1) {
-    return;
-  }
-
-  items = items.filter(function (item) {
-    return item.id !== id;
-  });
-
-  renderAll();
-
+// === Read：讀取所有 items ===
+app.get("/items", async (req, res) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/items/${id}`, {
-      method: "DELETE",
-    });
-
-    if (!response.ok) {
-      throw new Error("刪除失敗");
-    }
+    const items = await fetchItemsFromGoogleSheets();
+    res.json(items);
   } catch (error) {
-    console.error("刪除資料失敗：", error);
+    console.error("GET /items 讀取 Google Sheets 發生錯誤：", error);
 
-    insertItemAtIndex(previousItem, previousIndex);
-    renderAll();
-
-    alert("本局暫時無法撤案，案件已放回原位，資料未更動。請稍後再試。");
-  }
-}
-
-function addTask() {
-  addItem("task", taskInput, {
-    category: taskCategory.value,
-    difficulty: taskDifficulty.value,
-  });
-}
-
-function addStandard() {
-  addItem("standard", standardInput, {
-    category: DEFAULT_CATEGORY,
-    difficulty: DEFAULT_DIFFICULTY,
-  });
-}
-
-// === 初始化 ===
-async function initApp() {
-  renderWeekRange();
-  renderDailyQuote();
-  renderPlanCard();
-
-  addTaskBtn.addEventListener("click", addTask);
-  addStandardBtn.addEventListener("click", addStandard);
-
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", refreshItems);
-  }
-
-  if (currentWeekTab) {
-    currentWeekTab.addEventListener("click", function () {
-      switchWeekView("current");
+    res.status(500).json({
+      message: "讀取 Google Sheets 資料失敗",
+      error: error.message,
     });
   }
+});
 
-  if (nextWeekTab) {
-    nextWeekTab.addEventListener("click", function () {
-      switchWeekView("next");
-    });
-  }
+// === Create：新增 item ===
+app.post("/items", async (req, res) => {
+  try {
+    const {
+      type,
+      title,
+      category,
+      difficulty,
+      parentTaskId,
+      weekNumber,
+    } = req.body;
 
-  if (completeWeekBtn) {
-    completeWeekBtn.addEventListener("click", function () {
-      alert("本週結案功能下一步再接上。現在先確認本週 / 下週主線卡片能正常顯示。");
-    });
-  }
-
-  taskInput.addEventListener("keydown", function (event) {
-    if (event.key === "Enter") {
-      addTask();
+    if (!type || !title) {
+      return res.status(400).json({
+        message: "type 和 title 都是必填",
+      });
     }
-  });
 
-  standardInput.addEventListener("keydown", function (event) {
-    if (event.key === "Enter") {
-      addStandard();
+    if (type !== "task" && type !== "standard") {
+      return res.status(400).json({
+        message: "type 只能是 task 或 standard",
+      });
     }
-  });
 
-  await Promise.all([loadWeekContext(), loadItems()]);
-}
+    const createdItem = await createItemToGoogleSheets({
+      type,
+      title,
+      category,
+      difficulty,
+      parentTaskId,
+      weekNumber,
+    });
 
-initApp();
+    if (createdItem.type === "task") {
+      await tryCreateAutoStandardForTask(createdItem);
+    }
+
+    // 為了不破壞目前前端，這裡仍回傳新增的 task 本身
+    // 自動建立的 standard 目前按「重新整理案件板」後會出現在畫面
+    res.status(201).json(createdItem);
+  } catch (error) {
+    console.error("POST /items 新增 Google Sheets 發生錯誤：", error);
+
+    res.status(500).json({
+      message: "新增資料到 Google Sheets 失敗",
+      error: error.message,
+    });
+  }
+});
+
+// === Update：更新 item ===
+app.patch("/items/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, done, category, difficulty, parentTaskId, weekNumber } = req.body;
+
+    const updates = {};
+
+    if (title !== undefined) {
+      updates.title = title;
+    }
+
+    if (done !== undefined) {
+      updates.done = done;
+    }
+
+    if (category !== undefined) {
+      updates.category = category;
+    }
+
+    if (difficulty !== undefined) {
+      updates.difficulty = difficulty;
+    }
+
+    if (parentTaskId !== undefined) {
+      updates.parentTaskId = parentTaskId;
+    }
+
+    if (weekNumber !== undefined) {
+      updates.weekNumber = weekNumber;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        message: "沒有收到要更新的欄位",
+      });
+    }
+
+    const updatedItem = await updateItemToGoogleSheets(id, updates);
+
+    res.json(updatedItem);
+  } catch (error) {
+    console.error("PATCH /items/:id 更新 Google Sheets 發生錯誤：", error);
+
+    res.status(500).json({
+      message: "更新資料到 Google Sheets 失敗",
+      error: error.message,
+    });
+  }
+});
+
+// === Delete：刪除 item ===
+app.delete("/items/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deletedItem = await deleteItemFromGoogleSheets(id);
+
+    res.json({
+      message: "刪除成功",
+      id: deletedItem.id,
+      item: deletedItem,
+    });
+  } catch (error) {
+    console.error("DELETE /items/:id 刪除 Google Sheets 發生錯誤：", error);
+
+    res.status(500).json({
+      message: "刪除 Google Sheets 資料失敗",
+      error: error.message,
+    });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`不努力時間有限管理局後端啟動：http://localhost:${PORT}`);
+});
