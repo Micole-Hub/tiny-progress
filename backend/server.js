@@ -67,6 +67,11 @@ function normalizeDifficulty(value) {
   return difficulty;
 }
 
+// === 共用工具：done 正規化 ===
+function normalizeDone(value) {
+  return value === true || String(value).toUpperCase() === "TRUE";
+}
+
 // === 共用工具：整理 item，避免舊資料缺欄位時畫面壞掉 ===
 function normalizeItem(item) {
   const safeItem = item || {};
@@ -78,9 +83,7 @@ function normalizeItem(item) {
     title: String(safeItem.title || "").trim(),
     category: normalizeCategory(safeItem.category),
     difficulty: normalizeDifficulty(safeItem.difficulty),
-    done:
-      safeItem.done === true ||
-      String(safeItem.done).toUpperCase() === "TRUE",
+    done: normalizeDone(safeItem.done),
     parentTaskId: String(safeItem.parentTaskId || "").trim(),
     weekNumber:
       safeItem.weekNumber === undefined || safeItem.weekNumber === ""
@@ -318,7 +321,7 @@ async function createTaskWithAutoStandard({
   };
 }
 
-// === 共用函式：更新 item 到 Google Sheets ===
+// === 共用函式：更新單筆 item 到 Google Sheets ===
 async function updateItemToGoogleSheets(id, updates) {
   const safeUpdates = { ...updates };
 
@@ -366,6 +369,46 @@ async function updateItemToGoogleSheets(id, updates) {
   }
 
   return normalizeItem(data.item);
+}
+
+// === 共用函式：更新 item，若是 task 的 done 改變，則同步關聯 standard ===
+async function updateItemWithLinkedStandardsToGoogleSheets(id, updates) {
+  const items = await fetchItemsFromGoogleSheets();
+
+  const targetItem = items.find(function (item) {
+    return item.id === id;
+  });
+
+  if (!targetItem) {
+    throw new Error("找不到 id：" + id);
+  }
+
+  const updatedItem = await updateItemToGoogleSheets(id, updates);
+  const updatedLinkedStandards = [];
+
+  const shouldSyncLinkedStandards =
+    targetItem.type === "task" && updates.done !== undefined;
+
+  if (shouldSyncLinkedStandards) {
+    const nextDone = normalizeDone(updates.done);
+
+    const linkedStandards = items.filter(function (item) {
+      return item.type === "standard" && item.parentTaskId === targetItem.id;
+    });
+
+    for (const standard of linkedStandards) {
+      const updatedStandard = await updateItemToGoogleSheets(standard.id, {
+        done: nextDone,
+      });
+
+      updatedLinkedStandards.push(updatedStandard);
+    }
+  }
+
+  return {
+    item: updatedItem,
+    updatedLinkedStandards,
+  };
 }
 
 // === 共用函式：刪除單筆 item from Google Sheets ===
@@ -965,20 +1008,36 @@ async function handleDoneCommand({ numberText, type, label, done }) {
     return result.error;
   }
 
-  const updatedItem = await updateItemToGoogleSheets(result.item.id, {
-    done,
-  });
+  const updateResult = await updateItemWithLinkedStandardsToGoogleSheets(
+    result.item.id,
+    {
+      done,
+    }
+  );
 
+  const updatedItem = updateResult.item;
   const checkbox = done ? "☑" : "☐";
   const actionText = done ? "已辦理" : "已撤回辦理";
   const displayLabel = getDisplayLabel(label);
 
-  return [
+  const lines = [
     `${actionText}第 ${result.itemNumber} 個${displayLabel}：`,
     `${checkbox} ${updatedItem.title || result.item.title}`,
-    "",
-    "步子再小，也算靠岸。",
-  ].join("\n");
+  ];
+
+  if (
+    result.item.type === "task" &&
+    updateResult.updatedLinkedStandards.length > 0
+  ) {
+    lines.push(
+      "",
+      `已同步更新 ${updateResult.updatedLinkedStandards.length} 筆關聯驗收標準。`
+    );
+  }
+
+  lines.push("", "步子再小，也算靠岸。");
+
+  return lines.join("\n");
 }
 
 // === LINE 小工具：處理刪除 ===
@@ -1575,7 +1634,7 @@ app.post("/items", async (req, res) => {
   }
 });
 
-// === Update：更新 item ===
+// === Update：更新 item，task.done 改變時同步關聯 standard ===
 app.patch("/items/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -1620,9 +1679,12 @@ app.patch("/items/:id", async (req, res) => {
       });
     }
 
-    const updatedItem = await updateItemToGoogleSheets(id, updates);
+    const updateResult = await updateItemWithLinkedStandardsToGoogleSheets(
+      id,
+      updates
+    );
 
-    res.json(updatedItem);
+    res.json(updateResult);
   } catch (error) {
     console.error("PATCH /items/:id 更新 Google Sheets 發生錯誤：", error);
 

@@ -548,11 +548,16 @@ function normalizeDifficulty(value) {
   return DEFAULT_DIFFICULTY;
 }
 
+function normalizeDone(value) {
+  return value === true || String(value).toUpperCase() === "TRUE";
+}
+
 function normalizeItem(item) {
   return {
     ...item,
     category: normalizeCategory(item.category),
     difficulty: normalizeDifficulty(item.difficulty),
+    done: normalizeDone(item.done),
     parentTaskId: String(item.parentTaskId || "").trim(),
     weekNumber:
       item.weekNumber === undefined || item.weekNumber === ""
@@ -620,6 +625,23 @@ function replaceItemById(targetId, newItem) {
   items = items.map(function (item) {
     if (item.id === targetId) {
       return normalizedNewItem;
+    }
+
+    return item;
+  });
+}
+
+function updateLinkedStandardsDoneState(taskId, done) {
+  const nextDone = normalizeDone(done);
+  const now = new Date().toISOString();
+
+  items = items.map(function (item) {
+    if (item.type === "standard" && item.parentTaskId === taskId) {
+      return normalizeItem({
+        ...item,
+        done: nextDone,
+        updatedAt: now,
+      });
     }
 
     return item;
@@ -1059,6 +1081,7 @@ async function addItem(type, inputElement, options = {}) {
 
 // === 更新資料：樂觀更新 ===
 async function updateItem(id, updates) {
+  const previousItems = [...items];
   const previousItem = findItemById(id);
 
   if (!previousItem) {
@@ -1072,6 +1095,11 @@ async function updateItem(id, updates) {
   });
 
   replaceItem(optimisticItem);
+
+  if (previousItem.type === "task" && updates.done !== undefined) {
+    updateLinkedStandardsDoneState(previousItem.id, updates.done);
+  }
+
   renderAll();
 
   try {
@@ -1087,14 +1115,21 @@ async function updateItem(id, updates) {
       throw new Error("更新失敗");
     }
 
-    const updatedItem = await response.json();
+    const result = await response.json();
 
-    replaceItem(updatedItem);
+    replaceItem(result.item);
+
+    if (Array.isArray(result.updatedLinkedStandards)) {
+      result.updatedLinkedStandards.forEach(function (standard) {
+        replaceItem(standard);
+      });
+    }
+
     renderAll();
   } catch (error) {
     console.error("更新資料失敗：", error);
 
-    replaceItem(previousItem);
+    items = previousItems;
     renderAll();
 
     alert("本局暫時無法修訂案件，畫面已恢復，資料未更動。請稍後再試。");
