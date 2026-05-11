@@ -69,10 +69,27 @@ function normalizeDifficulty(value) {
 
 // === 共用工具：整理 item，避免舊資料缺欄位時畫面壞掉 ===
 function normalizeItem(item) {
+  const safeItem = item || {};
+
   return {
-    ...item,
-    category: normalizeCategory(item.category),
-    difficulty: normalizeDifficulty(item.difficulty),
+    ...safeItem,
+    id: String(safeItem.id || "").trim(),
+    type: String(safeItem.type || "").trim(),
+    title: String(safeItem.title || "").trim(),
+    category: normalizeCategory(safeItem.category),
+    difficulty: normalizeDifficulty(safeItem.difficulty),
+    done:
+      safeItem.done === true ||
+      String(safeItem.done).toUpperCase() === "TRUE",
+    parentTaskId: String(safeItem.parentTaskId || "").trim(),
+    weekNumber:
+      safeItem.weekNumber === undefined || safeItem.weekNumber === ""
+        ? ""
+        : Number(safeItem.weekNumber),
+    weekStart: safeItem.weekStart || "",
+    weekEnd: safeItem.weekEnd || "",
+    createdAt: safeItem.createdAt || "",
+    updatedAt: safeItem.updatedAt || "",
   };
 }
 
@@ -105,6 +122,11 @@ function getDisplayLabel(label) {
 // === 共用工具：溫柔公文感收尾句 ===
 function getGentleFooterText() {
   return "今日有學，即可記上一筆。";
+}
+
+// === 共用工具：自動驗收標準文字 ===
+function buildAutoStandardTitle(taskTitle) {
+  return `能完成「${taskTitle}」，並留下簡單紀錄。`;
 }
 
 // === 產生帶 secret 的 Google Sheets API URL，用於 GET 讀取 ===
@@ -168,7 +190,46 @@ async function createItemToGoogleSheets({
   title,
   category,
   difficulty,
+  done,
+  parentTaskId,
+  weekNumber,
+  weekStart,
+  weekEnd,
+  createdAt,
+  updatedAt,
 }) {
+  const itemPayload = {
+    type,
+    title,
+    category: normalizeCategory(category),
+    difficulty: normalizeDifficulty(difficulty),
+    done: done === true,
+  };
+
+  if (parentTaskId !== undefined) {
+    itemPayload.parentTaskId = String(parentTaskId || "").trim();
+  }
+
+  if (weekNumber !== undefined && weekNumber !== null && weekNumber !== "") {
+    itemPayload.weekNumber = Number(weekNumber);
+  }
+
+  if (weekStart !== undefined) {
+    itemPayload.weekStart = weekStart;
+  }
+
+  if (weekEnd !== undefined) {
+    itemPayload.weekEnd = weekEnd;
+  }
+
+  if (createdAt !== undefined) {
+    itemPayload.createdAt = createdAt;
+  }
+
+  if (updatedAt !== undefined) {
+    itemPayload.updatedAt = updatedAt;
+  }
+
   const response = await fetch(GOOGLE_SHEETS_API_URL, {
     method: "POST",
     headers: {
@@ -177,13 +238,7 @@ async function createItemToGoogleSheets({
     body: JSON.stringify({
       secret: GOOGLE_SHEETS_API_SECRET,
       action: "create",
-      item: {
-        type,
-        title,
-        category: normalizeCategory(category),
-        difficulty: normalizeDifficulty(difficulty),
-        done: false,
-      },
+      item: itemPayload,
     }),
   });
 
@@ -200,6 +255,44 @@ async function createItemToGoogleSheets({
   return normalizeItem(data.item);
 }
 
+// === 共用函式：新增 task，並自動建立關聯 standard ===
+async function createTaskWithAutoStandard({
+  title,
+  category,
+  difficulty,
+  weekNumber,
+}) {
+  const createdTask = await createItemToGoogleSheets({
+    type: "task",
+    title,
+    category,
+    difficulty,
+    done: false,
+    weekNumber,
+  });
+
+  if (!createdTask.id) {
+    throw new Error(
+      "新增任務成功，但 Google Apps Script 沒有回傳 task.id，無法建立關聯驗收標準"
+    );
+  }
+
+  const createdStandard = await createItemToGoogleSheets({
+    type: "standard",
+    title: buildAutoStandardTitle(createdTask.title || title),
+    category: createdTask.category,
+    difficulty: createdTask.difficulty,
+    done: false,
+    parentTaskId: createdTask.id,
+    weekNumber: createdTask.weekNumber,
+  });
+
+  return {
+    task: createdTask,
+    standard: createdStandard,
+  };
+}
+
 // === 共用函式：更新 item 到 Google Sheets ===
 async function updateItemToGoogleSheets(id, updates) {
   const safeUpdates = { ...updates };
@@ -210,6 +303,18 @@ async function updateItemToGoogleSheets(id, updates) {
 
   if (safeUpdates.difficulty !== undefined) {
     safeUpdates.difficulty = normalizeDifficulty(safeUpdates.difficulty);
+  }
+
+  if (safeUpdates.parentTaskId !== undefined) {
+    safeUpdates.parentTaskId = String(safeUpdates.parentTaskId || "").trim();
+  }
+
+  if (
+    safeUpdates.weekNumber !== undefined &&
+    safeUpdates.weekNumber !== null &&
+    safeUpdates.weekNumber !== ""
+  ) {
+    safeUpdates.weekNumber = Number(safeUpdates.weekNumber);
   }
 
   const response = await fetch(GOOGLE_SHEETS_API_URL, {
@@ -751,6 +856,27 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
     ].join("\n");
   }
 
+  if (type === "task") {
+    const result = await createTaskWithAutoStandard({
+      title: parsed.title,
+      category,
+      difficulty,
+    });
+
+    return [
+      "管理局小櫃台已立案：",
+      `☐ ${result.task.title || parsed.title}`,
+      `分類：${result.task.category}｜難度：${result.task.difficulty}`,
+      "",
+      "本局已自動建立關聯驗收標準：",
+      `☐ ${result.standard.title}`,
+      "",
+      getGentleFooterText(),
+      "",
+      "可以輸入「清單」查看目前案件板。",
+    ].join("\n");
+  }
+
   const createdItem = await createItemToGoogleSheets({
     type,
     title: parsed.title,
@@ -758,20 +884,10 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
     difficulty,
   });
 
-  const titleText =
-    createdItem.type === "task"
-      ? "管理局小櫃台已立案："
-      : "管理局小櫃台已新增本週驗收標準：";
-
-  const metaText =
-    createdItem.type === "task"
-      ? `分類：${createdItem.category}｜難度：${createdItem.difficulty}`
-      : "這份標準會用來看見本週靠近了哪裡。";
-
   return [
-    titleText,
+    "管理局小櫃台已新增本週驗收標準：",
     `☐ ${createdItem.title || parsed.title}`,
-    metaText,
+    "這份標準會用來看見本週靠近了哪裡。",
     "",
     getGentleFooterText(),
     "",
@@ -1325,7 +1441,7 @@ app.get("/items", async (req, res) => {
 // === Create：新增 item ===
 app.post("/items", async (req, res) => {
   try {
-    const { type, title, category, difficulty } = req.body;
+    const { type, title, category, difficulty, weekNumber } = req.body;
 
     if (!type || !title) {
       return res.status(400).json({
@@ -1339,11 +1455,26 @@ app.post("/items", async (req, res) => {
       });
     }
 
+    if (type === "task") {
+      const result = await createTaskWithAutoStandard({
+        title,
+        category,
+        difficulty,
+        weekNumber,
+      });
+
+      return res.status(201).json({
+        ...result.task,
+        autoStandard: result.standard,
+      });
+    }
+
     const createdItem = await createItemToGoogleSheets({
       type,
       title,
       category,
       difficulty,
+      weekNumber,
     });
 
     res.status(201).json(createdItem);
@@ -1361,7 +1492,14 @@ app.post("/items", async (req, res) => {
 app.patch("/items/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, done, category, difficulty } = req.body;
+    const {
+      title,
+      done,
+      category,
+      difficulty,
+      parentTaskId,
+      weekNumber,
+    } = req.body;
 
     const updates = {};
 
@@ -1379,6 +1517,14 @@ app.patch("/items/:id", async (req, res) => {
 
     if (difficulty !== undefined) {
       updates.difficulty = difficulty;
+    }
+
+    if (parentTaskId !== undefined) {
+      updates.parentTaskId = parentTaskId;
+    }
+
+    if (weekNumber !== undefined) {
+      updates.weekNumber = weekNumber;
     }
 
     if (Object.keys(updates).length === 0) {
