@@ -1,4 +1,4 @@
-// === Step 59：全域 API 等待狀態 ===
+// === 全域 API 等待狀態 ===
 // 目的：只要前端呼叫 API，就顯示「處理中」，並暫時鎖住按鈕
 
 let activeApiRequestCount = 0;
@@ -29,6 +29,8 @@ function getLoadingText(method) {
 
 // 開始等待狀態
 function startApiLoading(message) {
+  const isFirstRequest = activeApiRequestCount === 0;
+
   activeApiRequestCount += 1;
 
   const toast = ensureLoadingToast();
@@ -37,15 +39,17 @@ function startApiLoading(message) {
   document.body.classList.add("is-busy");
   toast.classList.add("is-show");
 
-  // 記住原本已經 disabled 的按鈕，避免等一下亂恢復
-  disabledButtonsBeforeBusy = Array.from(
-    document.querySelectorAll("button:disabled")
-  );
+  // 只有第一個 API 請求開始時，才記錄原本 disabled 的按鈕
+  // 避免第二個同時進來的請求，把「剛剛被鎖住的按鈕」誤判成原本就 disabled
+  if (isFirstRequest) {
+    disabledButtonsBeforeBusy = Array.from(
+      document.querySelectorAll("button:disabled")
+    );
 
-  // 操作中先鎖住所有按鈕，避免連點送出重複請求
-  document.querySelectorAll("button").forEach(function (button) {
-    button.disabled = true;
-  });
+    document.querySelectorAll("button").forEach(function (button) {
+      button.disabled = true;
+    });
+  }
 }
 
 // 結束等待狀態
@@ -61,7 +65,7 @@ function stopApiLoading() {
   document.body.classList.remove("is-busy");
   toast.classList.remove("is-show");
 
-  // 只恢復原本不是 disabled 的按鈕
+  // 只恢復「原本不是 disabled」的按鈕
   document.querySelectorAll("button").forEach(function (button) {
     const wasDisabledBeforeBusy = disabledButtonsBeforeBusy.includes(button);
 
@@ -115,7 +119,6 @@ const DEFAULT_CATEGORY = "程式學習";
 const DEFAULT_DIFFICULTY = "簡單";
 
 // === 每日金句 ===
-// 方向：溫柔公文感，不否定自己；今日有學，即可立案
 const DAILY_QUOTES = [
   "本局提醒：今日有學，即可立案；步子再小，也能靠岸。",
   "今日有光，心就不慌；學得再慢，也在路上。",
@@ -208,7 +211,6 @@ function getCurrentWeekRange(baseDate = new Date()) {
   const date = new Date(baseDate);
   const day = date.getDay();
 
-  // JavaScript 的週日是 0，所以週日要往前推 6 天才是週一
   const diffToMonday = day === 0 ? -6 : 1 - day;
 
   const monday = new Date(date);
@@ -723,8 +725,7 @@ async function refreshItems() {
     refreshBtn.disabled = true;
     refreshBtn.textContent = "案件板整理中...";
 
-    await loadWeekContext();
-    await loadItems();
+    await Promise.all([loadWeekContext(), loadItems()]);
 
     refreshBtn.textContent = "重新整理案件板";
   } catch (error) {
@@ -897,13 +898,10 @@ function addStandard() {
 }
 
 // === 初始化 ===
-function initApp() {
+async function initApp() {
   renderWeekRange();
   renderDailyQuote();
   renderPlanCard();
-
-  loadWeekContext();
-  loadItems();
 
   addTaskBtn.addEventListener("click", addTask);
   addStandardBtn.addEventListener("click", addStandard);
@@ -941,6 +939,8 @@ function initApp() {
       addStandard();
     }
   });
+
+  await Promise.all([loadWeekContext(), loadItems()]);
 }
 
 initApp();
