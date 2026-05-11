@@ -280,6 +280,15 @@ function renderDailyQuote() {
   dailyQuote.textContent = `本日金句：${quote}`;
 }
 
+// === 週次開放規則 ===
+// 星期日 12:00 之後，才可以開始新增下週資料
+function isSundayNoonOrLater(date = new Date()) {
+  const day = date.getDay();
+  const hour = date.getHours();
+
+  return day === 0 && hour >= 12;
+}
+
 // === 12 週主線工具函式 ===
 function getSelectedWeek() {
   if (selectedWeekView === "next") {
@@ -313,6 +322,28 @@ function getAchievementLabelText() {
 
 function isCurrentWeekView() {
   return selectedWeekView === "current";
+}
+
+function isNextWeekView() {
+  return selectedWeekView === "next";
+}
+
+function canAddToSelectedWeek() {
+  const selectedWeek = getSelectedWeek();
+
+  if (!selectedWeek || !selectedWeek.weekNumber) {
+    return false;
+  }
+
+  if (isCurrentWeekView()) {
+    return true;
+  }
+
+  if (isNextWeekView()) {
+    return isSundayNoonOrLater();
+  }
+
+  return false;
 }
 
 function setWeekTabActiveState() {
@@ -399,19 +430,25 @@ function renderBoardLabels() {
     standardSectionTitle.textContent = `${label}驗收標準`;
   }
 
-  if (selectedWeekView === "next") {
+  if (isNextWeekView()) {
+    const nextWeekCanAdd = canAddToSelectedWeek();
+
     if (progressNote) {
-      progressNote.textContent = "下週先預覽，不急著提前開張。";
+      progressNote.textContent = nextWeekCanAdd
+        ? "下週已開放預先立案，先替未來鋪一小段路。"
+        : "下週先預覽，不急著提前開張。";
     }
 
     if (taskSectionNote) {
-      taskSectionNote.textContent =
-        "這裡先預覽下週案件，結案前暫不開放新增。";
+      taskSectionNote.textContent = nextWeekCanAdd
+        ? "週日中午已過，可以先把下週任務安靜放進資料夾。"
+        : "這裡先預覽下週案件，週日中午 12 點後開放新增。";
     }
 
     if (standardSectionNote) {
-      standardSectionNote.textContent =
-        "下週目前僅供預覽，本局先不提前立案。";
+      standardSectionNote.textContent = nextWeekCanAdd
+        ? "可以先替下週寫下驗收方向，但正式開工仍待本週結案。"
+        : "下週目前僅供預覽，週日中午 12 點後可先立案。";
     }
 
     return;
@@ -432,9 +469,7 @@ function renderBoardLabels() {
 }
 
 function renderAddFormState() {
-  const canAdd =
-    isCurrentWeekView() &&
-    Boolean(weekContext.currentWeek && weekContext.currentWeek.weekNumber);
+  const canAdd = canAddToSelectedWeek();
 
   const formControls = [
     taskInput,
@@ -452,15 +487,24 @@ function renderAddFormState() {
   });
 
   if (taskInput) {
-    taskInput.placeholder = canAdd
-      ? "立一個小案件，例如：練習 CSS Flex"
-      : "下週目前只供預覽，結案後再立案";
+    if (isCurrentWeekView()) {
+      taskInput.placeholder = "立一個小案件，例如：練習 CSS Flex";
+    } else {
+      taskInput.placeholder = canAdd
+        ? "先替下週立一個小案件，例如：練習 JavaScript"
+        : "下週目前只供預覽，週日中午 12 點後可先立案";
+    }
   }
 
   if (standardInput) {
-    standardInput.placeholder = canAdd
-      ? "寫一個本週想靠近的方向，例如：本週能說明一個學到的觀念"
-      : "下週目前只供預覽，結案後再新增";
+    if (isCurrentWeekView()) {
+      standardInput.placeholder =
+        "寫一個本週想靠近的方向，例如：本週能說明一個學到的觀念";
+    } else {
+      standardInput.placeholder = canAdd
+        ? "先寫一個下週驗收方向"
+        : "下週目前只供預覽，週日中午 12 點後可先新增";
+    }
   }
 }
 
@@ -601,7 +645,7 @@ function getTaskEmptyMessage() {
     return "目前還沒有可顯示的週次資料。";
   }
 
-  if (selectedWeekView === "next") {
+  if (isNextWeekView()) {
     return "下週目前還沒有任務，先讓未來安靜排隊。";
   }
 
@@ -613,8 +657,8 @@ function getStandardEmptyMessage() {
     return "目前還沒有可顯示的週次資料。";
   }
 
-  if (selectedWeekView === "next") {
-    return "下週標準尚未成文，等本週結案後再慢慢補。";
+  if (isNextWeekView()) {
+    return "下週標準尚未成文，等時機到了再慢慢補。";
   }
 
   return "本週標準尚未成文，寫下一個方向，慢慢前進。";
@@ -920,8 +964,12 @@ async function refreshItems() {
 
 // === 新增資料：樂觀更新 ===
 async function addItem(type, inputElement, options = {}) {
-  if (!isCurrentWeekView()) {
-    alert("下週目前只供預覽，請先完成本週結案後再新增。");
+  if (!canAddToSelectedWeek()) {
+    const message = isNextWeekView()
+      ? "下週目前只供預覽，週日中午 12 點後才可先新增。"
+      : "目前還沒有可新增的週次資料。";
+
+    alert(message);
     return;
   }
 
@@ -936,9 +984,7 @@ async function addItem(type, inputElement, options = {}) {
   const category = normalizeCategory(options.category);
   const difficulty = normalizeDifficulty(options.difficulty);
 
-  const targetWeekNumber = weekContext.currentWeek
-    ? weekContext.currentWeek.weekNumber
-    : "";
+  const targetWeekNumber = getSelectedWeekNumber();
 
   const tempItem = {
     id: "temp-" + Date.now(),
