@@ -39,6 +39,7 @@ function startApiLoading(message) {
   document.body.classList.add("is-busy");
   toast.classList.add("is-show");
 
+  // 只有第一個 API 請求開始時，才記錄原本 disabled 的按鈕
   if (isFirstRequest) {
     disabledButtonsBeforeBusy = Array.from(
       document.querySelectorAll("button:disabled")
@@ -63,6 +64,7 @@ function stopApiLoading() {
   document.body.classList.remove("is-busy");
   toast.classList.remove("is-show");
 
+  // 只恢復「原本不是 disabled」的按鈕
   document.querySelectorAll("button").forEach(function (button) {
     const wasDisabledBeforeBusy = disabledButtonsBeforeBusy.includes(button);
 
@@ -105,6 +107,7 @@ window.fetch = async function (input, options = {}) {
 };
 
 // === API 設定 ===
+// 注意：這裡只放 Render 後端主網址，不要加 /items
 const API_BASE_URL = "https://no-effort-time-bureau.onrender.com";
 
 // === 分類與難度設定 ===
@@ -152,8 +155,19 @@ let selectedWeekView = "current";
 const taskList = document.querySelector("#taskList");
 const standardList = document.querySelector("#standardList");
 
+const progressTitle = document.querySelector("#progressTitle");
+const progressNote = document.querySelector("#progressNote");
+const taskProgressLabel = document.querySelector("#taskProgressLabel");
+const standardProgressLabel = document.querySelector("#standardProgressLabel");
+
 const taskProgress = document.querySelector("#taskProgress");
 const standardProgress = document.querySelector("#standardProgress");
+
+const taskSectionTitle = document.querySelector("#taskSectionTitle");
+const taskSectionNote = document.querySelector("#taskSectionNote");
+
+const standardSectionTitle = document.querySelector("#standardSectionTitle");
+const standardSectionNote = document.querySelector("#standardSectionNote");
 
 const taskInput = document.querySelector("#taskInput");
 const taskCategory = document.querySelector("#taskCategory");
@@ -226,6 +240,7 @@ function renderWeekRange() {
 
   const currentWeek = weekContext.currentWeek;
 
+  // 如果 weeks 工作表未來有填 weekStart / weekEnd，就優先顯示 weeks 的日期
   if (currentWeek && currentWeek.weekStart && currentWeek.weekEnd) {
     weekStartText.textContent = currentWeek.weekStart.replaceAll("-", "/");
     weekStartText.setAttribute("datetime", currentWeek.weekStart);
@@ -236,6 +251,7 @@ function renderWeekRange() {
     return;
   }
 
+  // 若 weeks 尚未填日期，先沿用原本的本週日期算法
   const range = getCurrentWeekRange();
 
   weekStartText.textContent = formatDateForDisplay(range.weekStart);
@@ -273,12 +289,30 @@ function getSelectedWeek() {
   return weekContext.currentWeek;
 }
 
+function getSelectedWeekNumber() {
+  const selectedWeek = getSelectedWeek();
+
+  if (!selectedWeek || !selectedWeek.weekNumber) {
+    return null;
+  }
+
+  return Number(selectedWeek.weekNumber);
+}
+
+function getSelectedWeekDisplayLabel() {
+  return selectedWeekView === "next" ? "下週" : "本週";
+}
+
 function getSelectedWeekLabelText() {
   return selectedWeekView === "next" ? "下週主題" : "本週主題";
 }
 
 function getAchievementLabelText() {
   return selectedWeekView === "next" ? "下週達成" : "本週達成";
+}
+
+function isCurrentWeekView() {
+  return selectedWeekView === "current";
 }
 
 function setWeekTabActiveState() {
@@ -342,13 +376,101 @@ function renderPlanCard() {
     selectedWeek.achievement || "尚未填寫本週達成。";
 }
 
+function renderBoardLabels() {
+  const label = getSelectedWeekDisplayLabel();
+
+  if (progressTitle) {
+    progressTitle.textContent = `${label}進度`;
+  }
+
+  if (taskProgressLabel) {
+    taskProgressLabel.textContent = `${label}任務`;
+  }
+
+  if (standardProgressLabel) {
+    standardProgressLabel.textContent = `${label}驗收標準`;
+  }
+
+  if (taskSectionTitle) {
+    taskSectionTitle.textContent = `${label}任務`;
+  }
+
+  if (standardSectionTitle) {
+    standardSectionTitle.textContent = `${label}驗收標準`;
+  }
+
+  if (selectedWeekView === "next") {
+    if (progressNote) {
+      progressNote.textContent = "下週先預覽，不急著提前開張。";
+    }
+
+    if (taskSectionNote) {
+      taskSectionNote.textContent =
+        "這裡先預覽下週案件，結案前暫不開放新增。";
+    }
+
+    if (standardSectionNote) {
+      standardSectionNote.textContent =
+        "下週目前僅供預覽，本局先不提前立案。";
+    }
+
+    return;
+  }
+
+  if (progressNote) {
+    progressNote.textContent = "本局只記本週靠近了哪裡，不翻舊帳。";
+  }
+
+  if (taskSectionNote) {
+    taskSectionNote.textContent = "本局會依分類排好，陪你一件一件辦。";
+  }
+
+  if (standardSectionNote) {
+    standardSectionNote.textContent =
+      "這不是拿來責備自己，而是看見本週靠近了哪裡。";
+  }
+}
+
+function renderAddFormState() {
+  const canAdd =
+    isCurrentWeekView() &&
+    Boolean(weekContext.currentWeek && weekContext.currentWeek.weekNumber);
+
+  const formControls = [
+    taskInput,
+    taskCategory,
+    taskDifficulty,
+    addTaskBtn,
+    standardInput,
+    addStandardBtn,
+  ];
+
+  formControls.forEach(function (control) {
+    if (control) {
+      control.disabled = !canAdd;
+    }
+  });
+
+  if (taskInput) {
+    taskInput.placeholder = canAdd
+      ? "立一個小案件，例如：練習 CSS Flex"
+      : "下週目前只供預覽，結案後再立案";
+  }
+
+  if (standardInput) {
+    standardInput.placeholder = canAdd
+      ? "寫一個本週想靠近的方向，例如：本週能說明一個學到的觀念"
+      : "下週目前只供預覽，結案後再新增";
+  }
+}
+
 function switchWeekView(view) {
   if (view !== "current" && view !== "next") {
     return;
   }
 
   selectedWeekView = view;
-  renderPlanCard();
+  renderAll();
 }
 
 // === 資料工具函式 ===
@@ -378,17 +500,33 @@ function normalizeItem(item) {
     category: normalizeCategory(item.category),
     difficulty: normalizeDifficulty(item.difficulty),
     parentTaskId: String(item.parentTaskId || "").trim(),
+    weekNumber:
+      item.weekNumber === undefined || item.weekNumber === ""
+        ? ""
+        : Number(item.weekNumber),
   };
 }
 
-function getItemsByType(type) {
+function getVisibleItems() {
+  const selectedWeekNumber = getSelectedWeekNumber();
+
+  if (!selectedWeekNumber) {
+    return [];
+  }
+
   return items.filter(function (item) {
+    return Number(item.weekNumber) === selectedWeekNumber;
+  });
+}
+
+function getVisibleItemsByType(type) {
+  return getVisibleItems().filter(function (item) {
     return item.type === type;
   });
 }
 
 function getTasksSortedByCategory() {
-  const tasks = getItemsByType("task");
+  const tasks = getVisibleItemsByType("task");
 
   return [...tasks].sort(function (a, b) {
     const categoryA = normalizeCategory(a.category);
@@ -456,6 +594,30 @@ function getDifficultyClass(difficulty) {
   if (difficulty === "適中") return "medium";
   if (difficulty === "困難") return "hard";
   return "";
+}
+
+function getTaskEmptyMessage() {
+  if (!getSelectedWeek()) {
+    return "目前還沒有可顯示的週次資料。";
+  }
+
+  if (selectedWeekView === "next") {
+    return "下週目前還沒有任務，先讓未來安靜排隊。";
+  }
+
+  return "今天還沒立案也無妨，放一個小任務，就是好的開始。";
+}
+
+function getStandardEmptyMessage() {
+  if (!getSelectedWeek()) {
+    return "目前還沒有可顯示的週次資料。";
+  }
+
+  if (selectedWeekView === "next") {
+    return "下週標準尚未成文，等本週結案後再慢慢補。";
+  }
+
+  return "本週標準尚未成文，寫下一個方向，慢慢前進。";
 }
 
 function createParentTaskRelation(standardItem) {
@@ -592,9 +754,9 @@ function createCheckItem(item, displayNumber) {
     const message =
       normalizedItem.type === "task"
         ? linkedStandards.length > 0
-          ? `確定要將這項本週任務撤案嗎？\n\n這項任務的 ${linkedStandards.length} 筆關聯驗收標準也會一併撤案。`
-          : "確定要將這項本週任務撤案嗎？本局會將它移出案件板。"
-        : "確定要將這項本週驗收標準撤案嗎？本局會將它移出案件板。";
+          ? `確定要將這項${getSelectedWeekDisplayLabel()}任務撤案嗎？\n\n這項任務的 ${linkedStandards.length} 筆關聯驗收標準也會一併撤案。`
+          : `確定要將這項${getSelectedWeekDisplayLabel()}任務撤案嗎？本局會將它移出案件板。`
+        : `確定要將這項${getSelectedWeekDisplayLabel()}驗收標準撤案嗎？本局會將它移出案件板。`;
 
     const shouldDelete = confirm(message);
 
@@ -621,9 +783,7 @@ function renderTasks() {
   taskList.innerHTML = "";
 
   if (tasks.length === 0) {
-    taskList.appendChild(
-      createEmptyMessage("今天還沒立案也無妨，放一個小任務，就是好的開始。")
-    );
+    taskList.appendChild(createEmptyMessage(getTaskEmptyMessage()));
     return;
   }
 
@@ -648,14 +808,12 @@ function renderTasks() {
 }
 
 function renderStandards() {
-  const standards = getItemsByType("standard");
+  const standards = getVisibleItemsByType("standard");
 
   standardList.innerHTML = "";
 
   if (standards.length === 0) {
-    standardList.appendChild(
-      createEmptyMessage("本週標準尚未成文，寫下一個方向，慢慢前進")
-    );
+    standardList.appendChild(createEmptyMessage(getStandardEmptyMessage()));
     return;
   }
 
@@ -665,8 +823,8 @@ function renderStandards() {
 }
 
 function renderProgress() {
-  const tasks = getItemsByType("task");
-  const standards = getItemsByType("standard");
+  const tasks = getVisibleItemsByType("task");
+  const standards = getVisibleItemsByType("standard");
 
   const doneTasks = tasks.filter(function (task) {
     return task.done;
@@ -682,6 +840,8 @@ function renderProgress() {
 
 function renderAll() {
   renderPlanCard();
+  renderBoardLabels();
+  renderAddFormState();
   renderWeekRange();
   renderTasks();
   renderStandards();
@@ -703,9 +863,6 @@ async function loadWeekContext() {
       currentWeek: data.currentWeek || null,
       nextWeek: data.nextWeek || null,
     };
-
-    renderPlanCard();
-    renderWeekRange();
   } catch (error) {
     console.error("讀取週次資料失敗：", error);
 
@@ -713,8 +870,6 @@ async function loadWeekContext() {
       currentWeek: null,
       nextWeek: null,
     };
-
-    renderPlanCard();
   }
 }
 
@@ -730,14 +885,11 @@ async function loadItems() {
     const data = await response.json();
 
     items = data.map(normalizeItem);
-
-    renderAll();
   } catch (error) {
     console.error("讀取任務資料失敗：", error);
     alert("本局暫時讀不到案件板，資料未更動。請稍後再重新整理。");
 
     items = [];
-    renderAll();
   }
 }
 
@@ -745,6 +897,7 @@ async function loadItems() {
 async function refreshItems() {
   if (!refreshBtn) {
     await Promise.all([loadWeekContext(), loadItems()]);
+    renderAll();
     return;
   }
 
@@ -753,6 +906,7 @@ async function refreshItems() {
     refreshBtn.textContent = "案件板整理中...";
 
     await Promise.all([loadWeekContext(), loadItems()]);
+    renderAll();
 
     refreshBtn.textContent = "重新整理案件板";
   } catch (error) {
@@ -766,6 +920,11 @@ async function refreshItems() {
 
 // === 新增資料：樂觀更新 ===
 async function addItem(type, inputElement, options = {}) {
+  if (!isCurrentWeekView()) {
+    alert("下週目前只供預覽，請先完成本週結案後再新增。");
+    return;
+  }
+
   const title = inputElement.value.trim();
 
   if (title === "") {
@@ -777,6 +936,10 @@ async function addItem(type, inputElement, options = {}) {
   const category = normalizeCategory(options.category);
   const difficulty = normalizeDifficulty(options.difficulty);
 
+  const targetWeekNumber = weekContext.currentWeek
+    ? weekContext.currentWeek.weekNumber
+    : "";
+
   const tempItem = {
     id: "temp-" + Date.now(),
     type,
@@ -785,9 +948,7 @@ async function addItem(type, inputElement, options = {}) {
     difficulty,
     done: false,
     parentTaskId: "",
-    weekNumber: weekContext.currentWeek
-      ? weekContext.currentWeek.weekNumber
-      : "",
+    weekNumber: targetWeekNumber,
     weekStart: "",
     weekEnd: "",
     createdAt: now,
@@ -809,6 +970,7 @@ async function addItem(type, inputElement, options = {}) {
         title,
         category,
         difficulty,
+        weekNumber: targetWeekNumber,
       }),
     });
 
@@ -821,8 +983,11 @@ async function addItem(type, inputElement, options = {}) {
     replaceItemById(tempItem.id, newItem);
     renderAll();
 
+    // 後端新增任務後會自動建立驗收標準
+    // 前端重新讀取一次，讓自動標準立刻出現在畫面上
     if (type === "task") {
       await loadItems();
+      renderAll();
     }
   } catch (error) {
     console.error("新增資料失敗：", error);
@@ -940,6 +1105,8 @@ async function initApp() {
   renderWeekRange();
   renderDailyQuote();
   renderPlanCard();
+  renderBoardLabels();
+  renderAddFormState();
 
   addTaskBtn.addEventListener("click", addTask);
   addStandardBtn.addEventListener("click", addStandard);
@@ -962,7 +1129,7 @@ async function initApp() {
 
   if (completeWeekBtn) {
     completeWeekBtn.addEventListener("click", function () {
-      alert("本週結案功能下一步再接上。現在先確認本週 / 下週主線卡片能正常顯示。");
+      alert("本週結案功能下一步再接上。現在先確認本週 / 下週任務切換是否正常。");
     });
   }
 
@@ -979,6 +1146,7 @@ async function initApp() {
   });
 
   await Promise.all([loadWeekContext(), loadItems()]);
+  renderAll();
 }
 
 initApp();

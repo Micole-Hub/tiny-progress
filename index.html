@@ -91,19 +91,21 @@
     <section class="progress-card">
       <div class="section-header">
         <div>
-          <h2>本週進度</h2>
-          <p class="section-note">本局只記本週靠近了哪裡，不翻舊帳。</p>
+          <h2 id="progressTitle">本週進度</h2>
+          <p class="section-note" id="progressNote">
+            本局只記本週靠近了哪裡，不翻舊帳。
+          </p>
         </div>
       </div>
 
       <div class="progress-list">
         <p>
-          <span>本週任務</span>
+          <span id="taskProgressLabel">本週任務</span>
           <strong id="taskProgress">0 / 0</strong>
         </p>
 
         <p>
-          <span>本週驗收標準</span>
+          <span id="standardProgressLabel">本週驗收標準</span>
           <strong id="standardProgress">0 / 0</strong>
         </p>
       </div>
@@ -112,8 +114,10 @@
     <section class="task-section">
       <div class="section-header">
         <div>
-          <h2>本週任務</h2>
-          <p class="section-note">本局會依分類排好，陪你一件一件辦。</p>
+          <h2 id="taskSectionTitle">本週任務</h2>
+          <p class="section-note" id="taskSectionNote">
+            本局會依分類排好，陪你一件一件辦。
+          </p>
         </div>
       </div>
 
@@ -142,15 +146,15 @@
       </div>
 
       <ul class="item-list" id="taskList">
-        <!-- 本週任務會由 JavaScript 自動產生 -->
+        <!-- 任務會由 JavaScript 自動產生 -->
       </ul>
     </section>
 
     <section class="standard-section">
       <div class="section-header">
         <div>
-          <h2>本週驗收標準</h2>
-          <p class="section-note">
+          <h2 id="standardSectionTitle">本週驗收標準</h2>
+          <p class="section-note" id="standardSectionNote">
             這不是拿來責備自己，而是看見本週靠近了哪裡。
           </p>
         </div>
@@ -169,7 +173,7 @@
       </div>
 
       <ul class="item-list" id="standardList">
-        <!-- 本週完成標準會由 JavaScript 自動產生 -->
+        <!-- 驗收標準會由 JavaScript 自動產生 -->
       </ul>
     </section>
   </main>
