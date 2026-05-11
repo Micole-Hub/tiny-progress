@@ -39,8 +39,6 @@ function startApiLoading(message) {
   document.body.classList.add("is-busy");
   toast.classList.add("is-show");
 
-  // 只有第一個 API 請求開始時，才記錄原本 disabled 的按鈕
-  // 避免第二個同時進來的請求，把「剛剛被鎖住的按鈕」誤判成原本就 disabled
   if (isFirstRequest) {
     disabledButtonsBeforeBusy = Array.from(
       document.querySelectorAll("button:disabled")
@@ -65,7 +63,6 @@ function stopApiLoading() {
   document.body.classList.remove("is-busy");
   toast.classList.remove("is-show");
 
-  // 只恢復「原本不是 disabled」的按鈕
   document.querySelectorAll("button").forEach(function (button) {
     const wasDisabledBeforeBusy = disabledButtonsBeforeBusy.includes(button);
 
@@ -108,7 +105,6 @@ window.fetch = async function (input, options = {}) {
 };
 
 // === API 設定 ===
-// 注意：這裡只放 Render 後端主網址，不要加 /items
 const API_BASE_URL = "https://no-effort-time-bureau.onrender.com";
 
 // === 分類與難度設定 ===
@@ -230,7 +226,6 @@ function renderWeekRange() {
 
   const currentWeek = weekContext.currentWeek;
 
-  // 如果 weeks 工作表未來有填 weekStart / weekEnd，就優先顯示 weeks 的日期
   if (currentWeek && currentWeek.weekStart && currentWeek.weekEnd) {
     weekStartText.textContent = currentWeek.weekStart.replaceAll("-", "/");
     weekStartText.setAttribute("datetime", currentWeek.weekStart);
@@ -241,7 +236,6 @@ function renderWeekRange() {
     return;
   }
 
-  // 若 weeks 尚未填日期，先沿用原本的本週日期算法
   const range = getCurrentWeekRange();
 
   weekStartText.textContent = formatDateForDisplay(range.weekStart);
@@ -404,14 +398,14 @@ function getTasksSortedByCategory() {
   });
 }
 
-function findItemById(id) {
-  return items.find(function (item) {
-    return item.id === id;
+function getLinkedStandardsByTaskId(taskId) {
+  return items.filter(function (item) {
+    return item.type === "standard" && item.parentTaskId === taskId;
   });
 }
 
-function findItemIndexById(id) {
-  return items.findIndex(function (item) {
+function findItemById(id) {
+  return items.find(function (item) {
     return item.id === id;
   });
 }
@@ -438,16 +432,6 @@ function replaceItemById(targetId, newItem) {
 
     return item;
   });
-}
-
-function insertItemAtIndex(item, index) {
-  const safeIndex = Math.max(0, index);
-
-  items = [
-    ...items.slice(0, safeIndex),
-    normalizeItem(item),
-    ...items.slice(safeIndex),
-  ];
 }
 
 // === 畫面渲染 ===
@@ -600,9 +584,16 @@ function createCheckItem(item, displayNumber) {
   });
 
   deleteBtn.addEventListener("click", async function () {
+    const linkedStandards =
+      normalizedItem.type === "task"
+        ? getLinkedStandardsByTaskId(normalizedItem.id)
+        : [];
+
     const message =
       normalizedItem.type === "task"
-        ? "確定要將這項本週任務撤案嗎？本局會將它移出案件板。"
+        ? linkedStandards.length > 0
+          ? `確定要將這項本週任務撤案嗎？\n\n這項任務的 ${linkedStandards.length} 筆關聯驗收標準也會一併撤案。`
+          : "確定要將這項本週任務撤案嗎？本局會將它移出案件板。"
         : "確定要將這項本週驗收標準撤案嗎？本局會將它移出案件板。";
 
     const shouldDelete = confirm(message);
@@ -830,8 +821,6 @@ async function addItem(type, inputElement, options = {}) {
     replaceItemById(tempItem.id, newItem);
     renderAll();
 
-    // 目前 server.js 會在新增任務後自動建立驗收標準
-    // 前端先重新讀取一次，讓自動標準立刻出現在畫面上
     if (type === "task") {
       await loadItems();
     }
@@ -895,16 +884,22 @@ async function updateItem(id, updates) {
 
 // === 刪除資料：樂觀更新 ===
 async function deleteItem(id) {
+  const previousItems = [...items];
   const previousItem = findItemById(id);
-  const previousIndex = findItemIndexById(id);
 
-  if (!previousItem || previousIndex === -1) {
+  if (!previousItem) {
     return;
   }
 
-  items = items.filter(function (item) {
-    return item.id !== id;
-  });
+  if (previousItem.type === "task") {
+    items = items.filter(function (item) {
+      return item.id !== id && item.parentTaskId !== id;
+    });
+  } else {
+    items = items.filter(function (item) {
+      return item.id !== id;
+    });
+  }
 
   renderAll();
 
@@ -919,7 +914,7 @@ async function deleteItem(id) {
   } catch (error) {
     console.error("刪除資料失敗：", error);
 
-    insertItemAtIndex(previousItem, previousIndex);
+    items = previousItems;
     renderAll();
 
     alert("本局暫時無法撤案，案件已放回原位，資料未更動。請稍後再試。");

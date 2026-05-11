@@ -343,7 +343,7 @@ async function updateItemToGoogleSheets(id, updates) {
   return normalizeItem(data.item);
 }
 
-// === 共用函式：刪除 item from Google Sheets ===
+// === 共用函式：刪除單筆 item from Google Sheets ===
 async function deleteItemFromGoogleSheets(id) {
   const response = await fetch(GOOGLE_SHEETS_API_URL, {
     method: "POST",
@@ -368,6 +368,42 @@ async function deleteItemFromGoogleSheets(id) {
   }
 
   return normalizeItem(data.item);
+}
+
+// === 共用函式：刪除 item，若是 task 則一併刪除關聯 standard ===
+async function deleteItemWithLinkedStandardsFromGoogleSheets(id) {
+  const items = await fetchItemsFromGoogleSheets();
+
+  const targetItem = items.find(function (item) {
+    return item.id === id;
+  });
+
+  if (!targetItem) {
+    throw new Error("找不到 id：" + id);
+  }
+
+  const linkedStandards =
+    targetItem.type === "task"
+      ? items.filter(function (item) {
+          return item.type === "standard" && item.parentTaskId === targetItem.id;
+        })
+      : [];
+
+  const deletedLinkedStandards = [];
+
+  // 先刪除關聯 standard，再刪除 task 本身
+  // 這樣可以避免主任務已消失，但關聯標準還殘留在資料表中
+  for (const standard of linkedStandards) {
+    const deletedStandard = await deleteItemFromGoogleSheets(standard.id);
+    deletedLinkedStandards.push(deletedStandard);
+  }
+
+  const deletedItem = await deleteItemFromGoogleSheets(targetItem.id);
+
+  return {
+    deletedItem,
+    deletedLinkedStandards,
+  };
 }
 
 // === LINE 小工具：取得使用者識別 key，用來記住修改狀態 ===
@@ -938,14 +974,28 @@ async function handleDeleteCommand({ numberText, type, label }) {
   const deletedTitle = result.item.title;
   const displayLabel = getDisplayLabel(label);
 
-  await deleteItemFromGoogleSheets(result.item.id);
+  const deletionResult = await deleteItemWithLinkedStandardsFromGoogleSheets(
+    result.item.id
+  );
 
-  return [
+  const lines = [
     `已撤案第 ${result.itemNumber} 個${displayLabel}：`,
     deletedTitle,
-    "",
-    "本局已更新案件板，資料不再列入本週。",
-  ].join("\n");
+  ];
+
+  if (
+    result.item.type === "task" &&
+    deletionResult.deletedLinkedStandards.length > 0
+  ) {
+    lines.push(
+      "",
+      `已一併撤案 ${deletionResult.deletedLinkedStandards.length} 筆關聯驗收標準。`
+    );
+  }
+
+  lines.push("", "本局已更新案件板，資料不再列入本週。");
+
+  return lines.join("\n");
 }
 
 // === LINE 小工具：處理修改 ===
@@ -1343,8 +1393,6 @@ app.post("/gas-queue", async (req, res) => {
       });
     }
 
-    // 用 userId 當成 sourceKey
-    // 這樣「修改任務 3」這種等待下一句的新文字流程，仍可沿用原本邏輯
     const sourceKey = String(userId).trim();
 
     const replyText = await handleLineTextCommand({
@@ -1546,17 +1594,18 @@ app.patch("/items/:id", async (req, res) => {
   }
 });
 
-// === Delete：刪除 item ===
+// === Delete：刪除 item，若是 task 則一併刪除關聯 standard ===
 app.delete("/items/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const deletedItem = await deleteItemFromGoogleSheets(id);
+    const deletionResult = await deleteItemWithLinkedStandardsFromGoogleSheets(id);
 
     res.json({
       message: "刪除成功",
-      id: deletedItem.id,
-      item: deletedItem,
+      id: deletionResult.deletedItem.id,
+      item: deletionResult.deletedItem,
+      deletedLinkedStandards: deletionResult.deletedLinkedStandards,
     });
   } catch (error) {
     console.error("DELETE /items/:id 刪除 Google Sheets 發生錯誤：", error);
