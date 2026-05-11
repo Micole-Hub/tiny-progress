@@ -670,6 +670,36 @@ body.is-busy button {
   color: #9d5245;
 }
 
+/* === 驗收標準關聯任務提示 === */
+
+.item-relation {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.chip-parent {
+  flex: 0 0 auto;
+  background: var(--gold-soft);
+  color: #8a5a28;
+  border: 1px solid rgba(216, 168, 95, 0.26);
+}
+
+.relation-title {
+  min-width: 0;
+  color: #6b5b48;
+  word-break: break-word;
+}
+
+.task-item.is-done .item-relation {
+  opacity: 0.82;
+}
+
 .item-actions {
   grid-area: actions;
   display: flex;

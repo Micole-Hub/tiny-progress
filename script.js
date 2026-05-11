@@ -474,6 +474,33 @@ function getDifficultyClass(difficulty) {
   return "";
 }
 
+function createParentTaskRelation(standardItem) {
+  if (!standardItem.parentTaskId) {
+    return null;
+  }
+
+  const parentTask = findItemById(standardItem.parentTaskId);
+
+  const relation = document.createElement("div");
+  relation.className = "item-relation";
+
+  const label = document.createElement("span");
+  label.className = "chip chip-parent";
+  label.textContent = "來自任務";
+
+  const title = document.createElement("span");
+  title.className = "relation-title";
+
+  title.textContent = parentTask
+    ? parentTask.title
+    : "找不到原任務，可能已被撤案";
+
+  relation.appendChild(label);
+  relation.appendChild(title);
+
+  return relation;
+}
+
 function createCheckItem(item, displayNumber) {
   const normalizedItem = normalizeItem(item);
 
@@ -525,6 +552,14 @@ function createCheckItem(item, displayNumber) {
 
   content.appendChild(topLine);
   content.appendChild(title);
+
+  if (normalizedItem.type === "standard") {
+    const relation = createParentTaskRelation(normalizedItem);
+
+    if (relation) {
+      content.appendChild(relation);
+    }
+  }
 
   const actions = document.createElement("div");
   actions.className = "item-actions";
