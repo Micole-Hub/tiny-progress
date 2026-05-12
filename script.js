@@ -1175,6 +1175,34 @@ async function deleteItem(id) {
   }
 }
 
+// === 結案預演文字 ===
+function buildCompleteWeekPreviewText(currentWeek, nextWeek) {
+  const currentWeekNumber = Number(currentWeek.weekNumber);
+  const nextWeekNumber = Number(nextWeek.weekNumber);
+  const upcomingWeekNumber = nextWeekNumber + 1;
+
+  const lines = [
+    "結案預演，尚未更動資料",
+    "",
+    `第 ${currentWeekNumber} 週：current → completed`,
+    `第 ${nextWeekNumber} 週：next → current`,
+  ];
+
+  if (upcomingWeekNumber <= 12) {
+    lines.push(`第 ${upcomingWeekNumber} 週：upcoming → next`);
+  } else {
+    lines.push("目前已接近最後一週，可能沒有新的 upcoming 可接成 next。");
+  }
+
+  lines.push(
+    "",
+    "按「確定」才會正式結案。",
+    "按「取消」不會更動任何資料。"
+  );
+
+  return lines.join("\n");
+}
+
 // === 本週結案 ===
 async function completeCurrentWeek() {
   const currentWeek = weekContext.currentWeek;
@@ -1190,9 +1218,8 @@ async function completeCurrentWeek() {
     return;
   }
 
-  const shouldComplete = confirm(
-    `確定要將第 ${currentWeek.weekNumber} 週結案，並進入第 ${nextWeek.weekNumber} 週嗎？\n\n結案後，畫面會切換到新的本週。`
-  );
+  const previewText = buildCompleteWeekPreviewText(currentWeek, nextWeek);
+  const shouldComplete = confirm(previewText);
 
   if (!shouldComplete) {
     return;
