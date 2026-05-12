@@ -558,7 +558,6 @@ function normalizeItem(item) {
     category: normalizeCategory(item.category),
     difficulty: normalizeDifficulty(item.difficulty),
     done: normalizeDone(item.done),
-    parentTaskId: String(item.parentTaskId || "").trim(),
     weekNumber:
       item.weekNumber === undefined || item.weekNumber === ""
         ? ""
@@ -595,12 +594,6 @@ function getTasksSortedByCategory() {
   });
 }
 
-function getLinkedStandardsByTaskId(taskId) {
-  return items.filter(function (item) {
-    return item.type === "standard" && item.parentTaskId === taskId;
-  });
-}
-
 function findItemById(id) {
   return items.find(function (item) {
     return item.id === id;
@@ -625,23 +618,6 @@ function replaceItemById(targetId, newItem) {
   items = items.map(function (item) {
     if (item.id === targetId) {
       return normalizedNewItem;
-    }
-
-    return item;
-  });
-}
-
-function updateLinkedStandardsDoneState(taskId, done) {
-  const nextDone = normalizeDone(done);
-  const now = new Date().toISOString();
-
-  items = items.map(function (item) {
-    if (item.type === "standard" && item.parentTaskId === taskId) {
-      return normalizeItem({
-        ...item,
-        done: nextDone,
-        updatedAt: now,
-      });
     }
 
     return item;
@@ -696,33 +672,6 @@ function getStandardEmptyMessage() {
   return "本週標準尚未成文，寫下一個方向，慢慢前進。";
 }
 
-function createParentTaskRelation(standardItem) {
-  if (!standardItem.parentTaskId) {
-    return null;
-  }
-
-  const parentTask = findItemById(standardItem.parentTaskId);
-
-  const relation = document.createElement("div");
-  relation.className = "item-relation";
-
-  const label = document.createElement("span");
-  label.className = "chip chip-parent";
-  label.textContent = "來自任務";
-
-  const title = document.createElement("span");
-  title.className = "relation-title";
-
-  title.textContent = parentTask
-    ? parentTask.title
-    : "找不到原任務，可能已被撤案";
-
-  relation.appendChild(label);
-  relation.appendChild(title);
-
-  return relation;
-}
-
 function createCheckItem(item, displayNumber) {
   const normalizedItem = normalizeItem(item);
 
@@ -775,14 +724,6 @@ function createCheckItem(item, displayNumber) {
   content.appendChild(topLine);
   content.appendChild(title);
 
-  if (normalizedItem.type === "standard") {
-    const relation = createParentTaskRelation(normalizedItem);
-
-    if (relation) {
-      content.appendChild(relation);
-    }
-  }
-
   const actions = document.createElement("div");
   actions.className = "item-actions";
 
@@ -822,16 +763,9 @@ function createCheckItem(item, displayNumber) {
   });
 
   deleteBtn.addEventListener("click", async function () {
-    const linkedStandards =
-      normalizedItem.type === "task"
-        ? getLinkedStandardsByTaskId(normalizedItem.id)
-        : [];
-
     const message =
       normalizedItem.type === "task"
-        ? linkedStandards.length > 0
-          ? `確定要將這項${getSelectedWeekDisplayLabel()}任務撤案嗎？\n\n這項任務的 ${linkedStandards.length} 筆關聯驗收標準也會一併撤案。`
-          : `確定要將這項${getSelectedWeekDisplayLabel()}任務撤案嗎？本局會將它移出案件板。`
+        ? `確定要將這項${getSelectedWeekDisplayLabel()}任務撤案嗎？本局會將它移出案件板。`
         : `確定要將這項${getSelectedWeekDisplayLabel()}驗收標準撤案嗎？本局會將它移出案件板。`;
 
     const shouldDelete = confirm(message);
@@ -1025,7 +959,6 @@ async function addItem(type, inputElement, options = {}) {
     category,
     difficulty,
     done: false,
-    parentTaskId: "",
     weekNumber: targetWeekNumber,
     weekStart: "",
     weekEnd: "",
@@ -1060,11 +993,6 @@ async function addItem(type, inputElement, options = {}) {
 
     replaceItemById(tempItem.id, newItem);
     renderAll();
-
-    if (type === "task") {
-      await loadItems();
-      renderAll();
-    }
   } catch (error) {
     console.error("新增資料失敗：", error);
 
@@ -1081,7 +1009,6 @@ async function addItem(type, inputElement, options = {}) {
 
 // === 更新資料：樂觀更新 ===
 async function updateItem(id, updates) {
-  const previousItems = [...items];
   const previousItem = findItemById(id);
 
   if (!previousItem) {
@@ -1095,11 +1022,6 @@ async function updateItem(id, updates) {
   });
 
   replaceItem(optimisticItem);
-
-  if (previousItem.type === "task" && updates.done !== undefined) {
-    updateLinkedStandardsDoneState(previousItem.id, updates.done);
-  }
-
   renderAll();
 
   try {
@@ -1115,21 +1037,14 @@ async function updateItem(id, updates) {
       throw new Error("更新失敗");
     }
 
-    const result = await response.json();
+    const updatedItem = await response.json();
 
-    replaceItem(result.item);
-
-    if (Array.isArray(result.updatedLinkedStandards)) {
-      result.updatedLinkedStandards.forEach(function (standard) {
-        replaceItem(standard);
-      });
-    }
-
+    replaceItem(updatedItem);
     renderAll();
   } catch (error) {
     console.error("更新資料失敗：", error);
 
-    items = previousItems;
+    replaceItem(previousItem);
     renderAll();
 
     alert("本局暫時無法修訂案件，畫面已恢復，資料未更動。請稍後再試。");
@@ -1145,15 +1060,9 @@ async function deleteItem(id) {
     return;
   }
 
-  if (previousItem.type === "task") {
-    items = items.filter(function (item) {
-      return item.id !== id && item.parentTaskId !== id;
-    });
-  } else {
-    items = items.filter(function (item) {
-      return item.id !== id;
-    });
-  }
+  items = items.filter(function (item) {
+    return item.id !== id;
+  });
 
   renderAll();
 
@@ -1175,7 +1084,7 @@ async function deleteItem(id) {
   }
 }
 
-// === 結案文字 ===
+// === 結案確認文字 ===
 function buildCompleteWeekConfirmText(currentWeek, nextWeek) {
   const currentWeekNumber = Number(currentWeek.weekNumber);
   const nextWeekNumber = Number(nextWeek.weekNumber);
@@ -1196,8 +1105,8 @@ function buildCompleteWeekConfirmText(currentWeek, nextWeek) {
 
   lines.push(
     "",
-    "按「確定」才會正式結案。",
-    "按「取消」不會更動任何資料。"
+    "按「確定」後會正式更新週次。",
+    "按「取消」不會更動資料。"
   );
 
   return lines.join("\n");

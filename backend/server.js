@@ -84,7 +84,6 @@ function normalizeItem(item) {
     category: normalizeCategory(safeItem.category),
     difficulty: normalizeDifficulty(safeItem.difficulty),
     done: normalizeDone(safeItem.done),
-    parentTaskId: String(safeItem.parentTaskId || "").trim(),
     weekNumber:
       safeItem.weekNumber === undefined || safeItem.weekNumber === ""
         ? ""
@@ -120,16 +119,6 @@ function getDisplayLabel(label) {
   }
 
   return label;
-}
-
-// === 共用工具：溫柔公文感收尾句 ===
-function getGentleFooterText() {
-  return "今日有學，即可記上一筆。";
-}
-
-// === 共用工具：自動驗收標準文字 ===
-function buildAutoStandardTitle(taskTitle) {
-  return `能完成「${taskTitle}」，並留下簡單紀錄。`;
 }
 
 // === 產生帶 secret 的 Google Sheets API URL，用於 GET 讀取 ===
@@ -169,7 +158,18 @@ async function fetchWeekContextFromGoogleSheets() {
   };
 }
 
-// === 共用函式：從 Google Sheets 讀 items ===
+// === 共用函式：取得 current 週週次 ===
+async function getCurrentWeekNumberFromGoogleSheets() {
+  const context = await fetchWeekContextFromGoogleSheets();
+
+  if (!context.currentWeek || !context.currentWeek.weekNumber) {
+    throw new Error("找不到目前週，無法處理 LINE 指令");
+  }
+
+  return Number(context.currentWeek.weekNumber);
+}
+
+// === 共用函式：從 Google Sheets 讀全部 items ===
 async function fetchItemsFromGoogleSheets() {
   const response = await fetch(buildGoogleSheetsGetUrl());
 
@@ -184,6 +184,18 @@ async function fetchItemsFromGoogleSheets() {
   }
 
   return data.items.map(normalizeItem);
+}
+
+// === 共用函式：只讀目前週 items ===
+async function fetchCurrentWeekItemsFromGoogleSheets() {
+  const [items, currentWeekNumber] = await Promise.all([
+    fetchItemsFromGoogleSheets(),
+    getCurrentWeekNumberFromGoogleSheets(),
+  ]);
+
+  return items.filter(function (item) {
+    return Number(item.weekNumber) === currentWeekNumber;
+  });
 }
 
 // === 共用函式：呼叫 GAS 完成本週結案 ===
@@ -219,7 +231,6 @@ async function createItemToGoogleSheets({
   category,
   difficulty,
   done,
-  parentTaskId,
   weekNumber,
   weekStart,
   weekEnd,
@@ -233,10 +244,6 @@ async function createItemToGoogleSheets({
     difficulty: normalizeDifficulty(difficulty),
     done: done === true,
   };
-
-  if (parentTaskId !== undefined) {
-    itemPayload.parentTaskId = String(parentTaskId || "").trim();
-  }
 
   if (weekNumber !== undefined && weekNumber !== null && weekNumber !== "") {
     itemPayload.weekNumber = Number(weekNumber);
@@ -283,44 +290,6 @@ async function createItemToGoogleSheets({
   return normalizeItem(data.item);
 }
 
-// === 共用函式：新增 task，並自動建立關聯 standard ===
-async function createTaskWithAutoStandard({
-  title,
-  category,
-  difficulty,
-  weekNumber,
-}) {
-  const createdTask = await createItemToGoogleSheets({
-    type: "task",
-    title,
-    category,
-    difficulty,
-    done: false,
-    weekNumber,
-  });
-
-  if (!createdTask.id) {
-    throw new Error(
-      "新增任務成功，但 Google Apps Script 沒有回傳 task.id，無法建立關聯驗收標準"
-    );
-  }
-
-  const createdStandard = await createItemToGoogleSheets({
-    type: "standard",
-    title: buildAutoStandardTitle(createdTask.title || title),
-    category: createdTask.category,
-    difficulty: createdTask.difficulty,
-    done: false,
-    parentTaskId: createdTask.id,
-    weekNumber: createdTask.weekNumber,
-  });
-
-  return {
-    task: createdTask,
-    standard: createdStandard,
-  };
-}
-
 // === 共用函式：更新單筆 item 到 Google Sheets ===
 async function updateItemToGoogleSheets(id, updates) {
   const safeUpdates = { ...updates };
@@ -331,10 +300,6 @@ async function updateItemToGoogleSheets(id, updates) {
 
   if (safeUpdates.difficulty !== undefined) {
     safeUpdates.difficulty = normalizeDifficulty(safeUpdates.difficulty);
-  }
-
-  if (safeUpdates.parentTaskId !== undefined) {
-    safeUpdates.parentTaskId = String(safeUpdates.parentTaskId || "").trim();
   }
 
   if (
@@ -371,46 +336,6 @@ async function updateItemToGoogleSheets(id, updates) {
   return normalizeItem(data.item);
 }
 
-// === 共用函式：更新 item，若是 task 的 done 改變，則同步關聯 standard ===
-async function updateItemWithLinkedStandardsToGoogleSheets(id, updates) {
-  const items = await fetchItemsFromGoogleSheets();
-
-  const targetItem = items.find(function (item) {
-    return item.id === id;
-  });
-
-  if (!targetItem) {
-    throw new Error("找不到 id：" + id);
-  }
-
-  const updatedItem = await updateItemToGoogleSheets(id, updates);
-  const updatedLinkedStandards = [];
-
-  const shouldSyncLinkedStandards =
-    targetItem.type === "task" && updates.done !== undefined;
-
-  if (shouldSyncLinkedStandards) {
-    const nextDone = normalizeDone(updates.done);
-
-    const linkedStandards = items.filter(function (item) {
-      return item.type === "standard" && item.parentTaskId === targetItem.id;
-    });
-
-    for (const standard of linkedStandards) {
-      const updatedStandard = await updateItemToGoogleSheets(standard.id, {
-        done: nextDone,
-      });
-
-      updatedLinkedStandards.push(updatedStandard);
-    }
-  }
-
-  return {
-    item: updatedItem,
-    updatedLinkedStandards,
-  };
-}
-
 // === 共用函式：刪除單筆 item from Google Sheets ===
 async function deleteItemFromGoogleSheets(id) {
   const response = await fetch(GOOGLE_SHEETS_API_URL, {
@@ -438,40 +363,6 @@ async function deleteItemFromGoogleSheets(id) {
   return normalizeItem(data.item);
 }
 
-// === 共用函式：刪除 item，若是 task 則一併刪除關聯 standard ===
-async function deleteItemWithLinkedStandardsFromGoogleSheets(id) {
-  const items = await fetchItemsFromGoogleSheets();
-
-  const targetItem = items.find(function (item) {
-    return item.id === id;
-  });
-
-  if (!targetItem) {
-    throw new Error("找不到 id：" + id);
-  }
-
-  const linkedStandards =
-    targetItem.type === "task"
-      ? items.filter(function (item) {
-          return item.type === "standard" && item.parentTaskId === targetItem.id;
-        })
-      : [];
-
-  const deletedLinkedStandards = [];
-
-  for (const standard of linkedStandards) {
-    const deletedStandard = await deleteItemFromGoogleSheets(standard.id);
-    deletedLinkedStandards.push(deletedStandard);
-  }
-
-  const deletedItem = await deleteItemFromGoogleSheets(targetItem.id);
-
-  return {
-    deletedItem,
-    deletedLinkedStandards,
-  };
-}
-
 // === LINE 小工具：取得使用者識別 key，用來記住修改狀態 ===
 function getLineSourceKey(event) {
   return (
@@ -482,9 +373,9 @@ function getLineSourceKey(event) {
   );
 }
 
-// === LINE 小工具：取得某一類資料 ===
+// === LINE 小工具：取得目前週某一類資料 ===
 async function getItemsByType(type) {
-  const items = await fetchItemsFromGoogleSheets();
+  const items = await fetchCurrentWeekItemsFromGoogleSheets();
   const filteredItems = items.filter((item) => item.type === type);
 
   if (type === "task") {
@@ -494,9 +385,12 @@ async function getItemsByType(type) {
   return filteredItems;
 }
 
-// === LINE 小工具：取得任務與驗收標準 ===
+// === LINE 小工具：取得目前週任務與驗收標準 ===
 async function getTaskBoardForLine() {
-  const items = await fetchItemsFromGoogleSheets();
+  const [items, weekContext] = await Promise.all([
+    fetchCurrentWeekItemsFromGoogleSheets(),
+    fetchWeekContextFromGoogleSheets(),
+  ]);
 
   const tasks = sortTasksByCategory(
     items.filter((item) => item.type === "task")
@@ -505,6 +399,7 @@ async function getTaskBoardForLine() {
   const standards = items.filter((item) => item.type === "standard");
 
   return {
+    currentWeek: weekContext.currentWeek,
     tasks,
     standards,
   };
@@ -513,8 +408,8 @@ async function getTaskBoardForLine() {
 // === LINE 小工具：清單底部固定提示 ===
 function getLineCommandHintText() {
   return [
-    "需要辦事攻略請輸入：攻略",
-    "想看用量小抄請輸入：用量小抄",
+    "需要操作說明請輸入：攻略",
+    "想看用量請輸入：用量小抄",
   ].join("\n");
 }
 
@@ -522,14 +417,12 @@ function getLineCommandHintText() {
 function formatTaskSectionByCategory(tasks) {
   if (tasks.length === 0) {
     return [
-      "本週任務：",
-      "",
-      "本週尚未立案也無妨，放一個小任務，就是好的開始。",
+      "【本週任務】",
+      "本週尚未立案。放一個小任務，就是好的開始。",
     ].join("\n");
   }
 
-  const lines = ["本週任務：", ""];
-
+  const lines = ["【本週任務】"];
   let taskNumber = 1;
 
   CATEGORY_OPTIONS.forEach(function (category) {
@@ -541,17 +434,16 @@ function formatTaskSectionByCategory(tasks) {
       return;
     }
 
-    lines.push(`【${category}】`);
+    lines.push("");
+    lines.push(`《${category}》`);
 
     categoryTasks.forEach(function (task) {
       const checkbox = task.done ? "☑" : "☐";
       const difficulty = normalizeDifficulty(task.difficulty);
 
-      lines.push(`${taskNumber}. ${checkbox} ${task.title}（${difficulty}）`);
+      lines.push(`${taskNumber}. ${checkbox} ${task.title}｜${difficulty}`);
       taskNumber += 1;
     });
-
-    lines.push("");
   });
 
   return lines.join("\n").trim();
@@ -560,7 +452,7 @@ function formatTaskSectionByCategory(tasks) {
 // === LINE 小工具：格式化驗收標準區塊 ===
 function formatLineSection(title, items, emptyText) {
   if (items.length === 0) {
-    return [title, "", emptyText].join("\n");
+    return [title, emptyText].join("\n");
   }
 
   const lines = items.map((item, index) => {
@@ -568,21 +460,29 @@ function formatLineSection(title, items, emptyText) {
     return `${index + 1}. ${checkbox} ${item.title}`;
   });
 
-  return [title, "", ...lines].join("\n");
+  return [title, ...lines].join("\n");
 }
 
 // === LINE 小工具：格式化完整清單 ===
-function formatTaskBoardForLine({ tasks, standards }) {
+function formatTaskBoardForLine({ currentWeek, tasks, standards }) {
   const taskSection = formatTaskSectionByCategory(tasks);
 
   const standardSection = formatLineSection(
-    "本週驗收標準：",
+    "【本週驗收標準】",
     standards,
-    "本週標準尚未成文，寫下一個方向，慢慢前進"
+    "本週標準尚未成文。寫下一個方向，慢慢前進。"
   );
 
+  const weekTitle = currentWeek
+    ? `第 ${currentWeek.weekNumber} 週｜${currentWeek.title}`
+    : "本週案件板";
+
   return [
-    "📋 不努力時間有限管理局｜本週案件板",
+    "📋 不努力時間有限管理局",
+    weekTitle,
+    "",
+    `任務進度：${tasks.filter((task) => task.done).length} / ${tasks.length}`,
+    `標準進度：${standards.filter((standard) => standard.done).length} / ${standards.length}`,
     "",
     taskSection,
     "",
@@ -611,7 +511,7 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
       "",
       `目前沒有${difficulty}任務。`,
       "",
-      "沒有案件也無妨，已經很棒。",
+      "沒有案件也無妨，先喝水，本局不追殺。",
       "",
       "需要完整清單請輸入：清單",
     ].join("\n");
@@ -621,7 +521,7 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
     const checkbox = entry.task.done ? "☑" : "☐";
     const category = normalizeCategory(entry.task.category);
 
-    return `${entry.originalNumber}. ${checkbox} ${entry.task.title}（${category}）`;
+    return `${entry.originalNumber}. ${checkbox} ${entry.task.title}｜${category}`;
   });
 
   return [
@@ -629,10 +529,53 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
     "",
     ...lines,
     "",
-    "以上編號沿用完整清單，可直接輸入：完成任務 編號",
-    "步子再小，也算靠岸。",
+    "以上編號沿用完整清單。",
+    "可直接輸入：完成任務3",
     "",
     "需要完整清單請輸入：清單",
+  ].join("\n");
+}
+
+// === LINE 小工具：抽一件未完成任務 ===
+async function handleDrawOneTaskCommand() {
+  const board = await getTaskBoardForLine();
+
+  const unfinishedTasks = board.tasks.filter(function (task) {
+    return !task.done;
+  });
+
+  if (unfinishedTasks.length === 0) {
+    return [
+      "🎲 本局抽籤結果",
+      "",
+      "本週沒有未完成任務可以抽。",
+      "如果都完成了，請給自己蓋一枚小章。",
+      "",
+      "可以輸入「清單」確認目前案件板。",
+    ].join("\n");
+  }
+
+  const randomIndex = Math.floor(Math.random() * unfinishedTasks.length);
+  const selectedTask = unfinishedTasks[randomIndex];
+
+  const taskNumber =
+    board.tasks.findIndex(function (task) {
+      return task.id === selectedTask.id;
+    }) + 1;
+
+  return [
+    "🎲 本局今日先派這一件",
+    "",
+    `第 ${taskNumber} 個任務`,
+    `☐ ${selectedTask.title}`,
+    "",
+    `分類：${selectedTask.category}`,
+    `難度：${selectedTask.difficulty}`,
+    "",
+    "做完可以輸入：",
+    `完成任務${taskNumber}`,
+    "",
+    "不用想太多，先開這一案。",
   ].join("\n");
 }
 
@@ -661,7 +604,7 @@ async function findItemByNumber({ type, numberText, label }) {
       error: [
         `本局目前查無第 ${itemNumber} 個${displayLabel}。`,
         "",
-        "可以先輸入「清單」確認編號，慢慢來，案件會排好。",
+        "可以先輸入「清單」確認編號。",
       ].join("\n"),
     };
   }
@@ -703,91 +646,41 @@ async function replyToLine(replyToken, replyText) {
   }
 }
 
-// === LINE 小工具：攻略 ===
+// === LINE 小工具：精簡攻略 ===
 function getGuideText() {
   return [
     "📋 不努力時間有限管理局｜辦事攻略",
     "",
-    "管理局小櫃台受理以下案件。",
-    "格式不用完美，補齊即可辦理。",
+    "【查看】",
+    "清單：看本週任務與驗收標準",
+    "簡單任務：看簡單任務",
+    "適中任務：看適中任務",
+    "困難任務：看困難任務",
+    "抽一件：從未完成任務裡抽一件",
     "",
-    "━━━━━━━━━━━━",
-    "🔎 一、查看案件",
-    "━━━━━━━━━━━━",
-    "📌 清單",
-    "查看本週任務與本週驗收標準",
+    "【新增】",
+    "新增任務 練習 CSS",
+    "新增任務 練習 CSS Flex｜程式學習｜適中",
+    "新增標準 本週能說明一個學到的觀念",
     "",
-    "📌 簡單任務",
-    "查看難度為「簡單」的任務",
+    "分類可用：程式學習、身心穩定、興趣探索",
+    "難度可用：簡單、適中、困難",
     "",
-    "📌 適中任務",
-    "查看難度為「適中」的任務",
+    "【辦理】",
+    "完成任務3",
+    "取消任務3",
+    "修改任務3",
+    "刪除任務3",
     "",
-    "📌 困難任務",
-    "查看難度為「困難」的任務",
+    "完成標準2",
+    "取消標準2",
+    "修改標準2",
+    "刪除標準2",
     "",
-    "━━━━━━━━━━━━",
-    "📝 二、新增案件",
-    "━━━━━━━━━━━━",
-    "📌 新增任務 任務內容",
-    "例：新增任務 練習 CSS",
+    "【修訂中止】",
+    "取消修改",
     "",
-    "📌 新增任務 任務內容｜分類｜難度",
-    "例：新增任務 練習 CSS Flex｜程式學習｜適中",
-    "",
-    "可用分類：",
-    "・程式學習",
-    "・身心穩定",
-    "・興趣探索",
-    "",
-    "可用難度：",
-    "・簡單",
-    "・適中",
-    "・困難",
-    "",
-    "━━━━━━━━━━━━",
-    "✅ 三、辦理任務",
-    "━━━━━━━━━━━━",
-    "📌 完成任務3",
-    "📌 完成第三個任務",
-    "📌 已完成第 3 個任務",
-    "",
-    "📌 取消任務3",
-    "撤回已辦理狀態",
-    "",
-    "📌 修改任務3",
-    "本局會請你輸入新文字",
-    "",
-    "📌 刪除任務3",
-    "將該任務撤案",
-    "",
-    "━━━━━━━━━━━━",
-    "📎 四、本週驗收標準",
-    "━━━━━━━━━━━━",
-    "📌 新增標準 本週能說明一個學到的觀念",
-    "📌 新增標準 本週有整理一次學習筆記",
-    "📌 新增標準 本週有完成一個小練習",
-    "",
-    "📌 完成標準2",
-    "📌 取消標準2",
-    "📌 修改標準2",
-    "📌 刪除標準2",
-    "",
-    "驗收標準是看見本週靠近了哪裡，",
-    "不是拿來規定自己完成幾個。",
-    "",
-    "━━━━━━━━━━━━",
-    "🛑 五、修訂中止",
-    "━━━━━━━━━━━━",
-    "📌 取消修改",
-    "若本局正在等你輸入新文字，",
-    "可用此指令取消修訂。",
-    "",
-    "━━━━━━━━━━━━",
-    "🌿 本局提醒",
-    "━━━━━━━━━━━━",
-    "今日有學，即可記上一筆。",
-    "步子再小，也算靠岸。",
+    "本局提醒：今日有學，即可記上一筆。",
   ].join("\n");
 }
 
@@ -796,46 +689,19 @@ function getUsageText() {
   return [
     "📮 不努力時間有限管理局｜LINE 用量小抄",
     "",
-    "【通常不太吃每月訊息額度】",
     "你主動傳訊息，Bot 立刻回覆：",
-    "- 清單",
-    "- 攻略",
-    "- 用量小抄",
-    "- 新增任務 任務內容",
-    "- 完成任務 數字",
-    "- 修改任務 數字",
-    "- 點選圖文選單後，Bot 立刻回覆",
+    "清單、攻略、抽一件、新增、完成、修改、刪除",
     "",
     "這類通常是 reply message。",
-    "意思是：你先敲櫃台，管理局小櫃台立刻回你。",
     "",
-    "【會計入訊息額度】",
     "Bot 主動傳給你：",
-    "- 每日提醒",
-    "- 主動補提醒",
-    "- 主動通知你還沒完成",
-    "- 群發 / 廣播",
+    "每日提醒、主動補提醒、主動通知",
     "",
-    "這類通常是 push message。",
-    "意思是：管理局主動派公文到你家。",
+    "這類通常是 push message，會計入主動訊息用量。",
     "",
-    "【目前本局規則】",
-    "- 每天主動提醒最多 1 則",
-    "- 你自己打指令，Bot 立刻回覆，走 reply",
-    "- 不做群發",
-    "- 不做廣播",
-    "- 不亂發主動通知",
-    "",
-    "【一人使用估算】",
-    "每天提醒 1 次：約 30 則 / 月",
-    "",
-    "輕用量方案目前：",
-    "月費 0 元",
-    "免費訊息 200 則 / 月",
-    "",
-    "所以一人使用，每天提醒 1 次很安全。",
-    "",
-    "本局提醒：你主動問，不太燒額度；管理局主動找你，才要算郵資。",
+    "目前建議：",
+    "每天主動提醒最多 1 則。",
+    "你主動問，本局再回。",
   ].join("\n");
 }
 
@@ -863,8 +729,6 @@ async function handlePendingActionIfNeeded(sourceKey, userText) {
       "這次修訂已經逾時，本局未更動資料。",
       "",
       `可以重新輸入：修改${pending.label} 數字`,
-      "",
-      "慢慢來，案件不會責備你。",
     ].join("\n");
   }
 
@@ -884,7 +748,7 @@ async function handlePendingActionIfNeeded(sourceKey, userText) {
     `已修訂第 ${pending.itemNumber} 個${displayLabel}：`,
     updatedItem.title || newTitle,
     "",
-    "本局已更新公文內容，請安心續辦。",
+    "本局已更新公文內容。",
   ].join("\n");
 }
 
@@ -930,12 +794,7 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
     return [
       `這份立案公文還缺少${displayLabel}內容，本局未更動資料。`,
       "",
-      `可以這樣輸入：${command} ${label}內容`,
       `例：${command} ${example}`,
-      "",
-      "任務也可以加分類與難度：",
-      "例：新增任務 練習 CSS / 程式學習 / 適中",
-      "例：新增任務 練習 CSS｜程式學習｜適中",
     ].join("\n");
   }
 
@@ -951,46 +810,36 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
       "",
       error.message,
       "",
-      "可以這樣輸入：",
-      "新增任務 練習 CSS / 程式學習 / 適中",
-      "新增任務 練習 CSS｜程式學習｜適中",
+      "例：新增任務 練習 CSS｜程式學習｜適中",
     ].join("\n");
   }
 
-  if (type === "task") {
-    const result = await createTaskWithAutoStandard({
-      title: parsed.title,
-      category,
-      difficulty,
-    });
-
-    return [
-      "管理局小櫃台已立案：",
-      `☐ ${result.task.title || parsed.title}`,
-      `分類：${result.task.category}｜難度：${result.task.difficulty}`,
-      "",
-      "本局已自動建立關聯驗收標準：",
-      `☐ ${result.standard.title}`,
-      "",
-      getGentleFooterText(),
-      "",
-      "可以輸入「清單」查看目前案件板。",
-    ].join("\n");
-  }
+  const currentWeekNumber = await getCurrentWeekNumberFromGoogleSheets();
 
   const createdItem = await createItemToGoogleSheets({
     type,
     title: parsed.title,
     category,
     difficulty,
+    weekNumber: currentWeekNumber,
   });
+
+  if (type === "task") {
+    return [
+      "管理局小櫃台已立案：",
+      `☐ ${createdItem.title || parsed.title}`,
+      `分類：${createdItem.category}｜難度：${createdItem.difficulty}`,
+      "",
+      "若要新增驗收標準，可輸入：",
+      "新增標準 本週能說明一個學到的觀念",
+      "",
+      "可以輸入「清單」查看目前案件板。",
+    ].join("\n");
+  }
 
   return [
     "管理局小櫃台已新增本週驗收標準：",
     `☐ ${createdItem.title || parsed.title}`,
-    "這份標準會用來看見本週靠近了哪裡。",
-    "",
-    getGentleFooterText(),
     "",
     "可以輸入「清單」查看目前案件板。",
   ].join("\n");
@@ -1008,36 +857,20 @@ async function handleDoneCommand({ numberText, type, label, done }) {
     return result.error;
   }
 
-  const updateResult = await updateItemWithLinkedStandardsToGoogleSheets(
-    result.item.id,
-    {
-      done,
-    }
-  );
+  const updatedItem = await updateItemToGoogleSheets(result.item.id, {
+    done,
+  });
 
-  const updatedItem = updateResult.item;
   const checkbox = done ? "☑" : "☐";
   const actionText = done ? "已辦理" : "已撤回辦理";
   const displayLabel = getDisplayLabel(label);
 
-  const lines = [
+  return [
     `${actionText}第 ${result.itemNumber} 個${displayLabel}：`,
     `${checkbox} ${updatedItem.title || result.item.title}`,
-  ];
-
-  if (
-    result.item.type === "task" &&
-    updateResult.updatedLinkedStandards.length > 0
-  ) {
-    lines.push(
-      "",
-      `已同步更新 ${updateResult.updatedLinkedStandards.length} 筆關聯驗收標準。`
-    );
-  }
-
-  lines.push("", "步子再小，也算靠岸。");
-
-  return lines.join("\n");
+    "",
+    "步子再小，也算靠岸。",
+  ].join("\n");
 }
 
 // === LINE 小工具：處理刪除 ===
@@ -1052,31 +885,15 @@ async function handleDeleteCommand({ numberText, type, label }) {
     return result.error;
   }
 
-  const deletedTitle = result.item.title;
+  const deletedItem = await deleteItemFromGoogleSheets(result.item.id);
   const displayLabel = getDisplayLabel(label);
 
-  const deletionResult = await deleteItemWithLinkedStandardsFromGoogleSheets(
-    result.item.id
-  );
-
-  const lines = [
+  return [
     `已撤案第 ${result.itemNumber} 個${displayLabel}：`,
-    deletedTitle,
-  ];
-
-  if (
-    result.item.type === "task" &&
-    deletionResult.deletedLinkedStandards.length > 0
-  ) {
-    lines.push(
-      "",
-      `已一併撤案 ${deletionResult.deletedLinkedStandards.length} 筆關聯驗收標準。`
-    );
-  }
-
-  lines.push("", "本局已更新案件板，資料不再列入本週。");
-
-  return lines.join("\n");
+    deletedItem.title || result.item.title,
+    "",
+    "本局已更新案件板。",
+  ].join("\n");
 }
 
 // === LINE 小工具：處理修改 ===
@@ -1108,7 +925,7 @@ async function handleEditCommand({
       `已修訂第 ${result.itemNumber} 個${displayLabel}：`,
       updatedItem.title || newTitle.trim(),
       "",
-      "本局已更新公文內容，請安心續辦。",
+      "本局已更新公文內容。",
     ].join("\n");
   }
 
@@ -1127,7 +944,7 @@ async function handleEditCommand({
     "",
     `目前內容：${result.item.title}`,
     "",
-    "如果暫時不想修訂，請輸入：取消修改",
+    "若不想修訂，請輸入：取消修改",
   ].join("\n");
 }
 
@@ -1240,27 +1057,15 @@ function getFormatReminderText() {
   return [
     "這份公文格式需補正，本局未更動資料。",
     "",
-    "可以這樣輸入：",
+    "常用格式：",
+    "新增任務 練習 CSS｜程式學習｜適中",
     "完成任務3",
-    "完成第 3 個任務",
-    "完成第三個任務",
-    "已完成第三個任務",
-    "",
     "取消任務3",
     "修改任務3",
     "刪除任務3",
-    "",
     "完成標準2",
-    "取消第二個標準",
-    "修改第 2 個標準",
-    "刪除第二個標準",
     "",
-    "新增任務 練習 CSS / 程式學習 / 適中",
-    "新增任務 練習 CSS｜程式學習｜適中",
-    "",
-    "不急著一次寫完，先把格式補齊就好。",
-    "",
-    getLineCommandHintText(),
+    "需要完整說明請輸入：攻略",
   ].join("\n");
 }
 
@@ -1269,9 +1074,10 @@ function getUnknownCommandText() {
   return [
     "本局目前看不懂這份公文，所以未更動資料。",
     "",
-    "可以輸入「清單」查看本週案件板，或輸入「攻略」查看辦事方式。",
-    "",
-    "慢慢來，先讓案件排成一列。",
+    "可以輸入：",
+    "清單",
+    "抽一件",
+    "攻略",
     "",
     getLineCommandHintText(),
   ].join("\n");
@@ -1300,6 +1106,15 @@ async function handleLineTextCommand({ sourceKey, userText }) {
     userText === "訊息用量"
   ) {
     return getUsageText();
+  }
+
+  if (
+    userText === "抽一件" ||
+    userText === "抽任務" ||
+    userText === "隨機任務" ||
+    userText === "今天做什麼"
+  ) {
+    return handleDrawOneTaskCommand();
   }
 
   if (userText === "清單" || userText === "全部清單") {
@@ -1601,20 +1416,6 @@ app.post("/items", async (req, res) => {
       });
     }
 
-    if (type === "task") {
-      const result = await createTaskWithAutoStandard({
-        title,
-        category,
-        difficulty,
-        weekNumber,
-      });
-
-      return res.status(201).json({
-        ...result.task,
-        autoStandard: result.standard,
-      });
-    }
-
     const createdItem = await createItemToGoogleSheets({
       type,
       title,
@@ -1634,7 +1435,7 @@ app.post("/items", async (req, res) => {
   }
 });
 
-// === Update：更新 item，task.done 改變時同步關聯 standard ===
+// === Update：更新 item ===
 app.patch("/items/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -1643,7 +1444,6 @@ app.patch("/items/:id", async (req, res) => {
       done,
       category,
       difficulty,
-      parentTaskId,
       weekNumber,
     } = req.body;
 
@@ -1665,10 +1465,6 @@ app.patch("/items/:id", async (req, res) => {
       updates.difficulty = difficulty;
     }
 
-    if (parentTaskId !== undefined) {
-      updates.parentTaskId = parentTaskId;
-    }
-
     if (weekNumber !== undefined) {
       updates.weekNumber = weekNumber;
     }
@@ -1679,12 +1475,9 @@ app.patch("/items/:id", async (req, res) => {
       });
     }
 
-    const updateResult = await updateItemWithLinkedStandardsToGoogleSheets(
-      id,
-      updates
-    );
+    const updatedItem = await updateItemToGoogleSheets(id, updates);
 
-    res.json(updateResult);
+    res.json(updatedItem);
   } catch (error) {
     console.error("PATCH /items/:id 更新 Google Sheets 發生錯誤：", error);
 
@@ -1695,18 +1488,17 @@ app.patch("/items/:id", async (req, res) => {
   }
 });
 
-// === Delete：刪除 item，若是 task 則一併刪除關聯 standard ===
+// === Delete：刪除 item ===
 app.delete("/items/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const deletionResult = await deleteItemWithLinkedStandardsFromGoogleSheets(id);
+    const deletedItem = await deleteItemFromGoogleSheets(id);
 
     res.json({
       message: "刪除成功",
-      id: deletionResult.deletedItem.id,
-      item: deletionResult.deletedItem,
-      deletedLinkedStandards: deletionResult.deletedLinkedStandards,
+      id: deletedItem.id,
+      item: deletedItem,
     });
   } catch (error) {
     console.error("DELETE /items/:id 刪除 Google Sheets 發生錯誤：", error);
