@@ -1175,14 +1175,14 @@ async function deleteItem(id) {
   }
 }
 
-// === 結案預演文字 ===
-function buildCompleteWeekPreviewText(currentWeek, nextWeek) {
+// === 結案文字 ===
+function buildCompleteWeekConfirmText(currentWeek, nextWeek) {
   const currentWeekNumber = Number(currentWeek.weekNumber);
   const nextWeekNumber = Number(nextWeek.weekNumber);
   const upcomingWeekNumber = nextWeekNumber + 1;
 
   const lines = [
-    "結案預演，尚未更動資料",
+    "結案確認",
     "",
     `第 ${currentWeekNumber} 週：current → completed`,
     `第 ${nextWeekNumber} 週：next → current`,
@@ -1218,8 +1218,8 @@ async function completeCurrentWeek() {
     return;
   }
 
-  const previewText = buildCompleteWeekPreviewText(currentWeek, nextWeek);
-  const shouldComplete = confirm(previewText);
+  const confirmText = buildCompleteWeekConfirmText(currentWeek, nextWeek);
+  const shouldComplete = confirm(confirmText);
 
   if (!shouldComplete) {
     return;
