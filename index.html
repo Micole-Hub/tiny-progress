@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>不努力時間有限管理局</title>
   <link rel="stylesheet" href="style.css" />
-  <script src="script.js?v=20260512-1" defer></script>
+  <script src="script.js?v=20260513-progress-1" defer></script>
 </head>
 
 <body>
@@ -99,16 +99,30 @@
       </div>
 
       <div class="progress-list">
-        <p>
-          <span id="taskProgressLabel">本週任務</span>
-          <strong id="taskProgress">0 / 0</strong>
-        </p>
+  <div class="progress-item">
+    <div class="progress-row">
+      <span id="taskProgressLabel">本週任務</span>
+      <strong id="taskProgress">0 / 0</strong>
+    </div>
 
-        <p>
-          <span id="standardProgressLabel">本週驗收標準</span>
-          <strong id="standardProgress">0 / 0</strong>
-        </p>
-      </div>
+    <!-- 任務進度條：寬度之後由 JavaScript 控制 -->
+    <div class="progress-track" aria-label="本週任務完成進度">
+      <div id="taskProgressFill" class="progress-fill"></div>
+    </div>
+  </div>
+
+  <div class="progress-item">
+    <div class="progress-row">
+      <span id="standardProgressLabel">本週驗收標準</span>
+      <strong id="standardProgress">0 / 0</strong>
+    </div>
+
+    <!-- 驗收標準進度條：寬度之後由 JavaScript 控制 -->
+    <div class="progress-track" aria-label="本週驗收標準完成進度">
+      <div id="standardProgressFill" class="progress-fill"></div>
+    </div>
+  </div>
+</div>
     </section>
 
     <section class="task-section">

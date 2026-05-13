@@ -175,6 +175,10 @@ const standardProgressLabel = document.querySelector("#standardProgressLabel");
 const taskProgress = document.querySelector("#taskProgress");
 const standardProgress = document.querySelector("#standardProgress");
 
+// 進度條填色元素
+const taskProgressFill = document.querySelector("#taskProgressFill");
+const standardProgressFill = document.querySelector("#standardProgressFill");
+
 const taskSectionTitle = document.querySelector("#taskSectionTitle");
 const taskSectionNote = document.querySelector("#taskSectionNote");
 
@@ -832,6 +836,23 @@ function renderStandards() {
   });
 }
 
+// 計算完成百分比，total 是 0 時固定回傳 0，避免出現 NaN
+function getProgressPercent(doneCount, totalCount) {
+  if (!totalCount) {
+    return 0;
+  }
+
+  return Math.round((doneCount / totalCount) * 100);
+}
+
+// 更新單一進度條寬度
+function updateProgressFill(fillElement, percent) {
+  if (!fillElement) return;
+
+  fillElement.style.width = `${percent}%`;
+  fillElement.setAttribute("aria-valuenow", String(percent));
+}
+
 function renderProgress() {
   const tasks = getVisibleItemsByType("task");
   const standards = getVisibleItemsByType("standard");
@@ -844,8 +865,19 @@ function renderProgress() {
     return standard.done;
   });
 
-  taskProgress.textContent = `${doneTasks.length} / ${tasks.length}`;
-  standardProgress.textContent = `${doneStandards.length} / ${standards.length}`;
+  const taskPercent = getProgressPercent(doneTasks.length, tasks.length);
+  const standardPercent = getProgressPercent(doneStandards.length, standards.length);
+
+  if (taskProgress) {
+    taskProgress.textContent = `${doneTasks.length} / ${tasks.length}`;
+  }
+
+  if (standardProgress) {
+    standardProgress.textContent = `${doneStandards.length} / ${standards.length}`;
+  }
+
+  updateProgressFill(taskProgressFill, taskPercent);
+  updateProgressFill(standardProgressFill, standardPercent);
 }
 
 function renderAll() {
