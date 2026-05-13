@@ -37,7 +37,10 @@ if (!GOOGLE_SHEETS_API_SECRET) {
 app.use(cors());
 app.use(express.json());
 
-// === 共用工具：分類正規化 ===
+// ==============================
+// 共用工具
+// ==============================
+
 function normalizeCategory(value) {
   const category = String(value || "").trim();
 
@@ -52,7 +55,6 @@ function normalizeCategory(value) {
   return category;
 }
 
-// === 共用工具：難度正規化 ===
 function normalizeDifficulty(value) {
   const difficulty = String(value || "").trim();
 
@@ -67,12 +69,10 @@ function normalizeDifficulty(value) {
   return difficulty;
 }
 
-// === 共用工具：done 正規化 ===
 function normalizeDone(value) {
   return value === true || String(value).toUpperCase() === "TRUE";
 }
 
-// === 共用工具：整理 item，避免舊資料缺欄位時畫面壞掉 ===
 function normalizeItem(item) {
   const safeItem = item || {};
 
@@ -95,7 +95,6 @@ function normalizeItem(item) {
   };
 }
 
-// === 共用工具：任務排序，讓 LINE 清單和編號邏輯一致 ===
 function sortTasksByCategory(tasks) {
   return [...tasks].sort(function (a, b) {
     const categoryA = normalizeCategory(a.category);
@@ -112,7 +111,6 @@ function sortTasksByCategory(tasks) {
   });
 }
 
-// === 共用工具：對外顯示名稱 ===
 function getDisplayLabel(label) {
   if (label === "完成標準") {
     return "本週驗收標準";
@@ -121,14 +119,12 @@ function getDisplayLabel(label) {
   return label;
 }
 
-// === 產生帶 secret 的 Google Sheets API URL，用於 GET 讀取 ===
 function buildGoogleSheetsGetUrl() {
   const url = new URL(GOOGLE_SHEETS_API_URL);
   url.searchParams.set("secret", GOOGLE_SHEETS_API_SECRET);
   return url.toString();
 }
 
-// === 產生帶 resource 的 Google Sheets API URL ===
 function buildGoogleSheetsResourceUrl(resource) {
   const url = new URL(GOOGLE_SHEETS_API_URL);
 
@@ -138,7 +134,10 @@ function buildGoogleSheetsResourceUrl(resource) {
   return url.toString();
 }
 
-// === 共用函式：從 Google Sheets 讀目前週與下週 ===
+// ==============================
+// Google Sheets API
+// ==============================
+
 async function fetchWeekContextFromGoogleSheets() {
   const response = await fetch(buildGoogleSheetsResourceUrl("week-context"));
 
@@ -158,7 +157,6 @@ async function fetchWeekContextFromGoogleSheets() {
   };
 }
 
-// === 共用函式：取得 current 週週次 ===
 async function getCurrentWeekNumberFromGoogleSheets() {
   const context = await fetchWeekContextFromGoogleSheets();
 
@@ -169,7 +167,6 @@ async function getCurrentWeekNumberFromGoogleSheets() {
   return Number(context.currentWeek.weekNumber);
 }
 
-// === 共用函式：從 Google Sheets 讀全部 items ===
 async function fetchItemsFromGoogleSheets() {
   const response = await fetch(buildGoogleSheetsGetUrl());
 
@@ -186,7 +183,6 @@ async function fetchItemsFromGoogleSheets() {
   return data.items.map(normalizeItem);
 }
 
-// === 共用函式：只讀目前週 items ===
 async function fetchCurrentWeekItemsFromGoogleSheets() {
   const [items, currentWeekNumber] = await Promise.all([
     fetchItemsFromGoogleSheets(),
@@ -198,7 +194,6 @@ async function fetchCurrentWeekItemsFromGoogleSheets() {
   });
 }
 
-// === 共用函式：呼叫 GAS 完成本週結案 ===
 async function completeCurrentWeekInGoogleSheets() {
   const response = await fetch(GOOGLE_SHEETS_API_URL, {
     method: "POST",
@@ -224,7 +219,6 @@ async function completeCurrentWeekInGoogleSheets() {
   return data.result;
 }
 
-// === 共用函式：新增 item 到 Google Sheets ===
 async function createItemToGoogleSheets({
   type,
   title,
@@ -290,7 +284,6 @@ async function createItemToGoogleSheets({
   return normalizeItem(data.item);
 }
 
-// === 共用函式：更新單筆 item 到 Google Sheets ===
 async function updateItemToGoogleSheets(id, updates) {
   const safeUpdates = { ...updates };
 
@@ -336,7 +329,6 @@ async function updateItemToGoogleSheets(id, updates) {
   return normalizeItem(data.item);
 }
 
-// === 共用函式：刪除單筆 item from Google Sheets ===
 async function deleteItemFromGoogleSheets(id) {
   const response = await fetch(GOOGLE_SHEETS_API_URL, {
     method: "POST",
@@ -363,7 +355,10 @@ async function deleteItemFromGoogleSheets(id) {
   return normalizeItem(data.item);
 }
 
-// === LINE 小工具：取得使用者識別 key，用來記住修改狀態 ===
+// ==============================
+// LINE 資料取得工具
+// ==============================
+
 function getLineSourceKey(event) {
   return (
     event.source?.userId ||
@@ -373,7 +368,6 @@ function getLineSourceKey(event) {
   );
 }
 
-// === LINE 小工具：取得目前週某一類資料 ===
 async function getItemsByType(type) {
   const items = await fetchCurrentWeekItemsFromGoogleSheets();
   const filteredItems = items.filter((item) => item.type === type);
@@ -385,7 +379,6 @@ async function getItemsByType(type) {
   return filteredItems;
 }
 
-// === LINE 小工具：取得目前週任務與驗收標準 ===
 async function getTaskBoardForLine() {
   const [items, weekContext] = await Promise.all([
     fetchCurrentWeekItemsFromGoogleSheets(),
@@ -405,7 +398,6 @@ async function getTaskBoardForLine() {
   };
 }
 
-// === LINE 小工具：清單底部固定提示 ===
 function getLineCommandHintText() {
   return [
     "需要操作說明請輸入：攻略",
@@ -413,7 +405,10 @@ function getLineCommandHintText() {
   ].join("\n");
 }
 
-// === LINE 小工具：格式化任務分類區塊，任務編號維持連續 ===
+// ==============================
+// 純文字格式化
+// ==============================
+
 function formatTaskSectionByCategory(tasks) {
   if (tasks.length === 0) {
     return [
@@ -449,7 +444,6 @@ function formatTaskSectionByCategory(tasks) {
   return lines.join("\n").trim();
 }
 
-// === LINE 小工具：格式化驗收標準區塊 ===
 function formatLineSection(title, items, emptyText) {
   if (items.length === 0) {
     return [title, emptyText].join("\n");
@@ -463,7 +457,6 @@ function formatLineSection(title, items, emptyText) {
   return [title, ...lines].join("\n");
 }
 
-// === LINE 小工具：格式化完整清單 ===
 function formatTaskBoardForLine({ currentWeek, tasks, standards }) {
   const taskSection = formatTaskSectionByCategory(tasks);
 
@@ -492,7 +485,6 @@ function formatTaskBoardForLine({ currentWeek, tasks, standards }) {
   ].join("\n");
 }
 
-// === LINE 小工具：格式化指定難度任務 ===
 function formatTasksByDifficultyForLine(tasks, difficulty) {
   const matchedTasks = tasks
     .map(function (task, index) {
@@ -536,7 +528,342 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
   ].join("\n");
 }
 
-// === LINE 小工具：抽一件未完成任務 ===
+// ==============================
+// Flex Message 共用樣式
+// ==============================
+
+const FLEX_COLORS = {
+  cream: "#F7F0E6",
+  card: "#FFF9EF",
+  darkGreen: "#203A32",
+  green: "#2F7D56",
+  sage: "#9DBF9A",
+  sageLight: "#E5EEE2",
+  beige: "#EFE3C7",
+  beigeLine: "#DDD1BD",
+  mutedText: "#7A6E5F",
+  redLight: "#EFD9D6",
+  redText: "#6B3932",
+  blueGray: "#DCE8EA",
+  blueText: "#2E5460",
+};
+
+function getDifficultyFlexStyle(difficulty) {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
+
+  if (normalizedDifficulty === "簡單") {
+    return {
+      backgroundColor: "#E5EEE2",
+      textColor: "#35533D",
+    };
+  }
+
+  if (normalizedDifficulty === "適中") {
+    return {
+      backgroundColor: "#EFE3C7",
+      textColor: "#6A4E21",
+    };
+  }
+
+  return {
+    backgroundColor: "#EFD9D6",
+    textColor: "#6B3932",
+  };
+}
+
+function buildFlexTag(label, backgroundColor, textColor) {
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor,
+    cornerRadius: "999px",
+    paddingTop: "6px",
+    paddingBottom: "6px",
+    paddingStart: "10px",
+    paddingEnd: "10px",
+    contents: [
+      {
+        type: "text",
+        text: label,
+        size: "xs",
+        weight: "bold",
+        color: textColor,
+        align: "center",
+      },
+    ],
+  };
+}
+
+function buildFlexHeader(title, subtitle) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "xs",
+    contents: [
+      {
+        type: "text",
+        text: "不努力時間有限管理局",
+        size: "xs",
+        color: FLEX_COLORS.mutedText,
+        weight: "bold",
+      },
+      {
+        type: "text",
+        text: title,
+        size: "xl",
+        weight: "bold",
+        color: FLEX_COLORS.darkGreen,
+        wrap: true,
+      },
+      {
+        type: "text",
+        text: subtitle || "本日金句：不要一開張又關門",
+        size: "sm",
+        color: FLEX_COLORS.mutedText,
+        wrap: true,
+      },
+    ],
+  };
+}
+
+function buildFlexInfoCard(contents) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "sm",
+    backgroundColor: FLEX_COLORS.card,
+    cornerRadius: "16px",
+    paddingAll: "16px",
+    borderColor: "#E5D7C3",
+    borderWidth: "1px",
+    contents,
+  };
+}
+
+function buildProgressLine(label, doneCount, totalCount) {
+  return {
+    type: "box",
+    layout: "horizontal",
+    spacing: "sm",
+    contents: [
+      {
+        type: "text",
+        text: label,
+        size: "sm",
+        color: FLEX_COLORS.mutedText,
+        flex: 0,
+      },
+      {
+        type: "text",
+        text: `${doneCount} / ${totalCount}`,
+        size: "sm",
+        color: FLEX_COLORS.darkGreen,
+        weight: "bold",
+        align: "end",
+      },
+    ],
+  };
+}
+
+function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory }) {
+  const checkbox = task.done ? "☑" : "☐";
+  const difficulty = normalizeDifficulty(task.difficulty);
+  const category = normalizeCategory(task.category);
+  const difficultyStyle = getDifficultyFlexStyle(difficulty);
+
+  const tagContents = [];
+
+  if (showCategory) {
+    tagContents.push(buildFlexTag(category, "#DFE9DD", "#36533F"));
+  }
+
+  if (showDifficulty) {
+    tagContents.push(
+      buildFlexTag(
+        difficulty,
+        difficultyStyle.backgroundColor,
+        difficultyStyle.textColor
+      )
+    );
+  }
+
+  const rowContents = [
+    {
+      type: "text",
+      text: `${taskNumber}. ${checkbox} ${task.title}`,
+      size: "sm",
+      color: task.done ? "#8A7E6E" : FLEX_COLORS.darkGreen,
+      wrap: true,
+      weight: task.done ? "regular" : "bold",
+    },
+  ];
+
+  if (tagContents.length > 0) {
+    rowContents.push({
+      type: "box",
+      layout: "horizontal",
+      spacing: "sm",
+      margin: "sm",
+      contents: tagContents,
+    });
+  }
+
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "xs",
+    paddingBottom: "10px",
+    contents: rowContents,
+  };
+}
+
+function buildStandardFlexRow({ standard, standardNumber }) {
+  const checkbox = standard.done ? "☑" : "☐";
+
+  return {
+    type: "text",
+    text: `${standardNumber}. ${checkbox} ${standard.title}`,
+    size: "sm",
+    color: standard.done ? "#8A7E6E" : FLEX_COLORS.darkGreen,
+    wrap: true,
+  };
+}
+
+function buildFlexFooterHint(lines) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "xs",
+    margin: "sm",
+    contents: lines.map(function (line, index) {
+      return {
+        type: "text",
+        text: line,
+        size: index === 0 ? "sm" : "xs",
+        color: index === 0 ? FLEX_COLORS.darkGreen : "#8A7E6E",
+        weight: index === 0 ? "bold" : "regular",
+        wrap: true,
+      };
+    }),
+  };
+}
+
+function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents }) {
+  const contents = [
+    buildFlexHeader(title, subtitle),
+    {
+      type: "separator",
+      margin: "md",
+      color: FLEX_COLORS.beigeLine,
+    },
+    ...bodyContents,
+  ];
+
+  if (footerContents) {
+    contents.push({
+      type: "separator",
+      margin: "md",
+      color: FLEX_COLORS.beigeLine,
+    });
+    contents.push(footerContents);
+  }
+
+  return {
+    type: "bubble",
+    size: "mega",
+    styles: {
+      body: {
+        backgroundColor: FLEX_COLORS.cream,
+      },
+      footer: {
+        backgroundColor: FLEX_COLORS.cream,
+      },
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "22px",
+      spacing: "md",
+      contents,
+    },
+  };
+}
+
+// ==============================
+// Flex Message：抽一件
+// ==============================
+
+function buildDrawOneTaskFallbackText({ selectedTask, taskNumber }) {
+  return [
+    "🎲 本局今日先派這一件",
+    "",
+    `第 ${taskNumber} 個任務`,
+    `☐ ${selectedTask.title}`,
+    "",
+    `分類：${selectedTask.category}`,
+    `難度：${selectedTask.difficulty}`,
+    "",
+    "做完可以輸入：",
+    `完成任務${taskNumber}`,
+    "",
+    "不用想太多，先開這一案。",
+  ].join("\n");
+}
+
+function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
+  const category = normalizeCategory(selectedTask.category);
+  const difficulty = normalizeDifficulty(selectedTask.difficulty);
+  const difficultyStyle = getDifficultyFlexStyle(difficulty);
+
+  const bubble = buildBaseFlexBubble({
+    title: "本局今日先派這一件",
+    subtitle: "本日金句：不要一開張又關門",
+    bodyContents: [
+      buildFlexInfoCard([
+        {
+          type: "text",
+          text: `第 ${taskNumber} 個任務`,
+          size: "sm",
+          color: FLEX_COLORS.mutedText,
+          weight: "bold",
+        },
+        {
+          type: "text",
+          text: selectedTask.title,
+          size: "lg",
+          weight: "bold",
+          color: FLEX_COLORS.darkGreen,
+          wrap: true,
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          spacing: "sm",
+          margin: "md",
+          contents: [
+            buildFlexTag(category, "#DFE9DD", "#36533F"),
+            buildFlexTag(
+              difficulty,
+              difficultyStyle.backgroundColor,
+              difficultyStyle.textColor
+            ),
+          ],
+        },
+      ]),
+    ],
+    footerContents: buildFlexFooterHint([
+      `做完可以輸入：完成任務${taskNumber}`,
+      "不用想太多，先開這一案。",
+    ]),
+  });
+
+  return {
+    type: "flex",
+    altText: `本局今日先派這一件：${selectedTask.title}`,
+    contents: bubble,
+  };
+}
+
 async function handleDrawOneTaskCommand() {
   const board = await getTaskBoardForLine();
 
@@ -563,65 +890,367 @@ async function handleDrawOneTaskCommand() {
       return task.id === selectedTask.id;
     }) + 1;
 
-  return [
-    "🎲 本局今日先派這一件",
-    "",
-    `第 ${taskNumber} 個任務`,
-    `☐ ${selectedTask.title}`,
-    "",
-    `分類：${selectedTask.category}`,
-    `難度：${selectedTask.difficulty}`,
-    "",
-    "做完可以輸入：",
-    `完成任務${taskNumber}`,
-    "",
-    "不用想太多，先開這一案。",
-  ].join("\n");
-}
+  const replyText = buildDrawOneTaskFallbackText({
+    selectedTask,
+    taskNumber,
+  });
 
-// === LINE 小工具：把編號轉成真正的 item ===
-async function findItemByNumber({ type, numberText, label }) {
-  const itemNumber = Number(numberText);
-  const displayLabel = getDisplayLabel(label);
-
-  if (!Number.isInteger(itemNumber) || itemNumber <= 0) {
-    return {
-      error: [
-        `這份公文還缺少正確的${displayLabel}編號，本局未更動資料。`,
-        "",
-        "可以這樣輸入：",
-        `完成${label}3`,
-        `完成第三個${label}`,
-      ].join("\n"),
-    };
-  }
-
-  const items = await getItemsByType(type);
-  const targetItem = items[itemNumber - 1];
-
-  if (!targetItem) {
-    return {
-      error: [
-        `本局目前查無第 ${itemNumber} 個${displayLabel}。`,
-        "",
-        "可以先輸入「清單」確認編號。",
-      ].join("\n"),
-    };
-  }
+  const flexMessage = buildDrawOneTaskFlexMessage({
+    selectedTask,
+    taskNumber,
+  });
 
   return {
-    itemNumber,
-    item: targetItem,
-    items,
+    replyText,
+    replyMessages: [flexMessage],
   };
 }
 
-// === LINE 小工具：回覆 LINE 訊息 ===
-async function replyToLine(replyToken, replyText) {
+// ==============================
+// Flex Message：難度任務清單
+// ==============================
+
+function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
+  const matchedTasks = tasks
+    .map(function (task, index) {
+      return {
+        task,
+        originalNumber: index + 1,
+      };
+    })
+    .filter(function (entry) {
+      return normalizeDifficulty(entry.task.difficulty) === difficulty;
+    });
+
+  const unfinishedCount = matchedTasks.filter(function (entry) {
+    return !entry.task.done;
+  }).length;
+
+  let bodyContents = [];
+
+  if (matchedTasks.length === 0) {
+    bodyContents = [
+      buildFlexInfoCard([
+        {
+          type: "text",
+          text: `目前沒有${difficulty}任務。`,
+          size: "md",
+          color: FLEX_COLORS.darkGreen,
+          weight: "bold",
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: "沒有案件也無妨，先喝水，本局不追殺。",
+          size: "sm",
+          color: FLEX_COLORS.mutedText,
+          wrap: true,
+        },
+      ]),
+    ];
+  } else {
+    const limitedEntries = matchedTasks.slice(0, 8);
+
+    bodyContents = [
+      buildFlexInfoCard([
+        {
+          type: "text",
+          text: `未完成：${unfinishedCount} 件`,
+          size: "sm",
+          color: FLEX_COLORS.mutedText,
+          weight: "bold",
+        },
+        ...limitedEntries.map(function (entry) {
+          return buildTaskFlexRow({
+            task: entry.task,
+            taskNumber: entry.originalNumber,
+            showDifficulty: false,
+            showCategory: true,
+          });
+        }),
+        ...(matchedTasks.length > limitedEntries.length
+          ? [
+              {
+                type: "text",
+                text: `還有 ${matchedTasks.length - limitedEntries.length} 件未顯示，可輸入「清單」查看完整案件板。`,
+                size: "xs",
+                color: FLEX_COLORS.mutedText,
+                wrap: true,
+              },
+            ]
+          : []),
+      ]),
+    ];
+  }
+
+  const bubble = buildBaseFlexBubble({
+    title: `本週${difficulty}任務`,
+    subtitle: "以上編號沿用完整清單",
+    bodyContents,
+    footerContents: buildFlexFooterHint([
+      "可直接輸入：完成任務3",
+      "需要完整清單請輸入：清單",
+    ]),
+  });
+
+  return {
+    type: "flex",
+    altText: `本週${difficulty}任務`,
+    contents: bubble,
+  };
+}
+
+async function handleDifficultyTaskFlexCommand(difficulty) {
+  const tasks = await getItemsByType("task");
+  const replyText = formatTasksByDifficultyForLine(tasks, difficulty);
+  const flexMessage = buildDifficultyTaskListFlexMessage({
+    tasks,
+    difficulty,
+  });
+
+  return {
+    replyText,
+    replyMessages: [flexMessage],
+  };
+}
+
+// ==============================
+// Flex Message：全部清單
+// ==============================
+
+function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
+  const taskDoneCount = tasks.filter(function (task) {
+    return task.done;
+  }).length;
+
+  const standardDoneCount = standards.filter(function (standard) {
+    return standard.done;
+  }).length;
+
+  const weekTitle = currentWeek
+    ? `第 ${currentWeek.weekNumber} 週｜${currentWeek.title}`
+    : "本週案件板";
+
+  const taskRows = tasks.slice(0, 8).map(function (task, index) {
+    return buildTaskFlexRow({
+      task,
+      taskNumber: index + 1,
+      showDifficulty: true,
+      showCategory: true,
+    });
+  });
+
+  const standardRows = standards.slice(0, 5).map(function (standard, index) {
+    return buildStandardFlexRow({
+      standard,
+      standardNumber: index + 1,
+    });
+  });
+
+  const bodyContents = [
+    buildFlexInfoCard([
+      {
+        type: "text",
+        text: weekTitle,
+        size: "sm",
+        color: FLEX_COLORS.mutedText,
+        weight: "bold",
+        wrap: true,
+      },
+      buildProgressLine("任務進度", taskDoneCount, tasks.length),
+      buildProgressLine("標準進度", standardDoneCount, standards.length),
+    ]),
+  ];
+
+  if (tasks.length === 0) {
+    bodyContents.push(
+      buildFlexInfoCard([
+        {
+          type: "text",
+          text: "本週任務尚未立案。",
+          size: "md",
+          color: FLEX_COLORS.darkGreen,
+          weight: "bold",
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: "放一個小任務，就是好的開始。",
+          size: "sm",
+          color: FLEX_COLORS.mutedText,
+          wrap: true,
+        },
+      ])
+    );
+  } else {
+    bodyContents.push(
+      buildFlexInfoCard([
+        {
+          type: "text",
+          text: "本週任務",
+          size: "sm",
+          color: FLEX_COLORS.mutedText,
+          weight: "bold",
+        },
+        ...taskRows,
+        ...(tasks.length > taskRows.length
+          ? [
+              {
+                type: "text",
+                text: `還有 ${tasks.length - taskRows.length} 件任務未顯示，可打開任務板查看完整內容。`,
+                size: "xs",
+                color: FLEX_COLORS.mutedText,
+                wrap: true,
+              },
+            ]
+          : []),
+      ])
+    );
+  }
+
+  if (standards.length === 0) {
+    bodyContents.push(
+      buildFlexInfoCard([
+        {
+          type: "text",
+          text: "本週驗收標準尚未成文。",
+          size: "sm",
+          color: FLEX_COLORS.darkGreen,
+          weight: "bold",
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: "寫下一個方向，慢慢前進。",
+          size: "xs",
+          color: FLEX_COLORS.mutedText,
+          wrap: true,
+        },
+      ])
+    );
+  } else {
+    bodyContents.push(
+      buildFlexInfoCard([
+        {
+          type: "text",
+          text: "本週驗收標準",
+          size: "sm",
+          color: FLEX_COLORS.mutedText,
+          weight: "bold",
+        },
+        ...standardRows,
+        ...(standards.length > standardRows.length
+          ? [
+              {
+                type: "text",
+                text: `還有 ${standards.length - standardRows.length} 則標準未顯示。`,
+                size: "xs",
+                color: FLEX_COLORS.mutedText,
+                wrap: true,
+              },
+            ]
+          : []),
+      ])
+    );
+  }
+
+  const bubble = buildBaseFlexBubble({
+    title: "本週案件板",
+    subtitle: "本日金句：不要一開張又關門",
+    bodyContents,
+    footerContents: buildFlexFooterHint([
+      "需要操作說明請輸入：攻略",
+      "想看用量請輸入：用量小抄",
+    ]),
+  });
+
+  return {
+    type: "flex",
+    altText: "不努力時間有限管理局｜本週案件板",
+    contents: bubble,
+  };
+}
+
+async function handleAllListFlexCommand() {
+  const board = await getTaskBoardForLine();
+  const replyText = formatTaskBoardForLine(board);
+  const flexMessage = buildAllListFlexMessage(board);
+
+  return {
+    replyText,
+    replyMessages: [flexMessage],
+  };
+}
+
+// ==============================
+// LINE Reply 格式整理
+// ==============================
+
+function buildLineTextMessage(text) {
+  return {
+    type: "text",
+    text: String(text || "本局目前沒有可回覆的內容。"),
+  };
+}
+
+function getFallbackTextFromReplyMessages(replyMessages) {
+  const textMessage = replyMessages.find(function (message) {
+    return message && message.type === "text" && message.text;
+  });
+
+  if (textMessage) {
+    return textMessage.text;
+  }
+
+  const flexMessage = replyMessages.find(function (message) {
+    return message && message.type === "flex" && message.altText;
+  });
+
+  if (flexMessage) {
+    return flexMessage.altText;
+  }
+
+  return "不努力時間有限管理局已回覆。";
+}
+
+function normalizeLineReplyResult(replyResult) {
+  if (
+    replyResult &&
+    typeof replyResult === "object" &&
+    Array.isArray(replyResult.replyMessages)
+  ) {
+    const replyMessages = replyResult.replyMessages;
+    const replyText =
+      replyResult.replyText || getFallbackTextFromReplyMessages(replyMessages);
+
+    return {
+      replyText,
+      replyMessages,
+    };
+  }
+
+  if (Array.isArray(replyResult)) {
+    return {
+      replyText: getFallbackTextFromReplyMessages(replyResult),
+      replyMessages: replyResult,
+    };
+  }
+
+  const replyText = String(replyResult || "本局目前沒有可回覆的內容。");
+
+  return {
+    replyText,
+    replyMessages: [buildLineTextMessage(replyText)],
+  };
+}
+
+async function replyToLine(replyToken, replyResult) {
   if (!LINE_CHANNEL_ACCESS_TOKEN) {
     console.error("缺少 LINE_CHANNEL_ACCESS_TOKEN，無法回覆 LINE 訊息");
     return;
   }
+
+  const normalizedReply = normalizeLineReplyResult(replyResult);
 
   const lineResponse = await fetch("https://api.line.me/v2/bot/message/reply", {
     method: "POST",
@@ -631,12 +1260,7 @@ async function replyToLine(replyToken, replyText) {
     },
     body: JSON.stringify({
       replyToken,
-      messages: [
-        {
-          type: "text",
-          text: replyText,
-        },
-      ],
+      messages: normalizedReply.replyMessages,
     }),
   });
 
@@ -646,7 +1270,10 @@ async function replyToLine(replyToken, replyText) {
   }
 }
 
-// === LINE 小工具：精簡攻略 ===
+// ==============================
+// LINE 指令文字
+// ==============================
+
 function getGuideText() {
   return [
     "📋 不努力時間有限管理局｜辦事攻略",
@@ -684,7 +1311,6 @@ function getGuideText() {
   ].join("\n");
 }
 
-// === LINE 小工具：用量小抄 ===
 function getUsageText() {
   return [
     "📮 不努力時間有限管理局｜LINE 用量小抄",
@@ -705,7 +1331,6 @@ function getUsageText() {
   ].join("\n");
 }
 
-// === LINE 小工具：處理等待中的修改 ===
 async function handlePendingActionIfNeeded(sourceKey, userText) {
   const pending = pendingActions.get(sourceKey);
 
@@ -752,7 +1377,6 @@ async function handlePendingActionIfNeeded(sourceKey, userText) {
   ].join("\n");
 }
 
-// === LINE 小工具：解析新增文字裡的分類與難度 ===
 function parseCreateText({ userText, command }) {
   let rawText = userText.replace(new RegExp(`^${command}\\s*`), "").trim();
   rawText = rawText.replace(/^[：:]/, "").trim();
@@ -781,7 +1405,6 @@ function parseCreateText({ userText, command }) {
   };
 }
 
-// === LINE 小工具：處理新增 ===
 async function handleCreateCommand({ userText, command, type, label, example }) {
   const parsed = parseCreateText({
     userText,
@@ -845,7 +1468,42 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
   ].join("\n");
 }
 
-// === LINE 小工具：處理完成 / 取消 ===
+async function findItemByNumber({ type, numberText, label }) {
+  const itemNumber = Number(numberText);
+  const displayLabel = getDisplayLabel(label);
+
+  if (!Number.isInteger(itemNumber) || itemNumber <= 0) {
+    return {
+      error: [
+        `這份公文還缺少正確的${displayLabel}編號，本局未更動資料。`,
+        "",
+        "可以這樣輸入：",
+        `完成${label}3`,
+        `完成第三個${label}`,
+      ].join("\n"),
+    };
+  }
+
+  const items = await getItemsByType(type);
+  const targetItem = items[itemNumber - 1];
+
+  if (!targetItem) {
+    return {
+      error: [
+        `本局目前查無第 ${itemNumber} 個${displayLabel}。`,
+        "",
+        "可以先輸入「清單」確認編號。",
+      ].join("\n"),
+    };
+  }
+
+  return {
+    itemNumber,
+    item: targetItem,
+    items,
+  };
+}
+
 async function handleDoneCommand({ numberText, type, label, done }) {
   const result = await findItemByNumber({
     type,
@@ -873,7 +1531,6 @@ async function handleDoneCommand({ numberText, type, label, done }) {
   ].join("\n");
 }
 
-// === LINE 小工具：處理刪除 ===
 async function handleDeleteCommand({ numberText, type, label }) {
   const result = await findItemByNumber({
     type,
@@ -896,7 +1553,6 @@ async function handleDeleteCommand({ numberText, type, label }) {
   ].join("\n");
 }
 
-// === LINE 小工具：處理修改 ===
 async function handleEditCommand({
   sourceKey,
   numberText,
@@ -948,7 +1604,6 @@ async function handleEditCommand({
   ].join("\n");
 }
 
-// === LINE 小工具：把中文數字轉成阿拉伯數字 ===
 function parseFlexibleNumber(numberText) {
   const text = String(numberText || "").trim().replace(/兩/g, "二");
 
@@ -991,7 +1646,6 @@ function parseFlexibleNumber(numberText) {
   return null;
 }
 
-// === LINE 小工具：把自然語句解析成操作指令 ===
 function buildLineOperationCommand(actionText, targetText, numberText, newTitle) {
   const number = parseFlexibleNumber(numberText);
 
@@ -1031,7 +1685,6 @@ function buildLineOperationCommand(actionText, targetText, numberText, newTitle)
   };
 }
 
-// === LINE 小工具：解析完成 / 取消 / 修改 / 刪除指令 ===
 function parseLineOperationCommand(userText) {
   let match = userText.match(
     /^(完成|已完成|取消|修改|刪除)\s*(任務|完成標準|標準)\s*(\d+|[零一二三四五六七八九十兩]+)(?:\s+(.+))?$/
@@ -1052,7 +1705,6 @@ function parseLineOperationCommand(userText) {
   return null;
 }
 
-// === LINE 小工具：格式需補正提醒 ===
 function getFormatReminderText() {
   return [
     "這份公文格式需補正，本局未更動資料。",
@@ -1069,7 +1721,6 @@ function getFormatReminderText() {
   ].join("\n");
 }
 
-// === LINE 小工具：未知文字提醒 ===
 function getUnknownCommandText() {
   return [
     "本局目前看不懂這份公文，所以未更動資料。",
@@ -1083,7 +1734,10 @@ function getUnknownCommandText() {
   ].join("\n");
 }
 
-// === LINE 小工具：處理文字指令 ===
+// ==============================
+// LINE 指令主處理
+// ==============================
+
 async function handleLineTextCommand({ sourceKey, userText }) {
   const pendingReply = await handlePendingActionIfNeeded(sourceKey, userText);
 
@@ -1118,23 +1772,19 @@ async function handleLineTextCommand({ sourceKey, userText }) {
   }
 
   if (userText === "清單" || userText === "全部清單") {
-    const board = await getTaskBoardForLine();
-    return formatTaskBoardForLine(board);
+    return handleAllListFlexCommand();
   }
 
   if (userText === "簡單任務" || userText === "簡單") {
-    const tasks = await getItemsByType("task");
-    return formatTasksByDifficultyForLine(tasks, "簡單");
+    return handleDifficultyTaskFlexCommand("簡單");
   }
 
   if (userText === "適中任務" || userText === "適中") {
-    const tasks = await getItemsByType("task");
-    return formatTasksByDifficultyForLine(tasks, "適中");
+    return handleDifficultyTaskFlexCommand("適中");
   }
 
   if (userText === "困難任務" || userText === "困難") {
-    const tasks = await getItemsByType("task");
-    return formatTasksByDifficultyForLine(tasks, "困難");
+    return handleDifficultyTaskFlexCommand("困難");
   }
 
   if (userText.startsWith("新增一個任務")) {
@@ -1245,12 +1895,14 @@ async function handleLineTextCommand({ sourceKey, userText }) {
   return getUnknownCommandText();
 }
 
-// === 首頁測試 ===
+// ==============================
+// Express Routes
+// ==============================
+
 app.get("/", (req, res) => {
   res.send("不努力時間有限管理局 API 開張中。本局小櫃台今日值班。");
 });
 
-// === GAS Queue Gateway：處理 GAS 轉來的 LINE 文字，回傳真正 replyText ===
 app.post("/gas-queue", async (req, res) => {
   try {
     console.log("收到 GAS Queue 訊息：", req.body);
@@ -1289,15 +1941,18 @@ app.post("/gas-queue", async (req, res) => {
 
     const sourceKey = String(userId).trim();
 
-    const replyText = await handleLineTextCommand({
+    const replyResult = await handleLineTextCommand({
       sourceKey,
       userText,
     });
 
+    const normalizedReply = normalizeLineReplyResult(replyResult);
+
     return res.json({
       ok: true,
       queueId,
-      replyText,
+      replyText: normalizedReply.replyText,
+      replyMessages: normalizedReply.replyMessages,
     });
   } catch (error) {
     console.error("處理 /gas-queue 發生錯誤：", error);
@@ -1310,7 +1965,6 @@ app.post("/gas-queue", async (req, res) => {
   }
 });
 
-// === LINE Webhook：處理 LINE 聊天指令 ===
 app.post("/line/webhook", async (req, res) => {
   console.log("收到 LINE Webhook：", req.body);
 
@@ -1326,12 +1980,12 @@ app.post("/line/webhook", async (req, res) => {
       const userText = event.message.text.trim();
       const replyToken = event.replyToken;
 
-      const replyText = await handleLineTextCommand({
+      const replyResult = await handleLineTextCommand({
         sourceKey,
         userText,
       });
 
-      await replyToLine(replyToken, replyText);
+      await replyToLine(replyToken, replyResult);
     } catch (error) {
       console.error("處理 LINE Webhook 發生錯誤：", error);
 
@@ -1347,7 +2001,6 @@ app.post("/line/webhook", async (req, res) => {
   res.status(200).send("OK");
 });
 
-// === Read：讀取目前週與下週 ===
 app.get("/week-context", async (req, res) => {
   try {
     const context = await fetchWeekContextFromGoogleSheets();
@@ -1363,7 +2016,6 @@ app.get("/week-context", async (req, res) => {
   }
 });
 
-// === Weeks：本週結案，進入下一週 ===
 app.post("/weeks/complete-current", async (req, res) => {
   try {
     const result = await completeCurrentWeekInGoogleSheets();
@@ -1384,7 +2036,6 @@ app.post("/weeks/complete-current", async (req, res) => {
   }
 });
 
-// === Read：讀取所有 items ===
 app.get("/items", async (req, res) => {
   try {
     const items = await fetchItemsFromGoogleSheets();
@@ -1399,7 +2050,6 @@ app.get("/items", async (req, res) => {
   }
 });
 
-// === Create：新增 item ===
 app.post("/items", async (req, res) => {
   try {
     const { type, title, category, difficulty, weekNumber } = req.body;
@@ -1435,7 +2085,6 @@ app.post("/items", async (req, res) => {
   }
 });
 
-// === Update：更新 item ===
 app.patch("/items/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -1488,7 +2137,6 @@ app.patch("/items/:id", async (req, res) => {
   }
 });
 
-// === Delete：刪除 item ===
 app.delete("/items/:id", async (req, res) => {
   try {
     const { id } = req.params;
