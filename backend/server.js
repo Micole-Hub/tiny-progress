@@ -471,7 +471,7 @@ function formatTaskBoardForLine({ currentWeek, tasks, standards }) {
     : "本週案件板";
 
   return [
-    "📋 不努力時間有限管理局",
+    "📋 Tiny Progress",
     weekTitle,
     "",
     `任務進度：${tasks.filter((task) => task.done).length} / ${tasks.length}`,
@@ -516,13 +516,21 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
     return `${entry.originalNumber}. ${checkbox} ${entry.task.title}｜${category}`;
   });
 
+  const firstUnfinishedEntry = matchedTasks.find(function (entry) {
+    return !entry.task.done;
+  });
+
+  const commandHint = firstUnfinishedEntry
+    ? `可直接輸入：完成任務${firstUnfinishedEntry.originalNumber}`
+    : "本區案件已辦理完畢";
+
   return [
     `📌 本週${difficulty}任務`,
     "",
     ...lines,
     "",
     "以上編號沿用完整清單。",
-    "可直接輸入：完成任務3",
+    commandHint,
     "",
     "需要完整清單請輸入：清單",
   ].join("\n");
@@ -532,20 +540,35 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
 // Flex Message 共用樣式
 // ==============================
 
+const FLEX_BRAND_NAME = "Tiny Progress";
+const FLEX_FIXED_LINE = "小小前進，也算數。";
+
 const FLEX_COLORS = {
   cream: "#F7F0E6",
   card: "#FFF9EF",
   darkGreen: "#203A32",
   green: "#2F7D56",
+  greenFresh: "#7DB46C",
   sage: "#9DBF9A",
   sageLight: "#E5EEE2",
   beige: "#EFE3C7",
   beigeLine: "#DDD1BD",
   mutedText: "#7A6E5F",
-  redLight: "#EFD9D6",
+  red: "#B85F4B",
+  redLight: "#F0D8D2",
   redText: "#6B3932",
+  gold: "#D8A85F",
+  goldLight: "#F4E4C7",
   blueGray: "#DCE8EA",
   blueText: "#2E5460",
+};
+
+const FLEX_ACCENTS = {
+  all: FLEX_COLORS.red,
+  draw: FLEX_COLORS.gold,
+  easy: FLEX_COLORS.greenFresh,
+  medium: FLEX_COLORS.gold,
+  hard: FLEX_COLORS.red,
 };
 
 function getDifficultyFlexStyle(difficulty) {
@@ -553,22 +576,50 @@ function getDifficultyFlexStyle(difficulty) {
 
   if (normalizedDifficulty === "簡單") {
     return {
-      backgroundColor: "#E5EEE2",
-      textColor: "#35533D",
+      backgroundColor: "#DBF0D5",
+      textColor: "#315B35",
     };
   }
 
   if (normalizedDifficulty === "適中") {
     return {
-      backgroundColor: "#EFE3C7",
+      backgroundColor: "#F4E4C7",
       textColor: "#6A4E21",
     };
   }
 
   return {
-    backgroundColor: "#EFD9D6",
+    backgroundColor: "#F0D8D2",
     textColor: "#6B3932",
   };
+}
+
+function getDifficultyAccentColor(difficulty) {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
+
+  if (normalizedDifficulty === "簡單") return FLEX_ACCENTS.easy;
+  if (normalizedDifficulty === "適中") return FLEX_ACCENTS.medium;
+  return FLEX_ACCENTS.hard;
+}
+
+function getDifficultyFooterCopy(difficulty, isCompleted) {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
+
+  if (normalizedDifficulty === "簡單") {
+    return isCompleted
+      ? "熱身完成，今天已經有動起來。"
+      : "先熱身一下，本局不催跑。";
+  }
+
+  if (normalizedDifficulty === "適中") {
+    return isCompleted
+      ? "穩穩辦完，本局予以記錄。"
+      : "穩穩推進，不用開倍速。";
+  }
+
+  return isCompleted
+    ? "大案收妥，今天可以蓋一枚章。"
+    : "大案也能小辦，不必硬闖。";
 }
 
 function buildFlexTag(label, backgroundColor, textColor) {
@@ -594,6 +645,17 @@ function buildFlexTag(label, backgroundColor, textColor) {
   };
 }
 
+function buildAccentBar(accentColor) {
+  return {
+    type: "box",
+    layout: "vertical",
+    height: "6px",
+    backgroundColor: accentColor || FLEX_COLORS.greenFresh,
+    cornerRadius: "999px",
+    contents: [],
+  };
+}
+
 function buildFlexHeader(title, subtitle) {
   return {
     type: "box",
@@ -602,9 +664,9 @@ function buildFlexHeader(title, subtitle) {
     contents: [
       {
         type: "text",
-        text: "不努力時間有限管理局",
-        size: "xs",
-        color: FLEX_COLORS.mutedText,
+        text: FLEX_BRAND_NAME,
+        size: "sm",
+        color: FLEX_COLORS.darkGreen,
         weight: "bold",
       },
       {
@@ -617,7 +679,7 @@ function buildFlexHeader(title, subtitle) {
       },
       {
         type: "text",
-        text: subtitle || "本日金句：不要一開張又關門",
+        text: subtitle || FLEX_FIXED_LINE,
         size: "sm",
         color: FLEX_COLORS.mutedText,
         wrap: true,
@@ -626,15 +688,15 @@ function buildFlexHeader(title, subtitle) {
   };
 }
 
-function buildFlexInfoCard(contents) {
+function buildFlexInfoCard(contents, options = {}) {
   return {
     type: "box",
     layout: "vertical",
     spacing: "sm",
-    backgroundColor: FLEX_COLORS.card,
+    backgroundColor: options.backgroundColor || FLEX_COLORS.card,
     cornerRadius: "16px",
     paddingAll: "16px",
-    borderColor: "#E5D7C3",
+    borderColor: options.borderColor || "#E5D7C3",
     borderWidth: "1px",
     contents,
   };
@@ -721,11 +783,20 @@ function buildStandardFlexRow({ standard, standardNumber }) {
   const checkbox = standard.done ? "☑" : "☐";
 
   return {
-    type: "text",
-    text: `${standardNumber}. ${checkbox} ${standard.title}`,
-    size: "sm",
-    color: standard.done ? "#8A7E6E" : FLEX_COLORS.darkGreen,
-    wrap: true,
+    type: "box",
+    layout: "vertical",
+    spacing: "xs",
+    paddingBottom: "10px",
+    contents: [
+      {
+        type: "text",
+        text: `${standardNumber}. ${checkbox} ${standard.title}`,
+        size: "sm",
+        color: standard.done ? "#8A7E6E" : FLEX_COLORS.darkGreen,
+        wrap: true,
+        weight: standard.done ? "regular" : "bold",
+      },
+    ],
   };
 }
 
@@ -748,8 +819,15 @@ function buildFlexFooterHint(lines) {
   };
 }
 
-function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents }) {
+function buildBaseFlexBubble({
+  title,
+  subtitle,
+  bodyContents,
+  footerContents,
+  accentColor,
+}) {
   const contents = [
+    buildAccentBar(accentColor),
     buildFlexHeader(title, subtitle),
     {
       type: "separator",
@@ -795,7 +873,7 @@ function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents }) 
 
 function buildDrawOneTaskFallbackText({ selectedTask, taskNumber }) {
   return [
-    "🎲 本局今日先派這一件",
+    "🎲 Tiny Progress｜本局今日先派這一件",
     "",
     `第 ${taskNumber} 個任務`,
     `☐ ${selectedTask.title}`,
@@ -817,39 +895,46 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
 
   const bubble = buildBaseFlexBubble({
     title: "本局今日先派這一件",
-    subtitle: "本日金句：不要一開張又關門",
+    subtitle: FLEX_FIXED_LINE,
+    accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
-      buildFlexInfoCard([
+      buildFlexInfoCard(
+        [
+          {
+            type: "text",
+            text: `第 ${taskNumber} 個任務`,
+            size: "sm",
+            color: FLEX_COLORS.mutedText,
+            weight: "bold",
+          },
+          {
+            type: "text",
+            text: selectedTask.title,
+            size: "lg",
+            weight: "bold",
+            color: FLEX_COLORS.darkGreen,
+            wrap: true,
+          },
+          {
+            type: "box",
+            layout: "horizontal",
+            spacing: "sm",
+            margin: "md",
+            contents: [
+              buildFlexTag(category, "#DFE9DD", "#36533F"),
+              buildFlexTag(
+                difficulty,
+                difficultyStyle.backgroundColor,
+                difficultyStyle.textColor
+              ),
+            ],
+          },
+        ],
         {
-          type: "text",
-          text: `第 ${taskNumber} 個任務`,
-          size: "sm",
-          color: FLEX_COLORS.mutedText,
-          weight: "bold",
-        },
-        {
-          type: "text",
-          text: selectedTask.title,
-          size: "lg",
-          weight: "bold",
-          color: FLEX_COLORS.darkGreen,
-          wrap: true,
-        },
-        {
-          type: "box",
-          layout: "horizontal",
-          spacing: "sm",
-          margin: "md",
-          contents: [
-            buildFlexTag(category, "#DFE9DD", "#36533F"),
-            buildFlexTag(
-              difficulty,
-              difficultyStyle.backgroundColor,
-              difficultyStyle.textColor
-            ),
-          ],
-        },
-      ]),
+          borderColor: "#E8C887",
+          backgroundColor: "#FFF8EA",
+        }
+      ),
     ],
     footerContents: buildFlexFooterHint([
       `做完可以輸入：完成任務${taskNumber}`,
@@ -859,7 +944,7 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
 
   return {
     type: "flex",
-    altText: `本局今日先派這一件：${selectedTask.title}`,
+    altText: `Tiny Progress｜本局今日先派這一件：${selectedTask.title}`,
     contents: bubble,
   };
 }
@@ -873,7 +958,7 @@ async function handleDrawOneTaskCommand() {
 
   if (unfinishedTasks.length === 0) {
     return [
-      "🎲 本局抽籤結果",
+      "🎲 Tiny Progress｜本局抽籤結果",
       "",
       "本週沒有未完成任務可以抽。",
       "如果都完成了，請給自己蓋一枚小章。",
@@ -909,6 +994,24 @@ async function handleDrawOneTaskCommand() {
 // ==============================
 // Flex Message：難度任務清單
 // ==============================
+
+function buildDifficultyTaskFooterLines(matchedTasks, difficulty) {
+  const firstUnfinishedEntry = matchedTasks.find(function (entry) {
+    return !entry.task.done;
+  });
+
+  if (!firstUnfinishedEntry) {
+    return [
+      "本區案件已辦理完畢",
+      getDifficultyFooterCopy(difficulty, true),
+    ];
+  }
+
+  return [
+    `可直接輸入：完成任務${firstUnfinishedEntry.originalNumber}`,
+    getDifficultyFooterCopy(difficulty, false),
+  ];
+}
 
 function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
   const matchedTasks = tasks
@@ -986,16 +1089,18 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
   const bubble = buildBaseFlexBubble({
     title: `本週${difficulty}任務`,
     subtitle: "以上編號沿用完整清單",
+    accentColor: getDifficultyAccentColor(difficulty),
     bodyContents,
-    footerContents: buildFlexFooterHint([
-      "可直接輸入：完成任務3",
-      "需要完整清單請輸入：清單",
-    ]),
+    footerContents: buildFlexFooterHint(
+      matchedTasks.length === 0
+        ? ["需要完整清單請輸入：清單", "沒有案件也算一種清爽。"]
+        : buildDifficultyTaskFooterLines(matchedTasks, difficulty)
+    ),
   });
 
   return {
     type: "flex",
-    altText: `本週${difficulty}任務`,
+    altText: `Tiny Progress｜本週${difficulty}任務`,
     contents: bubble,
   };
 }
@@ -1028,7 +1133,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   }).length;
 
   const weekTitle = currentWeek
-    ? `第 ${currentWeek.weekNumber} 週｜${currentWeek.title}`
+    ? `第${currentWeek.weekNumber}週｜${currentWeek.title}`
     : "本週案件板";
 
   const taskRows = tasks.slice(0, 8).map(function (task, index) {
@@ -1052,10 +1157,11 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
       {
         type: "text",
         text: weekTitle,
-        size: "sm",
+        size: "xs",
         color: FLEX_COLORS.mutedText,
         weight: "bold",
-        wrap: true,
+        wrap: false,
+        maxLines: 1,
       },
       buildProgressLine("任務進度", taskDoneCount, tasks.length),
       buildProgressLine("標準進度", standardDoneCount, standards.length),
@@ -1156,17 +1262,18 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
 
   const bubble = buildBaseFlexBubble({
     title: "本週案件板",
-    subtitle: "本日金句：不要一開張又關門",
+    subtitle: FLEX_FIXED_LINE,
+    accentColor: FLEX_ACCENTS.all,
     bodyContents,
     footerContents: buildFlexFooterHint([
+      "案件都在這裡，今天先辦一小件。",
       "需要操作說明請輸入：攻略",
-      "想看用量請輸入：用量小抄",
     ]),
   });
 
   return {
     type: "flex",
-    altText: "不努力時間有限管理局｜本週案件板",
+    altText: "Tiny Progress｜本週案件板",
     contents: bubble,
   };
 }
@@ -1210,7 +1317,7 @@ function getFallbackTextFromReplyMessages(replyMessages) {
     return flexMessage.altText;
   }
 
-  return "不努力時間有限管理局已回覆。";
+  return "Tiny Progress 已回覆。";
 }
 
 function normalizeLineReplyResult(replyResult) {
@@ -1236,7 +1343,7 @@ function normalizeLineReplyResult(replyResult) {
     };
   }
 
-  const replyText = String(replyResult || "本局目前沒有可回覆的內容。");
+  const replyText = String(replyResult || "Tiny Progress 目前沒有可回覆的內容。");
 
   return {
     replyText,
@@ -1276,7 +1383,7 @@ async function replyToLine(replyToken, replyResult) {
 
 function getGuideText() {
   return [
-    "📋 不努力時間有限管理局｜辦事攻略",
+    "📋 Tiny Progress｜辦事攻略",
     "",
     "【查看】",
     "清單：看本週任務與驗收標準",
@@ -1307,13 +1414,13 @@ function getGuideText() {
     "【修訂中止】",
     "取消修改",
     "",
-    "本局提醒：今日有學，即可記上一筆。",
+    "小小前進，也算數。",
   ].join("\n");
 }
 
 function getUsageText() {
   return [
-    "📮 不努力時間有限管理局｜LINE 用量小抄",
+    "📮 Tiny Progress｜LINE 用量小抄",
     "",
     "你主動傳訊息，Bot 立刻回覆：",
     "清單、攻略、抽一件、新增、完成、修改、刪除",
@@ -1449,7 +1556,7 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
 
   if (type === "task") {
     return [
-      "管理局小櫃台已立案：",
+      "Tiny Progress 已立案：",
       `☐ ${createdItem.title || parsed.title}`,
       `分類：${createdItem.category}｜難度：${createdItem.difficulty}`,
       "",
@@ -1461,7 +1568,7 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
   }
 
   return [
-    "管理局小櫃台已新增本週驗收標準：",
+    "Tiny Progress 已新增本週驗收標準：",
     `☐ ${createdItem.title || parsed.title}`,
     "",
     "可以輸入「清單」查看目前案件板。",
@@ -1527,7 +1634,7 @@ async function handleDoneCommand({ numberText, type, label, done }) {
     `${actionText}第 ${result.itemNumber} 個${displayLabel}：`,
     `${checkbox} ${updatedItem.title || result.item.title}`,
     "",
-    "步子再小，也算靠岸。",
+    "小小前進，也算數。",
   ].join("\n");
 }
 
@@ -1723,7 +1830,7 @@ function getFormatReminderText() {
 
 function getUnknownCommandText() {
   return [
-    "本局目前看不懂這份公文，所以未更動資料。",
+    "Tiny Progress 目前看不懂這份公文，所以未更動資料。",
     "",
     "可以輸入：",
     "清單",
@@ -1900,7 +2007,7 @@ async function handleLineTextCommand({ sourceKey, userText }) {
 // ==============================
 
 app.get("/", (req, res) => {
-  res.send("不努力時間有限管理局 API 開張中。本局小櫃台今日值班。");
+  res.send("Tiny Progress API 開張中。本局小櫃台今日值班。");
 });
 
 app.post("/gas-queue", async (req, res) => {
@@ -2159,5 +2266,5 @@ app.delete("/items/:id", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`不努力時間有限管理局後端啟動：http://localhost:${PORT}`);
+  console.log(`Tiny Progress 後端啟動：http://localhost:${PORT}`);
 });
