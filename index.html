@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tiny Progress</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="icon" type="image/png" href="./App-icon.png">
-  <link rel="android-touch-icon" href="./App-icon.png">
-  <link rel="android-touch-icon" sizes="180x180" href="./App-icon.png">
-  <script src="script.js?v=20260513-progress-1" defer></script>
+
+  <title>不努力時間有限管理局</title>
+
+  <link rel="icon" href="favicon.png" />
+  <link rel="stylesheet" href="style.css?v=20260515-category-color-4" />
+
+  <script src="script.js?v=20260515-category-color-4" defer></script>
 </head>
 
 <body>
@@ -16,7 +17,7 @@
     <header class="hero">
       <p class="eyebrow">本週小櫃台值班中</p>
 
-      <h1>Tiny Progress</h1>    
+      <h1>不努力時間有限管理局</h1>
 
       <p class="quote" id="dailyQuote">
         本日金句：今日有學，即可記上一筆。
@@ -102,30 +103,42 @@
       </div>
 
       <div class="progress-list">
-  <div class="progress-item">
-    <div class="progress-row">
-      <span id="taskProgressLabel">本週任務</span>
-      <strong id="taskProgress">0 / 0</strong>
-    </div>
+        <div class="progress-item">
+          <div class="progress-row">
+            <span id="taskProgressLabel">本週任務</span>
+            <strong id="taskProgress">0 / 0</strong>
+          </div>
 
-    <!-- 任務進度條：寬度之後由 JavaScript 控制 -->
-    <div class="progress-track" aria-label="本週任務完成進度">
-      <div id="taskProgressFill" class="progress-fill"></div>
-    </div>
-  </div>
+          <div
+            class="progress-track"
+            role="progressbar"
+            aria-label="本週任務完成進度"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <div class="progress-fill" id="taskProgressFill"></div>
+          </div>
+        </div>
 
-  <div class="progress-item">
-    <div class="progress-row">
-      <span id="standardProgressLabel">本週驗收標準</span>
-      <strong id="standardProgress">0 / 0</strong>
-    </div>
+        <div class="progress-item">
+          <div class="progress-row">
+            <span id="standardProgressLabel">本週驗收標準</span>
+            <strong id="standardProgress">0 / 0</strong>
+          </div>
 
-    <!-- 驗收標準進度條：寬度之後由 JavaScript 控制 -->
-    <div class="progress-track" aria-label="本週驗收標準完成進度">
-      <div id="standardProgressFill" class="progress-fill"></div>
-    </div>
-  </div>
-</div>
+          <div
+            class="progress-track"
+            role="progressbar"
+            aria-label="本週驗收標準完成進度"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <div class="progress-fill" id="standardProgressFill"></div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="task-section">

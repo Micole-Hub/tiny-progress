@@ -562,12 +562,14 @@ const FLEX_COLORS = {
   blueGray: "#DCE8EA",
   blueText: "#2E5460",
 
-  // 分類專用色
+  // 分類專用色，需與前端 style.css 一致
   programming: "#507592",
   programmingText: "#FFFDF7",
-  wellness: "#8FA783",
+
+  wellness: "#8A6F7F",
   wellnessText: "#FFFDF7",
-  interest: "#D8A85F",
+
+  interest: "#B9854A",
   interestText: "#FFFDF7",
 };
 
@@ -938,6 +940,7 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber }) {
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
   const category = normalizeCategory(selectedTask.category);
   const difficulty = normalizeDifficulty(selectedTask.difficulty);
+
   const categoryStyle = getCategoryFlexStyle(category);
   const difficultyStyle = getDifficultyFlexStyle(difficulty);
 
