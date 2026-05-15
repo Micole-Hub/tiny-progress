@@ -668,15 +668,20 @@ function buildFlexTag(label, backgroundColor, textColor) {
     layout: "vertical",
     backgroundColor,
     cornerRadius: "999px",
-    paddingTop: "6px",
-    paddingBottom: "6px",
-    paddingStart: "10px",
-    paddingEnd: "10px",
+
+    // 標籤縮小：原本是 6px / 10px，現在改小一點
+    paddingTop: "4px",
+    paddingBottom: "4px",
+    paddingStart: "8px",
+    paddingEnd: "8px",
+
     contents: [
       {
         type: "text",
         text: label,
-        size: "xs",
+
+        // 標籤文字縮小：原本 xs，改成 xxs
+        size: "xxs",
         weight: "bold",
         color: textColor,
         align: "center",
@@ -810,12 +815,18 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory }) {
 
   if (tagContents.length > 0) {
     rowContents.push({
-      type: "box",
-      layout: "horizontal",
-      spacing: "sm",
-      margin: "sm",
-      contents: tagContents,
-    });
+  type: "box",
+  layout: "horizontal",
+
+  // 標籤之間距離縮小
+  spacing: "xs",
+
+  // 標籤跟任務文字的距離也縮小一點
+  margin: "xs",
+
+  contents: tagContents,
+});
+    
   }
 
   return {
@@ -966,12 +977,15 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
             color: FLEX_COLORS.darkGreen,
             wrap: true,
           },
-          {
-            type: "box",
-            layout: "horizontal",
-            spacing: "sm",
-            margin: "md",
-            contents: [
+         {
+              type: "box",
+              layout: "horizontal",
+
+              // 抽一件卡片裡的分類 / 難度標籤也縮小間距
+              spacing: "xs",
+              margin: "sm",
+
+              contents: [
               buildFlexTag(
                 category,
                 categoryStyle.backgroundColor,
