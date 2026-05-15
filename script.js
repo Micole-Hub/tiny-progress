@@ -295,7 +295,6 @@ function renderDailyQuote() {
 }
 
 // === 週次開放規則 ===
-// 星期日 12:00 之後，才可以開始新增下週資料
 function isSundayNoonOrLater(date = new Date()) {
   const day = date.getDay();
   const hour = date.getHours();
@@ -637,9 +636,21 @@ function createEmptyMessage(text) {
   return emptyItem;
 }
 
+function getCategoryClass(category) {
+  if (category === "程式學習") return "programming";
+  if (category === "身心穩定") return "wellness";
+  if (category === "興趣探索") return "interest";
+  return "";
+}
+
 function createCategoryHeading(category) {
   const heading = document.createElement("li");
-  heading.className = "category-heading";
+  const categoryClass = getCategoryClass(category);
+
+  heading.className = categoryClass
+    ? `category-heading ${categoryClass}`
+    : "category-heading";
+
   heading.textContent = `【${category}】`;
 
   return heading;
@@ -707,7 +718,12 @@ function createCheckItem(item, displayNumber) {
 
   if (normalizedItem.type === "task") {
     const categoryChip = document.createElement("span");
-    categoryChip.className = "chip chip-category";
+    const categoryClass = getCategoryClass(normalizedItem.category);
+
+    categoryChip.className = categoryClass
+      ? `chip chip-category ${categoryClass}`
+      : "chip chip-category";
+
     categoryChip.textContent = normalizedItem.category;
 
     const difficultyChip = document.createElement("span");

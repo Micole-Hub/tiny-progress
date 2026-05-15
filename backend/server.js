@@ -561,6 +561,14 @@ const FLEX_COLORS = {
   goldLight: "#F4E4C7",
   blueGray: "#DCE8EA",
   blueText: "#2E5460",
+
+  // 分類專用色
+  programming: "#507592",
+  programmingText: "#FFFDF7",
+  wellness: "#8FA783",
+  wellnessText: "#FFFDF7",
+  interest: "#D8A85F",
+  interestText: "#FFFDF7",
 };
 
 const FLEX_ACCENTS = {
@@ -570,6 +578,36 @@ const FLEX_ACCENTS = {
   medium: FLEX_COLORS.gold,
   hard: FLEX_COLORS.red,
 };
+
+function getCategoryFlexStyle(category) {
+  const normalizedCategory = normalizeCategory(category);
+
+  if (normalizedCategory === "程式學習") {
+    return {
+      backgroundColor: FLEX_COLORS.programming,
+      textColor: FLEX_COLORS.programmingText,
+    };
+  }
+
+  if (normalizedCategory === "身心穩定") {
+    return {
+      backgroundColor: FLEX_COLORS.wellness,
+      textColor: FLEX_COLORS.wellnessText,
+    };
+  }
+
+  if (normalizedCategory === "興趣探索") {
+    return {
+      backgroundColor: FLEX_COLORS.interest,
+      textColor: FLEX_COLORS.interestText,
+    };
+  }
+
+  return {
+    backgroundColor: "#DFE9DD",
+    textColor: "#36533F",
+  };
+}
 
 function getDifficultyFlexStyle(difficulty) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
@@ -736,7 +774,15 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory }) {
   const tagContents = [];
 
   if (showCategory) {
-    tagContents.push(buildFlexTag(category, "#DFE9DD", "#36533F"));
+    const categoryStyle = getCategoryFlexStyle(category);
+
+    tagContents.push(
+      buildFlexTag(
+        category,
+        categoryStyle.backgroundColor,
+        categoryStyle.textColor
+      )
+    );
   }
 
   if (showDifficulty) {
@@ -892,6 +938,7 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber }) {
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
   const category = normalizeCategory(selectedTask.category);
   const difficulty = normalizeDifficulty(selectedTask.difficulty);
+  const categoryStyle = getCategoryFlexStyle(category);
   const difficultyStyle = getDifficultyFlexStyle(difficulty);
 
   const bubble = buildBaseFlexBubble({
@@ -922,7 +969,11 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
             spacing: "sm",
             margin: "md",
             contents: [
-              buildFlexTag(category, "#DFE9DD", "#36533F"),
+              buildFlexTag(
+                category,
+                categoryStyle.backgroundColor,
+                categoryStyle.textColor
+              ),
               buildFlexTag(
                 difficulty,
                 difficultyStyle.backgroundColor,
@@ -2196,13 +2247,7 @@ app.post("/items", async (req, res) => {
 app.patch("/items/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      title,
-      done,
-      category,
-      difficulty,
-      weekNumber,
-    } = req.body;
+    const { title, done, category, difficulty, weekNumber } = req.body;
 
     const updates = {};
 
