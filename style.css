@@ -571,9 +571,6 @@ body.is-busy button {
   margin-top: 13px;
   padding: 10px 13px 10px 15px;
   border-radius: 15px;
-  background: var(--green-soft);
-  border: 1px solid rgba(143, 167, 131, 0.24);
-  color: var(--green-dark);
   font-weight: 950;
   letter-spacing: 0.04em;
 }
@@ -589,13 +586,46 @@ body.is-busy button {
   top: 50%;
   transform: translateY(-50%) rotate(-5deg);
   padding: 3px 7px;
-  border: 1px solid rgba(96, 120, 85, 0.32);
   border-radius: 4px;
-  color: rgba(96, 120, 85, 0.52);
   font-size: 11px;
   font-weight: 900;
 }
 
+/* 程式學習：冷靜藍灰 */
+.category-heading.programming {
+  background: #e7edf3;
+  border: 1px solid rgba(69, 99, 122, 0.18);
+  color: #45637a;
+}
+
+.category-heading.programming::after {
+  border: 1px solid rgba(69, 99, 122, 0.24);
+  color: rgba(69, 99, 122, 0.52);
+}
+
+/* 身心穩定：柔和灰紫 */
+.category-heading.wellness {
+  background: #efe7ea;
+  border: 1px solid rgba(122, 93, 105, 0.18);
+  color: #7a5d69;
+}
+
+.category-heading.wellness::after {
+  border: 1px solid rgba(122, 93, 105, 0.24);
+  color: rgba(122, 93, 105, 0.52);
+}
+
+/* 興趣探索：暖杏棕 */
+.category-heading.interest {
+  background: #f0e4d5;
+  border: 1px solid rgba(138, 95, 50, 0.18);
+  color: #8a5f32;
+}
+
+.category-heading.interest::after {
+  border: 1px solid rgba(138, 95, 50, 0.24);
+  color: rgba(138, 95, 50, 0.52);
+}
 .subcategory-heading {
   display: none;
 }
