@@ -35,15 +35,19 @@ app.use(express.json());
 
 function normalizeCategory(value) {
   const category = String(value || "").trim();
+
   if (!category) return DEFAULT_CATEGORY;
+
   if (!CATEGORY_OPTIONS.includes(category)) {
     throw new Error("category 只能是：" + CATEGORY_OPTIONS.join("、"));
   }
+
   return category;
 }
 
 function normalizeSubCategory(value, category = DEFAULT_CATEGORY) {
   const normalizedCategory = normalizeCategory(category);
+
   if (normalizedCategory !== "程式學習") return EMPTY_SUBCATEGORY;
 
   const subCategory = String(value || "").trim();
@@ -59,6 +63,7 @@ function normalizeDifficulty(value) {
   const difficulty = String(value || "").trim();
 
   if (!difficulty) return DEFAULT_DIFFICULTY;
+
   if (!DIFFICULTY_OPTIONS.includes(difficulty)) {
     throw new Error("difficulty 只能是：" + DIFFICULTY_OPTIONS.join("、"));
   }
@@ -103,6 +108,7 @@ function sortTasksByCategory(tasks) {
   return [...tasks].sort(function (a, b) {
     const categoryA = normalizeCategory(a.category);
     const categoryB = normalizeCategory(b.category);
+
     const categoryDiff =
       CATEGORY_OPTIONS.indexOf(categoryA) - CATEGORY_OPTIONS.indexOf(categoryB);
 
@@ -387,6 +393,12 @@ function getTaskMetaText(task, includeDifficulty = true) {
   return parts.join("｜");
 }
 
+function getLineSubCategoryLabel(subCategory) {
+  if (subCategory === "觀看課程影片") return "看課程";
+  if (subCategory === "寫筆記") return "筆記";
+  return subCategory;
+}
+
 function formatTaskSectionByCategory(tasks) {
   if (tasks.length === 0) {
     return ["【本週任務】", "本週尚未立案。放一個小任務，就是好的開始。"].join("\n");
@@ -404,9 +416,9 @@ function formatTaskSectionByCategory(tasks) {
 
     if (category === "程式學習") {
       [...SUBCATEGORY_OPTIONS, EMPTY_SUBCATEGORY].forEach(function (subCategory) {
-        const groupTasks = categoryTasks.filter(
-          (task) => normalizeSubCategory(task.subCategory, category) === subCategory
-        );
+        const groupTasks = categoryTasks.filter(function (task) {
+          return normalizeSubCategory(task.subCategory, category) === subCategory;
+        });
 
         if (groupTasks.length === 0) return;
 
@@ -514,12 +526,12 @@ const FLEX_COLORS = {
   red: "#B85F4B",
   gold: "#D8A85F",
 
-  programming: "#E7EDF3",
-  programmingText: "#45637A",
-  wellness: "#EFE7EA",
-  wellnessText: "#7A5D69",
-  interest: "#F0E4D5",
-  interestText: "#8A5F32",
+  programming: "#507592",
+  programmingText: "#FFFDF7",
+  wellness: "#8A6F7F",
+  wellnessText: "#FFFDF7",
+  interest: "#B9854A",
+  interestText: "#FFFDF7",
 
   video: "#6F7FA8",
   videoText: "#FFFDF7",
@@ -547,7 +559,7 @@ function getCategoryFlexStyle(category) {
     return {
       backgroundColor: FLEX_COLORS.programming,
       textColor: FLEX_COLORS.programmingText,
-      borderColor: "#CBD8E2",
+      borderColor: "#507592",
     };
   }
 
@@ -555,7 +567,7 @@ function getCategoryFlexStyle(category) {
     return {
       backgroundColor: FLEX_COLORS.wellness,
       textColor: FLEX_COLORS.wellnessText,
-      borderColor: "#DDCCD3",
+      borderColor: "#8A6F7F",
     };
   }
 
@@ -563,7 +575,7 @@ function getCategoryFlexStyle(category) {
     return {
       backgroundColor: FLEX_COLORS.interest,
       textColor: FLEX_COLORS.interestText,
-      borderColor: "#DFC9AD",
+      borderColor: "#B9854A",
     };
   }
 
@@ -576,15 +588,24 @@ function getCategoryFlexStyle(category) {
 
 function getSubCategoryFlexStyle(subCategory) {
   if (subCategory === "觀看課程影片") {
-    return { backgroundColor: FLEX_COLORS.video, textColor: FLEX_COLORS.videoText };
+    return {
+      backgroundColor: FLEX_COLORS.video,
+      textColor: FLEX_COLORS.videoText,
+    };
   }
 
   if (subCategory === "練習") {
-    return { backgroundColor: FLEX_COLORS.practice, textColor: FLEX_COLORS.practiceText };
+    return {
+      backgroundColor: FLEX_COLORS.practice,
+      textColor: FLEX_COLORS.practiceText,
+    };
   }
 
   if (subCategory === "寫筆記") {
-    return { backgroundColor: FLEX_COLORS.note, textColor: FLEX_COLORS.noteText };
+    return {
+      backgroundColor: FLEX_COLORS.note,
+      textColor: FLEX_COLORS.noteText,
+    };
   }
 
   return {
@@ -598,24 +619,24 @@ function getDifficultyFlexStyle(difficulty) {
 
   if (normalizedDifficulty === "簡單") {
     return {
-      backgroundColor: "#EAF3E5",
-      textColor: "#607855",
-      borderColor: "#C9DDC0",
+      backgroundColor: "#DBF0D5",
+      textColor: "#315B35",
+      borderColor: "#C4DFC0",
     };
   }
 
   if (normalizedDifficulty === "適中") {
     return {
-      backgroundColor: "#F5E8CF",
-      textColor: "#8A5A28",
-      borderColor: "#E4CB9D",
+      backgroundColor: "#F4E4C7",
+      textColor: "#6A4E21",
+      borderColor: "#E5CCA0",
     };
   }
 
   return {
-    backgroundColor: "#F1DFDA",
-    textColor: "#9D5245",
-    borderColor: "#DCB8AF",
+    backgroundColor: "#F0D8D2",
+    textColor: "#6B3932",
+    borderColor: "#DEBDB6",
   };
 }
 
@@ -642,17 +663,12 @@ function getDifficultyFooterCopy(difficulty, isCompleted) {
   return isCompleted ? "大案收妥，今天可以蓋一枚章。" : "大案也能小辦，不必硬闖。";
 }
 
-function getLineSubCategoryLabel(subCategory) {
-  if (subCategory === "觀看課程影片") return "看課";
-  if (subCategory === "寫筆記") return "筆記";
-  return subCategory;
-}
-
 function buildFlexTag(label, backgroundColor, textColor, options = {}) {
   return {
     type: "box",
     layout: "vertical",
     flex: 0,
+    width: options.width,
     backgroundColor,
     cornerRadius: options.cornerRadius || "999px",
     paddingTop: options.paddingTop || "4px",
@@ -670,64 +686,62 @@ function buildFlexTag(label, backgroundColor, textColor, options = {}) {
         color: textColor,
         align: "center",
         flex: 0,
+        maxLines: 1,
       },
     ],
   };
 }
 
-function buildCategoryFlexTag(category) {
+function buildCategoryFlexTag(category, options = {}) {
   const style = getCategoryFlexStyle(category);
 
   return buildFlexTag(category, style.backgroundColor, style.textColor, {
-    cornerRadius: "9px",
+    width: options.width || "118px",
+    cornerRadius: "999px",
     size: "xs",
     weight: "bold",
     borderColor: style.borderColor,
     paddingTop: "5px",
     paddingBottom: "5px",
-    paddingStart: "10px",
-    paddingEnd: "10px",
+    paddingStart: "8px",
+    paddingEnd: "8px",
   });
 }
 
-function buildSubCategoryFlexTag(subCategory) {
+function buildSubCategoryFlexTag(subCategory, options = {}) {
   const style = getSubCategoryFlexStyle(subCategory);
   const displayLabel = getLineSubCategoryLabel(subCategory);
 
   return buildFlexTag(displayLabel, style.backgroundColor, style.textColor, {
+    width: options.width || "74px",
     cornerRadius: "999px",
     size: "xxs",
     weight: "bold",
     paddingTop: "4px",
     paddingBottom: "4px",
-    paddingStart: "7px",
-    paddingEnd: "7px",
+    paddingStart: "6px",
+    paddingEnd: "6px",
   });
 }
 
-function buildDifficultyFlexTag(difficulty) {
+function buildDifficultyFlexTag(difficulty, options = {}) {
   const style = getDifficultyFlexStyle(difficulty);
 
   return {
     type: "box",
     layout: "horizontal",
     flex: 0,
+    width: options.width || "68px",
     backgroundColor: style.backgroundColor,
-    cornerRadius: "7px",
+    cornerRadius: "999px",
+    borderColor: style.borderColor,
+    borderWidth: "1px",
     paddingTop: "3px",
     paddingBottom: "3px",
-    paddingStart: "5px",
-    paddingEnd: "7px",
+    paddingStart: "6px",
+    paddingEnd: "6px",
     spacing: "xs",
     contents: [
-      {
-        type: "box",
-        layout: "vertical",
-        width: "2px",
-        backgroundColor: style.textColor,
-        cornerRadius: "999px",
-        contents: [],
-      },
       {
         type: "text",
         text: difficulty,
@@ -735,7 +749,8 @@ function buildDifficultyFlexTag(difficulty) {
         weight: "bold",
         color: style.textColor,
         align: "center",
-        flex: 0,
+        flex: 1,
+        maxLines: 1,
       },
     ],
   };
@@ -823,23 +838,43 @@ function buildProgressLine(label, doneCount, totalCount) {
   };
 }
 
-function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, showSubCategory = true }) {
+function buildTaskFlexRow({
+  task,
+  taskNumber,
+  showDifficulty,
+  showCategory,
+  showSubCategory = true,
+}) {
   const checkbox = task.done ? "☑" : "☐";
   const difficulty = normalizeDifficulty(task.difficulty);
   const category = normalizeCategory(task.category);
+  const isProgrammingTask = category === "程式學習";
   const tagContents = [];
 
   if (showCategory) {
-    tagContents.push(buildCategoryFlexTag(category));
+    tagContents.push(
+      buildCategoryFlexTag(category, {
+        width: isProgrammingTask ? "118px" : "154px",
+      })
+    );
   }
 
-  if (showSubCategory && category === "程式學習") {
+  if (showSubCategory && isProgrammingTask) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
-    tagContents.push(buildSubCategoryFlexTag(subCategory));
+
+    tagContents.push(
+      buildSubCategoryFlexTag(subCategory, {
+        width: "74px",
+      })
+    );
   }
 
   if (showDifficulty) {
-    tagContents.push(buildDifficultyFlexTag(difficulty));
+    tagContents.push(
+      buildDifficultyFlexTag(difficulty, {
+        width: isProgrammingTask ? "68px" : "104px",
+      })
+    );
   }
 
   const rowContents = [
@@ -915,21 +950,33 @@ function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, ac
   const contents = [
     buildAccentBar(accentColor),
     buildFlexHeader(title, subtitle),
-    { type: "separator", margin: "md", color: FLEX_COLORS.beigeLine },
+    {
+      type: "separator",
+      margin: "md",
+      color: FLEX_COLORS.beigeLine,
+    },
     ...bodyContents,
   ];
 
   if (footerContents) {
-    contents.push({ type: "separator", margin: "md", color: FLEX_COLORS.beigeLine });
+    contents.push({
+      type: "separator",
+      margin: "md",
+      color: FLEX_COLORS.beigeLine,
+    });
     contents.push(footerContents);
   }
 
   return {
     type: "bubble",
-    size: "mega",
+    size: "giga",
     styles: {
-      body: { backgroundColor: FLEX_COLORS.cream },
-      footer: { backgroundColor: FLEX_COLORS.cream },
+      body: {
+        backgroundColor: FLEX_COLORS.cream,
+      },
+      footer: {
+        backgroundColor: FLEX_COLORS.cream,
+      },
     },
     body: {
       type: "box",
@@ -959,18 +1006,33 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber }) {
 
 function buildTaskTagBox(task, showDifficulty) {
   const category = normalizeCategory(task.category);
+  const isProgrammingTask = category === "程式學習";
   const tags = [];
 
-  tags.push(buildCategoryFlexTag(category));
+  tags.push(
+    buildCategoryFlexTag(category, {
+      width: isProgrammingTask ? "118px" : "154px",
+    })
+  );
 
-  if (category === "程式學習") {
+  if (isProgrammingTask) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
-    tags.push(buildSubCategoryFlexTag(subCategory));
+
+    tags.push(
+      buildSubCategoryFlexTag(subCategory, {
+        width: "74px",
+      })
+    );
   }
 
   if (showDifficulty) {
     const difficulty = normalizeDifficulty(task.difficulty);
-    tags.push(buildDifficultyFlexTag(difficulty));
+
+    tags.push(
+      buildDifficultyFlexTag(difficulty, {
+        width: isProgrammingTask ? "68px" : "104px",
+      })
+    );
   }
 
   return {
@@ -1007,7 +1069,10 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
           },
           buildTaskTagBox(selectedTask, true),
         ],
-        { borderColor: "#E8C887", backgroundColor: "#FFF8EA" }
+        {
+          borderColor: "#E8C887",
+          backgroundColor: "#FFF8EA",
+        }
       ),
     ],
     footerContents: buildFlexFooterHint([
@@ -1042,8 +1107,16 @@ async function handleDrawOneTaskCommand() {
   const taskNumber = board.tasks.findIndex((task) => task.id === selectedTask.id) + 1;
 
   return {
-    replyText: buildDrawOneTaskFallbackText({ selectedTask, taskNumber }),
-    replyMessages: [buildDrawOneTaskFlexMessage({ selectedTask, taskNumber })],
+    replyText: buildDrawOneTaskFallbackText({
+      selectedTask,
+      taskNumber,
+    }),
+    replyMessages: [
+      buildDrawOneTaskFlexMessage({
+        selectedTask,
+        taskNumber,
+      }),
+    ],
   };
 }
 
@@ -1062,7 +1135,10 @@ function buildDifficultyTaskFooterLines(matchedTasks, difficulty) {
 
 function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
   const matchedTasks = tasks
-    .map((task, index) => ({ task, originalNumber: index + 1 }))
+    .map((task, index) => ({
+      task,
+      originalNumber: index + 1,
+    }))
     .filter((entry) => normalizeDifficulty(entry.task.difficulty) === difficulty);
 
   const unfinishedCount = matchedTasks.filter((entry) => !entry.task.done).length;
@@ -1147,14 +1223,21 @@ async function handleDifficultyTaskFlexCommand(difficulty) {
 
   return {
     replyText: formatTasksByDifficultyForLine(tasks, difficulty),
-    replyMessages: [buildDifficultyTaskListFlexMessage({ tasks, difficulty })],
+    replyMessages: [
+      buildDifficultyTaskListFlexMessage({
+        tasks,
+        difficulty,
+      }),
+    ],
   };
 }
 
 function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   const taskDoneCount = tasks.filter((task) => task.done).length;
   const standardDoneCount = standards.filter((standard) => standard.done).length;
-  const weekTitle = currentWeek ? `第${currentWeek.weekNumber}週｜${currentWeek.title}` : "本週案件板";
+  const weekTitle = currentWeek
+    ? `第${currentWeek.weekNumber}週｜${currentWeek.title}`
+    : "本週案件板";
 
   const taskRows = tasks.slice(0, 8).map((task, index) =>
     buildTaskFlexRow({
@@ -1315,11 +1398,15 @@ function buildLineTextMessage(text) {
 }
 
 function getFallbackTextFromReplyMessages(replyMessages) {
-  const textMessage = replyMessages.find((message) => message && message.type === "text" && message.text);
+  const textMessage = replyMessages.find(
+    (message) => message && message.type === "text" && message.text
+  );
 
   if (textMessage) return textMessage.text;
 
-  const flexMessage = replyMessages.find((message) => message && message.type === "flex" && message.altText);
+  const flexMessage = replyMessages.find(
+    (message) => message && message.type === "flex" && message.altText
+  );
 
   if (flexMessage) return flexMessage.altText;
 
@@ -1327,7 +1414,11 @@ function getFallbackTextFromReplyMessages(replyMessages) {
 }
 
 function normalizeLineReplyResult(replyResult) {
-  if (replyResult && typeof replyResult === "object" && Array.isArray(replyResult.replyMessages)) {
+  if (
+    replyResult &&
+    typeof replyResult === "object" &&
+    Array.isArray(replyResult.replyMessages)
+  ) {
     const replyMessages = replyResult.replyMessages;
 
     return {
@@ -1510,7 +1601,11 @@ function parseCreateText({ userText, command }) {
 }
 
 async function handleCreateCommand({ userText, command, type, label, example }) {
-  const parsed = parseCreateText({ userText, command });
+  const parsed = parseCreateText({
+    userText,
+    command,
+  });
+
   const displayLabel = getDisplayLabel(label);
 
   if (!parsed.title) {
@@ -1608,11 +1703,18 @@ async function findItemByNumber({ type, numberText, label }) {
 }
 
 async function handleDoneCommand({ numberText, type, label, done }) {
-  const result = await findItemByNumber({ type, numberText, label });
+  const result = await findItemByNumber({
+    type,
+    numberText,
+    label,
+  });
 
   if (result.error) return result.error;
 
-  const updatedItem = await updateItemToGoogleSheets(result.item.id, { done });
+  const updatedItem = await updateItemToGoogleSheets(result.item.id, {
+    done,
+  });
+
   const checkbox = done ? "☑" : "☐";
   const actionText = done ? "已辦理" : "已撤回辦理";
   const displayLabel = getDisplayLabel(label);
@@ -1626,7 +1728,11 @@ async function handleDoneCommand({ numberText, type, label, done }) {
 }
 
 async function handleDeleteCommand({ numberText, type, label }) {
-  const result = await findItemByNumber({ type, numberText, label });
+  const result = await findItemByNumber({
+    type,
+    numberText,
+    label,
+  });
 
   if (result.error) return result.error;
 
@@ -1642,7 +1748,11 @@ async function handleDeleteCommand({ numberText, type, label }) {
 }
 
 async function handleEditCommand({ sourceKey, numberText, newTitle, type, label }) {
-  const result = await findItemByNumber({ type, numberText, label });
+  const result = await findItemByNumber({
+    type,
+    numberText,
+    label,
+  });
 
   if (result.error) return result.error;
 
@@ -1799,7 +1909,9 @@ async function handleLineTextCommand({ sourceKey, userText }) {
 
   if (["攻略", "說明", "help", "Help"].includes(userText)) return getGuideText();
   if (["用量", "用量小抄", "訊息用量"].includes(userText)) return getUsageText();
-  if (["抽一件", "抽任務", "隨機任務", "今天做什麼"].includes(userText)) return handleDrawOneTaskCommand();
+  if (["抽一件", "抽任務", "隨機任務", "今天做什麼"].includes(userText)) {
+    return handleDrawOneTaskCommand();
+  }
 
   if (userText === "清單" || userText === "全部清單") return handleAllListFlexCommand();
   if (userText === "簡單任務" || userText === "簡單") return handleDifficultyTaskFlexCommand("簡單");
@@ -1914,21 +2026,33 @@ app.post("/gas-queue", async (req, res) => {
     const { source, queueId, userId, messageText } = req.body || {};
 
     if (source !== "gas_queue") {
-      return res.status(400).json({ ok: false, message: "source 必須是 gas_queue" });
+      return res.status(400).json({
+        ok: false,
+        message: "source 必須是 gas_queue",
+      });
     }
 
     if (!queueId) {
-      return res.status(400).json({ ok: false, message: "缺少 queueId" });
+      return res.status(400).json({
+        ok: false,
+        message: "缺少 queueId",
+      });
     }
 
     if (!userId) {
-      return res.status(400).json({ ok: false, message: "缺少 userId" });
+      return res.status(400).json({
+        ok: false,
+        message: "缺少 userId",
+      });
     }
 
     const userText = String(messageText || "").trim();
 
     if (!userText) {
-      return res.status(400).json({ ok: false, message: "缺少 messageText" });
+      return res.status(400).json({
+        ok: false,
+        message: "缺少 messageText",
+      });
     }
 
     const replyResult = await handleLineTextCommand({
@@ -1964,7 +2088,10 @@ app.post("/line/webhook", async (req, res) => {
 
       const sourceKey = getLineSourceKey(event);
       const userText = event.message.text.trim();
-      const replyResult = await handleLineTextCommand({ sourceKey, userText });
+      const replyResult = await handleLineTextCommand({
+        sourceKey,
+        userText,
+      });
 
       await replyToLine(event.replyToken, replyResult);
     } catch (error) {
@@ -2033,11 +2160,15 @@ app.post("/items", async (req, res) => {
     const { type, title, category, subCategory, difficulty, weekNumber } = req.body;
 
     if (!type || !title) {
-      return res.status(400).json({ message: "type 和 title 都是必填" });
+      return res.status(400).json({
+        message: "type 和 title 都是必填",
+      });
     }
 
     if (type !== "task" && type !== "standard") {
-      return res.status(400).json({ message: "type 只能是 task 或 standard" });
+      return res.status(400).json({
+        message: "type 只能是 task 或 standard",
+      });
     }
 
     const createdItem = await createItemToGoogleSheets({
@@ -2075,7 +2206,9 @@ app.patch("/items/:id", async (req, res) => {
     if (weekNumber !== undefined) updates.weekNumber = weekNumber;
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ message: "沒有收到要更新的欄位" });
+      return res.status(400).json({
+        message: "沒有收到要更新的欄位",
+      });
     }
 
     res.json(await updateItemToGoogleSheets(id, updates));
