@@ -23,19 +23,6 @@
   --green-dark: #607855;
   --green-soft: rgba(143, 167, 131, 0.18);
 
-  /* 分類專用色 */
-  --programming: #507592;
-  --programming-soft: rgba(80, 117, 146, 0.12);
-  --programming-line: rgba(80, 117, 146, 0.24);
-
-  --wellness: #8a6f7f;
-  --wellness-soft: rgba(138, 111, 127, 0.13);
-  --wellness-line: rgba(138, 111, 127, 0.26);
-
-  --interest: #b9854a;
-  --interest-soft: rgba(185, 133, 74, 0.16);
-  --interest-line: rgba(185, 133, 74, 0.3);
-
   --gold: #d8a85f;
   --gold-soft: rgba(216, 168, 95, 0.18);
 
@@ -506,7 +493,7 @@ body.is-busy button {
 }
 
 .task-add-form {
-  grid-template-columns: 1fr 132px 98px auto;
+  grid-template-columns: 1fr 132px 132px 98px auto;
 }
 
 .add-form input,
@@ -603,42 +590,6 @@ body.is-busy button {
   color: rgba(96, 120, 85, 0.52);
   font-size: 11px;
   font-weight: 900;
-}
-
-/* 程式學習大分類標題：淡藍紙感 */
-.category-heading.programming {
-  background: var(--programming-soft);
-  border: 1px solid var(--programming-line);
-  color: var(--programming);
-}
-
-.category-heading.programming::after {
-  color: rgba(80, 117, 146, 0.56);
-  border-color: rgba(80, 117, 146, 0.3);
-}
-
-/* 身心穩定大分類標題：淡紫棕紙感 */
-.category-heading.wellness {
-  background: var(--wellness-soft);
-  border: 1px solid var(--wellness-line);
-  color: var(--wellness);
-}
-
-.category-heading.wellness::after {
-  color: rgba(138, 111, 127, 0.56);
-  border-color: rgba(138, 111, 127, 0.32);
-}
-
-/* 興趣探索大分類標題：淡金棕紙感 */
-.category-heading.interest {
-  background: var(--interest-soft);
-  border: 1px solid var(--interest-line);
-  color: var(--interest);
-}
-
-.category-heading.interest::after {
-  color: rgba(185, 133, 74, 0.56);
-  border-color: rgba(185, 133, 74, 0.34);
 }
 
 .empty-message {
@@ -745,27 +696,6 @@ body.is-busy button {
   background: var(--green-soft);
   color: var(--green-dark);
   border: 1px solid rgba(143, 167, 131, 0.2);
-}
-
-/* 程式學習小標籤：實心藍色 */
-.chip-category.programming {
-  background: var(--programming);
-  color: #fffdf7;
-  border: 1px solid rgba(80, 117, 146, 0.28);
-}
-
-/* 身心穩定小標籤：實心紫棕色 */
-.chip-category.wellness {
-  background: var(--wellness);
-  color: #fffdf7;
-  border: 1px solid rgba(138, 111, 127, 0.28);
-}
-
-/* 興趣探索小標籤：實心金棕色 */
-.chip-category.interest {
-  background: var(--interest);
-  color: #fffdf7;
-  border: 1px solid rgba(185, 133, 74, 0.34);
 }
 
 .chip-difficulty {
