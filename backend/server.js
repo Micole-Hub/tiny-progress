@@ -311,10 +311,10 @@ function formatTaskSectionByCategory(tasks) {
       [...SUBCATEGORY_OPTIONS, EMPTY_SUBCATEGORY].forEach(function (subCategory) {
         const groupTasks = categoryTasks.filter((task) => normalizeSubCategory(task.subCategory, category) === subCategory);
         if (groupTasks.length === 0) return;
-        lines.push(`－${subCategory}`);
+
         groupTasks.forEach(function (task) {
           const checkbox = task.done ? "☑" : "☐";
-          lines.push(`${taskNumber}. ${checkbox} ${task.title}｜${normalizeDifficulty(task.difficulty)}`);
+          lines.push(`${taskNumber}. ${checkbox} ${task.title}｜${normalizeSubCategory(task.subCategory, category)}｜${normalizeDifficulty(task.difficulty)}`);
           taskNumber += 1;
         });
       });
@@ -392,11 +392,11 @@ const FLEX_COLORS = {
   wellnessText: "#FFFDF7",
   interest: "#B9854A",
   interestText: "#FFFDF7",
-  video: "#6F6FA6",
+  video: "#6F7FA8",
   videoText: "#FFFDF7",
-  practice: "#6F9A65",
+  practice: "#6E9B72",
   practiceText: "#FFFDF7",
-  note: "#CF8A56",
+  note: "#C28A5A",
   noteText: "#FFFDF7",
   uncategorized: "#9A8D82",
   uncategorizedText: "#FFFDF7",
@@ -454,11 +454,11 @@ function buildFlexTag(label, backgroundColor, textColor) {
     layout: "vertical",
     backgroundColor,
     cornerRadius: "999px",
-    paddingTop: "4px",
-    paddingBottom: "4px",
-    paddingStart: "8px",
-    paddingEnd: "8px",
-    contents: [{ type: "text", text: label, size: "xxs", weight: "bold", color: textColor, align: "center" }],
+    paddingTop: "5px",
+    paddingBottom: "5px",
+    paddingStart: "9px",
+    paddingEnd: "9px",
+    contents: [{ type: "text", text: label, size: "xs", weight: "bold", color: textColor, align: "center" }],
   };
 }
 

@@ -308,12 +308,6 @@ function createCategoryHeading(category) {
   heading.textContent = `【${category}】`;
   return heading;
 }
-function createSubCategoryHeading(subCategory) {
-  const heading = document.createElement("li");
-  heading.className = `subcategory-heading ${getSubCategoryClass(subCategory)}`;
-  heading.textContent = `－ ${subCategory}`;
-  return heading;
-}
 function getDifficultyClass(difficulty) { if (difficulty === "簡單") return "easy"; if (difficulty === "適中") return "medium"; if (difficulty === "困難") return "hard"; return ""; }
 function getTaskEmptyMessage() { if (!getSelectedWeek()) return "目前還沒有可顯示的週次資料。"; return isNextWeekView() ? "下週目前還沒有任務，先讓未來安靜排隊。" : "今天還沒立案也無妨，放一個小任務，就是好的開始。"; }
 function getStandardEmptyMessage() { if (!getSelectedWeek()) return "目前還沒有可顯示的週次資料。"; return isNextWeekView() ? "下週標準尚未成文，等時機到了再慢慢補。" : "本週標準尚未成文，寫下一個方向，慢慢前進。"; }
@@ -388,17 +382,27 @@ function renderTasks() {
     const categoryTasks = tasks.filter((task) => normalizeCategory(task.category) === category);
     if (categoryTasks.length === 0) return;
     taskList.appendChild(createCategoryHeading(category));
+
     if (category === "程式學習") {
       const orderedSubCategories = [...SUBCATEGORY_OPTIONS, EMPTY_SUBCATEGORY];
+
       orderedSubCategories.forEach((subCategory) => {
         const groupTasks = categoryTasks.filter((task) => normalizeSubCategory(task.subCategory, category) === subCategory);
         if (groupTasks.length === 0) return;
-        taskList.appendChild(createSubCategoryHeading(subCategory));
-        groupTasks.forEach((task) => { taskList.appendChild(createCheckItem(task, displayNumber)); displayNumber += 1; });
+
+        groupTasks.forEach((task) => {
+          taskList.appendChild(createCheckItem(task, displayNumber));
+          displayNumber += 1;
+        });
       });
+
       return;
     }
-    categoryTasks.forEach((task) => { taskList.appendChild(createCheckItem(task, displayNumber)); displayNumber += 1; });
+
+    categoryTasks.forEach((task) => {
+      taskList.appendChild(createCheckItem(task, displayNumber));
+      displayNumber += 1;
+    });
   });
 }
 function renderStandards() {
