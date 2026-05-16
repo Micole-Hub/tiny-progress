@@ -48,6 +48,8 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
   background: #f4efe6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body::before {
@@ -591,7 +593,6 @@ body.is-busy button {
   font-weight: 900;
 }
 
-/* 程式學習：冷靜藍灰 */
 .category-heading.programming {
   background: #e7edf3;
   border: 1px solid rgba(69, 99, 122, 0.18);
@@ -603,7 +604,6 @@ body.is-busy button {
   color: rgba(69, 99, 122, 0.52);
 }
 
-/* 身心穩定：柔和灰紫 */
 .category-heading.wellness {
   background: #efe7ea;
   border: 1px solid rgba(122, 93, 105, 0.18);
@@ -615,7 +615,6 @@ body.is-busy button {
   color: rgba(122, 93, 105, 0.52);
 }
 
-/* 興趣探索：暖杏棕 */
 .category-heading.interest {
   background: #f0e4d5;
   border: 1px solid rgba(138, 95, 50, 0.18);
@@ -626,6 +625,7 @@ body.is-busy button {
   border: 1px solid rgba(138, 95, 50, 0.24);
   color: rgba(138, 95, 50, 0.52);
 }
+
 .subcategory-heading {
   display: none;
 }
@@ -689,7 +689,7 @@ body.is-busy button {
   align-items: center;
   flex-wrap: wrap;
   gap: 7px;
-  margin-bottom: 7px;
+  margin-bottom: 8px;
 }
 
 .item-number {
@@ -708,9 +708,12 @@ body.is-busy button {
 
 .item-title {
   display: block;
-  line-height: 1.55;
+  color: #2f2a25;
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1.65;
+  letter-spacing: 0.01em;
   word-break: break-word;
-  color: var(--ink);
 }
 
 .item-meta {
@@ -729,15 +732,14 @@ body.is-busy button {
   white-space: nowrap;
 }
 
-/* 第一個：大分類，要更明顯 */
 .chip-category {
   padding: 6px 12px;
   border-radius: 10px;
   background: #efe5d4;
   color: #65513d;
   border: 1px solid rgba(101, 81, 61, 0.18);
-  font-size: 15px;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 850;
   letter-spacing: 0.03em;
 }
 
@@ -759,14 +761,13 @@ body.is-busy button {
   border-color: rgba(138, 95, 50, 0.18);
 }
 
-/* 第二個：子分類，反而小一點 */
 .chip-subcategory {
   padding: 5px 10px;
   border-radius: var(--radius-pill);
   color: #fffdf7;
   border: 1px solid rgba(255, 253, 247, 0.32);
-  font-size: 13px;
-  font-weight: 850;
+  font-size: 12.5px;
+  font-weight: 800;
   letter-spacing: 0.01em;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
@@ -787,12 +788,11 @@ body.is-busy button {
   background: var(--light-ink);
 }
 
-/* 第三個：難度，也小一點 */
 .chip-difficulty {
   padding: 4px 8px;
   border-radius: 6px 14px 14px 6px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 750;
   letter-spacing: 0.03em;
   border-left: 3px solid currentColor;
 }
@@ -904,6 +904,7 @@ body.is-busy button {
   text-decoration-thickness: 2px;
   text-decoration-color: var(--stamp);
   color: #7c6e63;
+  font-weight: 650;
 }
 
 .task-item.is-done::before {
@@ -1044,7 +1045,11 @@ body.is-busy button {
     gap: 6px;
   }
 
-  @media (max-width: 440px) {
+  .item-title {
+    font-size: 18px;
+    line-height: 1.65;
+  }
+
   .chip-category {
     font-size: 14px;
   }
@@ -1060,7 +1065,6 @@ body.is-busy button {
   .chip {
     min-height: 25px;
   }
-}
 
   .progress-row strong {
     font-size: 18px;

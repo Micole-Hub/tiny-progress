@@ -35,23 +35,18 @@ app.use(express.json());
 
 function normalizeCategory(value) {
   const category = String(value || "").trim();
-
   if (!category) return DEFAULT_CATEGORY;
-
   if (!CATEGORY_OPTIONS.includes(category)) {
     throw new Error("category 只能是：" + CATEGORY_OPTIONS.join("、"));
   }
-
   return category;
 }
 
 function normalizeSubCategory(value, category = DEFAULT_CATEGORY) {
   const normalizedCategory = normalizeCategory(category);
-
   if (normalizedCategory !== "程式學習") return EMPTY_SUBCATEGORY;
 
   const subCategory = String(value || "").trim();
-
   if (!subCategory) return DEFAULT_SUBCATEGORY;
   if (SUBCATEGORY_OPTIONS.includes(subCategory)) return subCategory;
   if (subCategory === EMPTY_SUBCATEGORY) return EMPTY_SUBCATEGORY;
@@ -61,13 +56,10 @@ function normalizeSubCategory(value, category = DEFAULT_CATEGORY) {
 
 function normalizeDifficulty(value) {
   const difficulty = String(value || "").trim();
-
   if (!difficulty) return DEFAULT_DIFFICULTY;
-
   if (!DIFFICULTY_OPTIONS.includes(difficulty)) {
     throw new Error("difficulty 只能是：" + DIFFICULTY_OPTIONS.join("、"));
   }
-
   return difficulty;
 }
 
@@ -108,9 +100,7 @@ function sortTasksByCategory(tasks) {
   return [...tasks].sort(function (a, b) {
     const categoryA = normalizeCategory(a.category);
     const categoryB = normalizeCategory(b.category);
-
-    const categoryDiff =
-      CATEGORY_OPTIONS.indexOf(categoryA) - CATEGORY_OPTIONS.indexOf(categoryB);
+    const categoryDiff = CATEGORY_OPTIONS.indexOf(categoryA) - CATEGORY_OPTIONS.indexOf(categoryB);
 
     if (categoryDiff !== 0) return categoryDiff;
 
@@ -144,16 +134,10 @@ function buildGoogleSheetsResourceUrl(resource) {
 
 async function fetchWeekContextFromGoogleSheets() {
   const response = await fetch(buildGoogleSheetsResourceUrl("week-context"));
-
-  if (!response.ok) {
-    throw new Error("呼叫 Google Apps Script 週次資料失敗，狀態碼：" + response.status);
-  }
+  if (!response.ok) throw new Error("呼叫 Google Apps Script 週次資料失敗，狀態碼：" + response.status);
 
   const data = await response.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Google Apps Script 回傳週次資料失敗");
-  }
+  if (!data.ok) throw new Error(data.message || "Google Apps Script 回傳週次資料失敗");
 
   return {
     currentWeek: data.currentWeek,
@@ -163,26 +147,18 @@ async function fetchWeekContextFromGoogleSheets() {
 
 async function getCurrentWeekNumberFromGoogleSheets() {
   const context = await fetchWeekContextFromGoogleSheets();
-
   if (!context.currentWeek || !context.currentWeek.weekNumber) {
     throw new Error("找不到目前週，無法處理 LINE 指令");
   }
-
   return Number(context.currentWeek.weekNumber);
 }
 
 async function fetchItemsFromGoogleSheets() {
   const response = await fetch(buildGoogleSheetsGetUrl());
-
-  if (!response.ok) {
-    throw new Error("呼叫 Google Apps Script 失敗，狀態碼：" + response.status);
-  }
+  if (!response.ok) throw new Error("呼叫 Google Apps Script 失敗，狀態碼：" + response.status);
 
   const data = await response.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Google Apps Script 回傳失敗");
-  }
+  if (!data.ok) throw new Error(data.message || "Google Apps Script 回傳失敗");
 
   return data.items.map(normalizeItem);
 }
@@ -208,15 +184,10 @@ async function completeCurrentWeekInGoogleSheets() {
     }),
   });
 
-  if (!response.ok) {
-    throw new Error("呼叫 Google Apps Script 結案失敗，狀態碼：" + response.status);
-  }
+  if (!response.ok) throw new Error("呼叫 Google Apps Script 結案失敗，狀態碼：" + response.status);
 
   const data = await response.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Google Apps Script 結案失敗");
-  }
+  if (!data.ok) throw new Error(data.message || "Google Apps Script 結案失敗");
 
   return data.result;
 }
@@ -245,10 +216,7 @@ async function createItemToGoogleSheets({
     done: done === true,
   };
 
-  if (weekNumber !== undefined && weekNumber !== null && weekNumber !== "") {
-    itemPayload.weekNumber = Number(weekNumber);
-  }
-
+  if (weekNumber !== undefined && weekNumber !== null && weekNumber !== "") itemPayload.weekNumber = Number(weekNumber);
   if (weekStart !== undefined) itemPayload.weekStart = weekStart;
   if (weekEnd !== undefined) itemPayload.weekEnd = weekEnd;
   if (createdAt !== undefined) itemPayload.createdAt = createdAt;
@@ -264,15 +232,10 @@ async function createItemToGoogleSheets({
     }),
   });
 
-  if (!response.ok) {
-    throw new Error("呼叫 Google Apps Script 新增失敗，狀態碼：" + response.status);
-  }
+  if (!response.ok) throw new Error("呼叫 Google Apps Script 新增失敗，狀態碼：" + response.status);
 
   const data = await response.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Google Apps Script 新增資料失敗");
-  }
+  if (!data.ok) throw new Error(data.message || "Google Apps Script 新增資料失敗");
 
   return normalizeItem(data.item);
 }
@@ -280,26 +243,12 @@ async function createItemToGoogleSheets({
 async function updateItemToGoogleSheets(id, updates) {
   const safeUpdates = { ...updates };
 
-  if (safeUpdates.category !== undefined) {
-    safeUpdates.category = normalizeCategory(safeUpdates.category);
-  }
-
+  if (safeUpdates.category !== undefined) safeUpdates.category = normalizeCategory(safeUpdates.category);
   if (safeUpdates.subCategory !== undefined) {
-    safeUpdates.subCategory = normalizeSubCategory(
-      safeUpdates.subCategory,
-      safeUpdates.category || DEFAULT_CATEGORY
-    );
+    safeUpdates.subCategory = normalizeSubCategory(safeUpdates.subCategory, safeUpdates.category || DEFAULT_CATEGORY);
   }
-
-  if (safeUpdates.difficulty !== undefined) {
-    safeUpdates.difficulty = normalizeDifficulty(safeUpdates.difficulty);
-  }
-
-  if (
-    safeUpdates.weekNumber !== undefined &&
-    safeUpdates.weekNumber !== null &&
-    safeUpdates.weekNumber !== ""
-  ) {
+  if (safeUpdates.difficulty !== undefined) safeUpdates.difficulty = normalizeDifficulty(safeUpdates.difficulty);
+  if (safeUpdates.weekNumber !== undefined && safeUpdates.weekNumber !== null && safeUpdates.weekNumber !== "") {
     safeUpdates.weekNumber = Number(safeUpdates.weekNumber);
   }
 
@@ -314,15 +263,10 @@ async function updateItemToGoogleSheets(id, updates) {
     }),
   });
 
-  if (!response.ok) {
-    throw new Error("呼叫 Google Apps Script 更新失敗，狀態碼：" + response.status);
-  }
+  if (!response.ok) throw new Error("呼叫 Google Apps Script 更新失敗，狀態碼：" + response.status);
 
   const data = await response.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Google Apps Script 更新資料失敗");
-  }
+  if (!data.ok) throw new Error(data.message || "Google Apps Script 更新資料失敗");
 
   return normalizeItem(data.item);
 }
@@ -338,15 +282,10 @@ async function deleteItemFromGoogleSheets(id) {
     }),
   });
 
-  if (!response.ok) {
-    throw new Error("呼叫 Google Apps Script 刪除失敗，狀態碼：" + response.status);
-  }
+  if (!response.ok) throw new Error("呼叫 Google Apps Script 刪除失敗，狀態碼：" + response.status);
 
   const data = await response.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Google Apps Script 刪除資料失敗");
-  }
+  if (!data.ok) throw new Error(data.message || "Google Apps Script 刪除資料失敗");
 
   return normalizeItem(data.item);
 }
@@ -358,7 +297,6 @@ function getLineSourceKey(event) {
 async function getItemsByType(type) {
   const items = await fetchCurrentWeekItemsFromGoogleSheets();
   const filteredItems = items.filter((item) => item.type === type);
-
   return type === "task" ? sortTasksByCategory(filteredItems) : filteredItems;
 }
 
@@ -386,10 +324,7 @@ function getTaskMetaText(task, includeDifficulty = true) {
     parts.push(normalizeSubCategory(task.subCategory, task.category));
   }
 
-  if (includeDifficulty) {
-    parts.push(normalizeDifficulty(task.difficulty));
-  }
-
+  if (includeDifficulty) parts.push(normalizeDifficulty(task.difficulty));
   return parts.join("｜");
 }
 
@@ -400,16 +335,13 @@ function getLineSubCategoryLabel(subCategory) {
 }
 
 function formatTaskSectionByCategory(tasks) {
-  if (tasks.length === 0) {
-    return ["【本週任務】", "本週尚未立案。放一個小任務，就是好的開始。"].join("\n");
-  }
+  if (tasks.length === 0) return ["【本週任務】", "本週尚未立案。放一個小任務，就是好的開始。"].join("\n");
 
   const lines = ["【本週任務】"];
   let taskNumber = 1;
 
   CATEGORY_OPTIONS.forEach(function (category) {
     const categoryTasks = tasks.filter((task) => normalizeCategory(task.category) === category);
-
     if (categoryTasks.length === 0) return;
 
     lines.push("", `《${category}》`);
@@ -425,15 +357,11 @@ function formatTaskSectionByCategory(tasks) {
         groupTasks.forEach(function (task) {
           const checkbox = task.done ? "☑" : "☐";
           lines.push(
-            `${taskNumber}. ${checkbox} ${task.title}｜${normalizeSubCategory(
-              task.subCategory,
-              category
-            )}｜${normalizeDifficulty(task.difficulty)}`
+            `${taskNumber}. ${checkbox} ${task.title}｜${normalizeSubCategory(task.subCategory, category)}｜${normalizeDifficulty(task.difficulty)}`
           );
           taskNumber += 1;
         });
       });
-
       return;
     }
 
@@ -449,11 +377,7 @@ function formatTaskSectionByCategory(tasks) {
 
 function formatLineSection(title, items, emptyText) {
   if (items.length === 0) return [title, emptyText].join("\n");
-
-  return [
-    title,
-    ...items.map((item, index) => `${index + 1}. ${item.done ? "☑" : "☐"} ${item.title}`),
-  ].join("\n");
+  return [title, ...items.map((item, index) => `${index + 1}. ${item.done ? "☑" : "☐"} ${item.title}`)].join("\n");
 }
 
 function formatTaskBoardForLine({ currentWeek, tasks, standards }) {
@@ -497,9 +421,7 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
   });
 
   const firstUnfinishedEntry = matchedTasks.find((entry) => !entry.task.done);
-  const commandHint = firstUnfinishedEntry
-    ? `可直接輸入：完成任務${firstUnfinishedEntry.originalNumber}`
-    : "本區案件已辦理完畢";
+  const commandHint = firstUnfinishedEntry ? `可直接輸入：完成任務${firstUnfinishedEntry.originalNumber}` : "本區案件已辦理完畢";
 
   return [
     `📌 本週${difficulty}任務`,
@@ -556,110 +478,53 @@ function getCategoryFlexStyle(category) {
   const normalizedCategory = normalizeCategory(category);
 
   if (normalizedCategory === "程式學習") {
-    return {
-      backgroundColor: FLEX_COLORS.programming,
-      textColor: FLEX_COLORS.programmingText,
-      borderColor: "#507592",
-    };
+    return { backgroundColor: FLEX_COLORS.programming, textColor: FLEX_COLORS.programmingText, borderColor: "#507592" };
   }
 
   if (normalizedCategory === "身心穩定") {
-    return {
-      backgroundColor: FLEX_COLORS.wellness,
-      textColor: FLEX_COLORS.wellnessText,
-      borderColor: "#8A6F7F",
-    };
+    return { backgroundColor: FLEX_COLORS.wellness, textColor: FLEX_COLORS.wellnessText, borderColor: "#8A6F7F" };
   }
 
   if (normalizedCategory === "興趣探索") {
-    return {
-      backgroundColor: FLEX_COLORS.interest,
-      textColor: FLEX_COLORS.interestText,
-      borderColor: "#B9854A",
-    };
+    return { backgroundColor: FLEX_COLORS.interest, textColor: FLEX_COLORS.interestText, borderColor: "#B9854A" };
   }
 
-  return {
-    backgroundColor: "#DFE9DD",
-    textColor: "#36533F",
-    borderColor: "#C8D7C5",
-  };
+  return { backgroundColor: "#DFE9DD", textColor: "#36533F", borderColor: "#C8D7C5" };
 }
 
 function getSubCategoryFlexStyle(subCategory) {
-  if (subCategory === "觀看課程影片") {
-    return {
-      backgroundColor: FLEX_COLORS.video,
-      textColor: FLEX_COLORS.videoText,
-    };
-  }
-
-  if (subCategory === "練習") {
-    return {
-      backgroundColor: FLEX_COLORS.practice,
-      textColor: FLEX_COLORS.practiceText,
-    };
-  }
-
-  if (subCategory === "寫筆記") {
-    return {
-      backgroundColor: FLEX_COLORS.note,
-      textColor: FLEX_COLORS.noteText,
-    };
-  }
-
-  return {
-    backgroundColor: FLEX_COLORS.uncategorized,
-    textColor: FLEX_COLORS.uncategorizedText,
-  };
+  if (subCategory === "觀看課程影片") return { backgroundColor: FLEX_COLORS.video, textColor: FLEX_COLORS.videoText };
+  if (subCategory === "練習") return { backgroundColor: FLEX_COLORS.practice, textColor: FLEX_COLORS.practiceText };
+  if (subCategory === "寫筆記") return { backgroundColor: FLEX_COLORS.note, textColor: FLEX_COLORS.noteText };
+  return { backgroundColor: FLEX_COLORS.uncategorized, textColor: FLEX_COLORS.uncategorizedText };
 }
 
 function getDifficultyFlexStyle(difficulty) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
 
   if (normalizedDifficulty === "簡單") {
-    return {
-      backgroundColor: "#DBF0D5",
-      textColor: "#315B35",
-      borderColor: "#C4DFC0",
-    };
+    return { backgroundColor: "#DBF0D5", textColor: "#315B35", borderColor: "#C4DFC0" };
   }
 
   if (normalizedDifficulty === "適中") {
-    return {
-      backgroundColor: "#F4E4C7",
-      textColor: "#6A4E21",
-      borderColor: "#E5CCA0",
-    };
+    return { backgroundColor: "#F4E4C7", textColor: "#6A4E21", borderColor: "#E5CCA0" };
   }
 
-  return {
-    backgroundColor: "#F0D8D2",
-    textColor: "#6B3932",
-    borderColor: "#DEBDB6",
-  };
+  return { backgroundColor: "#F0D8D2", textColor: "#6B3932", borderColor: "#DEBDB6" };
 }
 
 function getDifficultyAccentColor(difficulty) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
-
   if (normalizedDifficulty === "簡單") return FLEX_ACCENTS.easy;
   if (normalizedDifficulty === "適中") return FLEX_ACCENTS.medium;
-
   return FLEX_ACCENTS.hard;
 }
 
 function getDifficultyFooterCopy(difficulty, isCompleted) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
 
-  if (normalizedDifficulty === "簡單") {
-    return isCompleted ? "熱身完成，今天已經有動起來。" : "先熱身一下，本局不催跑。";
-  }
-
-  if (normalizedDifficulty === "適中") {
-    return isCompleted ? "穩穩辦完，本局予以記錄。" : "穩穩推進，不用開倍速。";
-  }
-
+  if (normalizedDifficulty === "簡單") return isCompleted ? "熱身完成，今天已經有動起來。" : "先熱身一下，本局不催跑。";
+  if (normalizedDifficulty === "適中") return isCompleted ? "穩穩辦完，本局予以記錄。" : "穩穩推進，不用開倍速。";
   return isCompleted ? "大案收妥，今天可以蓋一枚章。" : "大案也能小辦，不必硬闖。";
 }
 
@@ -696,15 +561,15 @@ function buildCategoryFlexTag(category, options = {}) {
   const style = getCategoryFlexStyle(category);
 
   return buildFlexTag(category, style.backgroundColor, style.textColor, {
-    width: options.width || "118px",
+    width: options.width || "104px",
     cornerRadius: "999px",
     size: "xs",
     weight: "bold",
     borderColor: style.borderColor,
     paddingTop: "5px",
     paddingBottom: "5px",
-    paddingStart: "8px",
-    paddingEnd: "8px",
+    paddingStart: "7px",
+    paddingEnd: "7px",
   });
 }
 
@@ -713,14 +578,14 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
   const displayLabel = getLineSubCategoryLabel(subCategory);
 
   return buildFlexTag(displayLabel, style.backgroundColor, style.textColor, {
-    width: options.width || "74px",
+    width: options.width || "64px",
     cornerRadius: "999px",
     size: "xxs",
     weight: "bold",
     paddingTop: "4px",
     paddingBottom: "4px",
-    paddingStart: "6px",
-    paddingEnd: "6px",
+    paddingStart: "5px",
+    paddingEnd: "5px",
   });
 }
 
@@ -731,16 +596,15 @@ function buildDifficultyFlexTag(difficulty, options = {}) {
     type: "box",
     layout: "horizontal",
     flex: 0,
-    width: options.width || "68px",
+    width: options.width || "58px",
     backgroundColor: style.backgroundColor,
     cornerRadius: "999px",
     borderColor: style.borderColor,
     borderWidth: "1px",
     paddingTop: "3px",
     paddingBottom: "3px",
-    paddingStart: "6px",
-    paddingEnd: "6px",
-    spacing: "xs",
+    paddingStart: "5px",
+    paddingEnd: "5px",
     contents: [
       {
         type: "text",
@@ -773,28 +637,9 @@ function buildFlexHeader(title, subtitle) {
     layout: "vertical",
     spacing: "xs",
     contents: [
-      {
-        type: "text",
-        text: FLEX_BRAND_NAME,
-        size: "sm",
-        color: FLEX_COLORS.darkGreen,
-        weight: "bold",
-      },
-      {
-        type: "text",
-        text: title,
-        size: "xl",
-        weight: "bold",
-        color: FLEX_COLORS.darkGreen,
-        wrap: true,
-      },
-      {
-        type: "text",
-        text: subtitle || FLEX_FIXED_LINE,
-        size: "sm",
-        color: FLEX_COLORS.mutedText,
-        wrap: true,
-      },
+      { type: "text", text: FLEX_BRAND_NAME, size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold" },
+      { type: "text", text: title, size: "xl", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true },
+      { type: "text", text: subtitle || FLEX_FIXED_LINE, size: "sm", color: FLEX_COLORS.mutedText, wrap: true },
     ],
   };
 }
@@ -819,32 +664,13 @@ function buildProgressLine(label, doneCount, totalCount) {
     layout: "horizontal",
     spacing: "sm",
     contents: [
-      {
-        type: "text",
-        text: label,
-        size: "sm",
-        color: FLEX_COLORS.mutedText,
-        flex: 0,
-      },
-      {
-        type: "text",
-        text: `${doneCount} / ${totalCount}`,
-        size: "sm",
-        color: FLEX_COLORS.darkGreen,
-        weight: "bold",
-        align: "end",
-      },
+      { type: "text", text: label, size: "sm", color: FLEX_COLORS.mutedText, flex: 0 },
+      { type: "text", text: `${doneCount} / ${totalCount}`, size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold", align: "end" },
     ],
   };
 }
 
-function buildTaskFlexRow({
-  task,
-  taskNumber,
-  showDifficulty,
-  showCategory,
-  showSubCategory = true,
-}) {
+function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, showSubCategory = true }) {
   const checkbox = task.done ? "☑" : "☐";
   const difficulty = normalizeDifficulty(task.difficulty);
   const category = normalizeCategory(task.category);
@@ -854,17 +680,16 @@ function buildTaskFlexRow({
   if (showCategory) {
     tagContents.push(
       buildCategoryFlexTag(category, {
-        width: isProgrammingTask ? "118px" : "154px",
+        width: isProgrammingTask ? "104px" : "132px",
       })
     );
   }
 
   if (showSubCategory && isProgrammingTask) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
-
     tagContents.push(
       buildSubCategoryFlexTag(subCategory, {
-        width: "74px",
+        width: "64px",
       })
     );
   }
@@ -872,7 +697,7 @@ function buildTaskFlexRow({
   if (showDifficulty) {
     tagContents.push(
       buildDifficultyFlexTag(difficulty, {
-        width: isProgrammingTask ? "68px" : "104px",
+        width: isProgrammingTask ? "58px" : "88px",
       })
     );
   }
@@ -881,7 +706,7 @@ function buildTaskFlexRow({
     {
       type: "text",
       text: `${taskNumber}. ${checkbox} ${task.title}`,
-      size: "sm",
+      size: task.done ? "sm" : "md",
       color: task.done ? "#8A7E6E" : FLEX_COLORS.darkGreen,
       wrap: true,
       weight: task.done ? "regular" : "bold",
@@ -902,7 +727,7 @@ function buildTaskFlexRow({
     type: "box",
     layout: "vertical",
     spacing: "xs",
-    paddingBottom: "10px",
+    paddingBottom: "12px",
     contents: rowContents,
   };
 }
@@ -950,33 +775,21 @@ function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, ac
   const contents = [
     buildAccentBar(accentColor),
     buildFlexHeader(title, subtitle),
-    {
-      type: "separator",
-      margin: "md",
-      color: FLEX_COLORS.beigeLine,
-    },
+    { type: "separator", margin: "md", color: FLEX_COLORS.beigeLine },
     ...bodyContents,
   ];
 
   if (footerContents) {
-    contents.push({
-      type: "separator",
-      margin: "md",
-      color: FLEX_COLORS.beigeLine,
-    });
+    contents.push({ type: "separator", margin: "md", color: FLEX_COLORS.beigeLine });
     contents.push(footerContents);
   }
 
   return {
     type: "bubble",
-    size: "giga",
+    size: "mega",
     styles: {
-      body: {
-        backgroundColor: FLEX_COLORS.cream,
-      },
-      footer: {
-        backgroundColor: FLEX_COLORS.cream,
-      },
+      body: { backgroundColor: FLEX_COLORS.cream },
+      footer: { backgroundColor: FLEX_COLORS.cream },
     },
     body: {
       type: "box",
@@ -1011,26 +824,24 @@ function buildTaskTagBox(task, showDifficulty) {
 
   tags.push(
     buildCategoryFlexTag(category, {
-      width: isProgrammingTask ? "118px" : "154px",
+      width: isProgrammingTask ? "104px" : "132px",
     })
   );
 
   if (isProgrammingTask) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
-
     tags.push(
       buildSubCategoryFlexTag(subCategory, {
-        width: "74px",
+        width: "64px",
       })
     );
   }
 
   if (showDifficulty) {
     const difficulty = normalizeDifficulty(task.difficulty);
-
     tags.push(
       buildDifficultyFlexTag(difficulty, {
-        width: isProgrammingTask ? "68px" : "104px",
+        width: isProgrammingTask ? "58px" : "88px",
       })
     );
   }
@@ -1052,33 +863,14 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
     bodyContents: [
       buildFlexInfoCard(
         [
-          {
-            type: "text",
-            text: `第 ${taskNumber} 個任務`,
-            size: "sm",
-            color: FLEX_COLORS.mutedText,
-            weight: "bold",
-          },
-          {
-            type: "text",
-            text: selectedTask.title,
-            size: "lg",
-            weight: "bold",
-            color: FLEX_COLORS.darkGreen,
-            wrap: true,
-          },
+          { type: "text", text: `第 ${taskNumber} 個任務`, size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
+          { type: "text", text: selectedTask.title, size: "lg", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true },
           buildTaskTagBox(selectedTask, true),
         ],
-        {
-          borderColor: "#E8C887",
-          backgroundColor: "#FFF8EA",
-        }
+        { borderColor: "#E8C887", backgroundColor: "#FFF8EA" }
       ),
     ],
-    footerContents: buildFlexFooterHint([
-      `做完可以輸入：完成任務${taskNumber}`,
-      "不用想太多，先開這一案。",
-    ]),
+    footerContents: buildFlexFooterHint([`做完可以輸入：完成任務${taskNumber}`, "不用想太多，先開這一案。"]),
   });
 
   return {
@@ -1107,38 +899,20 @@ async function handleDrawOneTaskCommand() {
   const taskNumber = board.tasks.findIndex((task) => task.id === selectedTask.id) + 1;
 
   return {
-    replyText: buildDrawOneTaskFallbackText({
-      selectedTask,
-      taskNumber,
-    }),
-    replyMessages: [
-      buildDrawOneTaskFlexMessage({
-        selectedTask,
-        taskNumber,
-      }),
-    ],
+    replyText: buildDrawOneTaskFallbackText({ selectedTask, taskNumber }),
+    replyMessages: [buildDrawOneTaskFlexMessage({ selectedTask, taskNumber })],
   };
 }
 
 function buildDifficultyTaskFooterLines(matchedTasks, difficulty) {
   const firstUnfinishedEntry = matchedTasks.find((entry) => !entry.task.done);
-
-  if (!firstUnfinishedEntry) {
-    return ["本區案件已辦理完畢", getDifficultyFooterCopy(difficulty, true)];
-  }
-
-  return [
-    `可直接輸入：完成任務${firstUnfinishedEntry.originalNumber}`,
-    getDifficultyFooterCopy(difficulty, false),
-  ];
+  if (!firstUnfinishedEntry) return ["本區案件已辦理完畢", getDifficultyFooterCopy(difficulty, true)];
+  return [`可直接輸入：完成任務${firstUnfinishedEntry.originalNumber}`, getDifficultyFooterCopy(difficulty, false)];
 }
 
 function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
   const matchedTasks = tasks
-    .map((task, index) => ({
-      task,
-      originalNumber: index + 1,
-    }))
+    .map((task, index) => ({ task, originalNumber: index + 1 }))
     .filter((entry) => normalizeDifficulty(entry.task.difficulty) === difficulty);
 
   const unfinishedCount = matchedTasks.filter((entry) => !entry.task.done).length;
@@ -1147,21 +921,8 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
   if (matchedTasks.length === 0) {
     bodyContents = [
       buildFlexInfoCard([
-        {
-          type: "text",
-          text: `目前沒有${difficulty}任務。`,
-          size: "md",
-          color: FLEX_COLORS.darkGreen,
-          weight: "bold",
-          wrap: true,
-        },
-        {
-          type: "text",
-          text: "沒有案件也無妨，先喝水，本局不追殺。",
-          size: "sm",
-          color: FLEX_COLORS.mutedText,
-          wrap: true,
-        },
+        { type: "text", text: `目前沒有${difficulty}任務。`, size: "md", color: FLEX_COLORS.darkGreen, weight: "bold", wrap: true },
+        { type: "text", text: "沒有案件也無妨，先喝水，本局不追殺。", size: "sm", color: FLEX_COLORS.mutedText, wrap: true },
       ]),
     ];
   } else {
@@ -1169,13 +930,7 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
 
     bodyContents = [
       buildFlexInfoCard([
-        {
-          type: "text",
-          text: `未完成：${unfinishedCount} 件`,
-          size: "sm",
-          color: FLEX_COLORS.mutedText,
-          weight: "bold",
-        },
+        { type: "text", text: `未完成：${unfinishedCount} 件`, size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
         ...limitedEntries.map((entry) =>
           buildTaskFlexRow({
             task: entry.task,
@@ -1223,21 +978,14 @@ async function handleDifficultyTaskFlexCommand(difficulty) {
 
   return {
     replyText: formatTasksByDifficultyForLine(tasks, difficulty),
-    replyMessages: [
-      buildDifficultyTaskListFlexMessage({
-        tasks,
-        difficulty,
-      }),
-    ],
+    replyMessages: [buildDifficultyTaskListFlexMessage({ tasks, difficulty })],
   };
 }
 
 function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   const taskDoneCount = tasks.filter((task) => task.done).length;
   const standardDoneCount = standards.filter((standard) => standard.done).length;
-  const weekTitle = currentWeek
-    ? `第${currentWeek.weekNumber}週｜${currentWeek.title}`
-    : "本週案件板";
+  const weekTitle = currentWeek ? `第${currentWeek.weekNumber}週｜${currentWeek.title}` : "本週案件板";
 
   const taskRows = tasks.slice(0, 8).map((task, index) =>
     buildTaskFlexRow({
@@ -1257,15 +1005,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
 
   const bodyContents = [
     buildFlexInfoCard([
-      {
-        type: "text",
-        text: weekTitle,
-        size: "xs",
-        color: FLEX_COLORS.mutedText,
-        weight: "bold",
-        wrap: false,
-        maxLines: 1,
-      },
+      { type: "text", text: weekTitle, size: "xs", color: FLEX_COLORS.mutedText, weight: "bold", wrap: false, maxLines: 1 },
       buildProgressLine("任務進度", taskDoneCount, tasks.length),
       buildProgressLine("標準進度", standardDoneCount, standards.length),
     ]),
@@ -1274,33 +1014,14 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   if (tasks.length === 0) {
     bodyContents.push(
       buildFlexInfoCard([
-        {
-          type: "text",
-          text: "本週任務尚未立案。",
-          size: "md",
-          color: FLEX_COLORS.darkGreen,
-          weight: "bold",
-          wrap: true,
-        },
-        {
-          type: "text",
-          text: "放一個小任務，就是好的開始。",
-          size: "sm",
-          color: FLEX_COLORS.mutedText,
-          wrap: true,
-        },
+        { type: "text", text: "本週任務尚未立案。", size: "md", color: FLEX_COLORS.darkGreen, weight: "bold", wrap: true },
+        { type: "text", text: "放一個小任務，就是好的開始。", size: "sm", color: FLEX_COLORS.mutedText, wrap: true },
       ])
     );
   } else {
     bodyContents.push(
       buildFlexInfoCard([
-        {
-          type: "text",
-          text: "本週任務",
-          size: "sm",
-          color: FLEX_COLORS.mutedText,
-          weight: "bold",
-        },
+        { type: "text", text: "本週任務", size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
         ...taskRows,
         ...(tasks.length > taskRows.length
           ? [
@@ -1320,33 +1041,14 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   if (standards.length === 0) {
     bodyContents.push(
       buildFlexInfoCard([
-        {
-          type: "text",
-          text: "本週驗收標準尚未成文。",
-          size: "sm",
-          color: FLEX_COLORS.darkGreen,
-          weight: "bold",
-          wrap: true,
-        },
-        {
-          type: "text",
-          text: "寫下一個方向，慢慢前進。",
-          size: "xs",
-          color: FLEX_COLORS.mutedText,
-          wrap: true,
-        },
+        { type: "text", text: "本週驗收標準尚未成文。", size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold", wrap: true },
+        { type: "text", text: "寫下一個方向，慢慢前進。", size: "xs", color: FLEX_COLORS.mutedText, wrap: true },
       ])
     );
   } else {
     bodyContents.push(
       buildFlexInfoCard([
-        {
-          type: "text",
-          text: "本週驗收標準",
-          size: "sm",
-          color: FLEX_COLORS.mutedText,
-          weight: "bold",
-        },
+        { type: "text", text: "本週驗收標準", size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
         ...standardRows,
         ...(standards.length > standardRows.length
           ? [
@@ -1368,10 +1070,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     subtitle: FLEX_FIXED_LINE,
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
-    footerContents: buildFlexFooterHint([
-      "案件都在這裡，今天先辦一小件。",
-      "需要操作說明請輸入：攻略",
-    ]),
+    footerContents: buildFlexFooterHint(["案件都在這裡，今天先辦一小件。", "需要操作說明請輸入：攻略"]),
   });
 
   return {
@@ -1398,29 +1097,18 @@ function buildLineTextMessage(text) {
 }
 
 function getFallbackTextFromReplyMessages(replyMessages) {
-  const textMessage = replyMessages.find(
-    (message) => message && message.type === "text" && message.text
-  );
-
+  const textMessage = replyMessages.find((message) => message && message.type === "text" && message.text);
   if (textMessage) return textMessage.text;
 
-  const flexMessage = replyMessages.find(
-    (message) => message && message.type === "flex" && message.altText
-  );
-
+  const flexMessage = replyMessages.find((message) => message && message.type === "flex" && message.altText);
   if (flexMessage) return flexMessage.altText;
 
   return "Tiny Progress 已回覆。";
 }
 
 function normalizeLineReplyResult(replyResult) {
-  if (
-    replyResult &&
-    typeof replyResult === "object" &&
-    Array.isArray(replyResult.replyMessages)
-  ) {
+  if (replyResult && typeof replyResult === "object" && Array.isArray(replyResult.replyMessages)) {
     const replyMessages = replyResult.replyMessages;
-
     return {
       replyText: replyResult.replyText || getFallbackTextFromReplyMessages(replyMessages),
       replyMessages,
@@ -1435,7 +1123,6 @@ function normalizeLineReplyResult(replyResult) {
   }
 
   const replyText = String(replyResult || "Tiny Progress 目前沒有可回覆的內容。");
-
   return {
     replyText,
     replyMessages: [buildLineTextMessage(replyText)],
@@ -1517,7 +1204,6 @@ function getUsageText() {
 
 async function handlePendingActionIfNeeded(sourceKey, userText) {
   const pending = pendingActions.get(sourceKey);
-
   if (!pending) return null;
 
   const displayLabel = getDisplayLabel(pending.label);
@@ -1529,32 +1215,16 @@ async function handlePendingActionIfNeeded(sourceKey, userText) {
 
   if (Date.now() - pending.createdAt > PENDING_ACTION_TTL_MS) {
     pendingActions.delete(sourceKey);
-
-    return [
-      "這次修訂已經逾時，本局未更動資料。",
-      "",
-      `可以重新輸入：修改${pending.label} 數字`,
-    ].join("\n");
+    return ["這次修訂已經逾時，本局未更動資料。", "", `可以重新輸入：修改${pending.label} 數字`].join("\n");
   }
 
   const newTitle = userText.trim();
+  if (!newTitle) return `請輸入新的${displayLabel}文字，或輸入「取消修改」。`;
 
-  if (!newTitle) {
-    return `請輸入新的${displayLabel}文字，或輸入「取消修改」。`;
-  }
-
-  const updatedItem = await updateItemToGoogleSheets(pending.itemId, {
-    title: newTitle,
-  });
-
+  const updatedItem = await updateItemToGoogleSheets(pending.itemId, { title: newTitle });
   pendingActions.delete(sourceKey);
 
-  return [
-    `已修訂第 ${pending.itemNumber} 個${displayLabel}：`,
-    updatedItem.title || newTitle,
-    "",
-    "本局已更新公文內容。",
-  ].join("\n");
+  return [`已修訂第 ${pending.itemNumber} 個${displayLabel}：`, updatedItem.title || newTitle, "", "本局已更新公文內容。"].join("\n");
 }
 
 function parseCreateText({ userText, command }) {
@@ -1592,28 +1262,15 @@ function parseCreateText({ userText, command }) {
     difficulty = parts[2] || DEFAULT_DIFFICULTY;
   }
 
-  return {
-    title,
-    category,
-    subCategory,
-    difficulty,
-  };
+  return { title, category, subCategory, difficulty };
 }
 
 async function handleCreateCommand({ userText, command, type, label, example }) {
-  const parsed = parseCreateText({
-    userText,
-    command,
-  });
-
+  const parsed = parseCreateText({ userText, command });
   const displayLabel = getDisplayLabel(label);
 
   if (!parsed.title) {
-    return [
-      `這份立案公文還缺少${displayLabel}內容，本局未更動資料。`,
-      "",
-      `例：${command} ${example}`,
-    ].join("\n");
+    return [`這份立案公文還缺少${displayLabel}內容，本局未更動資料。`, "", `例：${command} ${example}`].join("\n");
   }
 
   let category;
@@ -1625,17 +1282,10 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
     subCategory = normalizeSubCategory(parsed.subCategory, category);
     difficulty = normalizeDifficulty(parsed.difficulty);
   } catch (error) {
-    return [
-      "分類、子分類或難度需要補正，本局未更動資料。",
-      "",
-      error.message,
-      "",
-      "例：新增任務 練習 CSS｜程式學習｜練習｜適中",
-    ].join("\n");
+    return ["分類、子分類或難度需要補正，本局未更動資料。", "", error.message, "", "例：新增任務 練習 CSS｜程式學習｜練習｜適中"].join("\n");
   }
 
   const currentWeekNumber = await getCurrentWeekNumberFromGoogleSheets();
-
   const createdItem = await createItemToGoogleSheets({
     type,
     title: parsed.title,
@@ -1658,12 +1308,7 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
     ].join("\n");
   }
 
-  return [
-    "Tiny Progress 已新增本週驗收標準：",
-    `☐ ${createdItem.title || parsed.title}`,
-    "",
-    "可以輸入「清單」查看目前案件板。",
-  ].join("\n");
+  return ["Tiny Progress 已新增本週驗收標準：", `☐ ${createdItem.title || parsed.title}`, "", "可以輸入「清單」查看目前案件板。"].join("\n");
 }
 
 async function findItemByNumber({ type, numberText, label }) {
@@ -1672,13 +1317,7 @@ async function findItemByNumber({ type, numberText, label }) {
 
   if (!Number.isInteger(itemNumber) || itemNumber <= 0) {
     return {
-      error: [
-        `這份公文還缺少正確的${displayLabel}編號，本局未更動資料。`,
-        "",
-        "可以這樣輸入：",
-        `完成${label}3`,
-        `完成第三個${label}`,
-      ].join("\n"),
+      error: [`這份公文還缺少正確的${displayLabel}編號，本局未更動資料。`, "", "可以這樣輸入：", `完成${label}3`, `完成第三個${label}`].join("\n"),
     };
   }
 
@@ -1687,88 +1326,44 @@ async function findItemByNumber({ type, numberText, label }) {
 
   if (!targetItem) {
     return {
-      error: [
-        `本局目前查無第 ${itemNumber} 個${displayLabel}。`,
-        "",
-        "可以先輸入「清單」確認編號。",
-      ].join("\n"),
+      error: [`本局目前查無第 ${itemNumber} 個${displayLabel}。`, "", "可以先輸入「清單」確認編號。"].join("\n"),
     };
   }
 
-  return {
-    itemNumber,
-    item: targetItem,
-    items,
-  };
+  return { itemNumber, item: targetItem, items };
 }
 
 async function handleDoneCommand({ numberText, type, label, done }) {
-  const result = await findItemByNumber({
-    type,
-    numberText,
-    label,
-  });
-
+  const result = await findItemByNumber({ type, numberText, label });
   if (result.error) return result.error;
 
-  const updatedItem = await updateItemToGoogleSheets(result.item.id, {
-    done,
-  });
-
+  const updatedItem = await updateItemToGoogleSheets(result.item.id, { done });
   const checkbox = done ? "☑" : "☐";
   const actionText = done ? "已辦理" : "已撤回辦理";
   const displayLabel = getDisplayLabel(label);
 
-  return [
-    `${actionText}第 ${result.itemNumber} 個${displayLabel}：`,
-    `${checkbox} ${updatedItem.title || result.item.title}`,
-    "",
-    "小小前進，也算數。",
-  ].join("\n");
+  return [`${actionText}第 ${result.itemNumber} 個${displayLabel}：`, `${checkbox} ${updatedItem.title || result.item.title}`, "", "小小前進，也算數。"].join("\n");
 }
 
 async function handleDeleteCommand({ numberText, type, label }) {
-  const result = await findItemByNumber({
-    type,
-    numberText,
-    label,
-  });
-
+  const result = await findItemByNumber({ type, numberText, label });
   if (result.error) return result.error;
 
   const deletedItem = await deleteItemFromGoogleSheets(result.item.id);
   const displayLabel = getDisplayLabel(label);
 
-  return [
-    `已撤案第 ${result.itemNumber} 個${displayLabel}：`,
-    deletedItem.title || result.item.title,
-    "",
-    "本局已更新案件板。",
-  ].join("\n");
+  return [`已撤案第 ${result.itemNumber} 個${displayLabel}：`, deletedItem.title || result.item.title, "", "本局已更新案件板。"].join("\n");
 }
 
 async function handleEditCommand({ sourceKey, numberText, newTitle, type, label }) {
-  const result = await findItemByNumber({
-    type,
-    numberText,
-    label,
-  });
-
+  const result = await findItemByNumber({ type, numberText, label });
   if (result.error) return result.error;
 
   const displayLabel = getDisplayLabel(label);
 
   if (newTitle && newTitle.trim()) {
-    const updatedItem = await updateItemToGoogleSheets(result.item.id, {
-      title: newTitle.trim(),
-    });
-
-    return [
-      `已修訂第 ${result.itemNumber} 個${displayLabel}：`,
-      updatedItem.title || newTitle.trim(),
-      "",
-      "本局已更新公文內容。",
-    ].join("\n");
+    const updatedItem = await updateItemToGoogleSheets(result.item.id, { title: newTitle.trim() });
+    return [`已修訂第 ${result.itemNumber} 個${displayLabel}：`, updatedItem.title || newTitle.trim(), "", "本局已更新公文內容。"].join("\n");
   }
 
   pendingActions.set(sourceKey, {
@@ -1781,44 +1376,22 @@ async function handleEditCommand({ sourceKey, numberText, newTitle, type, label 
     createdAt: Date.now(),
   });
 
-  return [
-    `請輸入第 ${result.itemNumber} 個${displayLabel}的新文字：`,
-    "",
-    `目前內容：${result.item.title}`,
-    "",
-    "若不想修訂，請輸入：取消修改",
-  ].join("\n");
+  return [`請輸入第 ${result.itemNumber} 個${displayLabel}的新文字：`, "", `目前內容：${result.item.title}`, "", "若不想修訂，請輸入：取消修改"].join("\n");
 }
 
 function parseFlexibleNumber(numberText) {
   const text = String(numberText || "").trim().replace(/兩/g, "二");
-
   if (/^\d+$/.test(text)) return Number(text);
 
-  const digitMap = {
-    零: 0,
-    一: 1,
-    二: 2,
-    三: 3,
-    四: 4,
-    五: 5,
-    六: 6,
-    七: 7,
-    八: 8,
-    九: 9,
-  };
+  const digitMap = { 零: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
 
-  if (text.length === 1 && digitMap[text] !== undefined) {
-    return digitMap[text];
-  }
+  if (text.length === 1 && digitMap[text] !== undefined) return digitMap[text];
 
   if (text.includes("十")) {
     const parts = text.split("十");
     const tens = parts[0] === "" ? 1 : digitMap[parts[0]];
     const ones = parts[1] === "" ? 0 : digitMap[parts[1]];
-
     if (tens === undefined || ones === undefined) return null;
-
     return tens * 10 + ones;
   }
 
@@ -1829,20 +1402,11 @@ function buildLineOperationCommand(actionText, targetText, numberText, newTitle)
   const number = parseFlexibleNumber(numberText);
 
   if (!Number.isInteger(number) || number <= 0) {
-    return {
-      error: "這份公文還缺少正確編號，本局未更動資料。可以這樣輸入：完成第 3 個任務",
-    };
+    return { error: "這份公文還缺少正確編號，本局未更動資料。可以這樣輸入：完成第 3 個任務" };
   }
 
   const isTask = targetText.includes("任務");
-
-  const actionMap = {
-    完成: "done",
-    已完成: "done",
-    取消: "cancel",
-    修改: "edit",
-    刪除: "delete",
-  };
+  const actionMap = { 完成: "done", 已完成: "done", 取消: "cancel", 修改: "edit", 刪除: "delete" };
 
   return {
     action: actionMap[actionText],
@@ -1854,21 +1418,11 @@ function buildLineOperationCommand(actionText, targetText, numberText, newTitle)
 }
 
 function parseLineOperationCommand(userText) {
-  let match = userText.match(
-    /^(完成|已完成|取消|修改|刪除)\s*(任務|完成標準|標準)\s*(\d+|[零一二三四五六七八九十兩]+)(?:\s+(.+))?$/
-  );
+  let match = userText.match(/^(完成|已完成|取消|修改|刪除)\s*(任務|完成標準|標準)\s*(\d+|[零一二三四五六七八九十兩]+)(?:\s+(.+))?$/);
+  if (match) return buildLineOperationCommand(match[1], match[2], match[3], match[4]);
 
-  if (match) {
-    return buildLineOperationCommand(match[1], match[2], match[3], match[4]);
-  }
-
-  match = userText.match(
-    /^(完成|已完成|取消|修改|刪除)\s*第?\s*(\d+|[零一二三四五六七八九十兩]+)\s*個?\s*(任務|完成標準|標準)(?:\s+(.+))?$/
-  );
-
-  if (match) {
-    return buildLineOperationCommand(match[1], match[3], match[2], match[4]);
-  }
+  match = userText.match(/^(完成|已完成|取消|修改|刪除)\s*第?\s*(\d+|[零一二三四五六七八九十兩]+)\s*個?\s*(任務|完成標準|標準)(?:\s+(.+))?$/);
+  if (match) return buildLineOperationCommand(match[1], match[3], match[2], match[4]);
 
   return null;
 }
@@ -1904,14 +1458,11 @@ function getUnknownCommandText() {
 
 async function handleLineTextCommand({ sourceKey, userText }) {
   const pendingReply = await handlePendingActionIfNeeded(sourceKey, userText);
-
   if (pendingReply) return pendingReply;
 
   if (["攻略", "說明", "help", "Help"].includes(userText)) return getGuideText();
   if (["用量", "用量小抄", "訊息用量"].includes(userText)) return getUsageText();
-  if (["抽一件", "抽任務", "隨機任務", "今天做什麼"].includes(userText)) {
-    return handleDrawOneTaskCommand();
-  }
+  if (["抽一件", "抽任務", "隨機任務", "今天做什麼"].includes(userText)) return handleDrawOneTaskCommand();
 
   if (userText === "清單" || userText === "全部清單") return handleAllListFlexCommand();
   if (userText === "簡單任務" || userText === "簡單") return handleDifficultyTaskFlexCommand("簡單");
@@ -1919,95 +1470,33 @@ async function handleLineTextCommand({ sourceKey, userText }) {
   if (userText === "困難任務" || userText === "困難") return handleDifficultyTaskFlexCommand("困難");
 
   if (userText.startsWith("新增一個任務")) {
-    return handleCreateCommand({
-      userText,
-      command: "新增一個任務",
-      type: "task",
-      label: "任務",
-      example: "練習 LINE Bot",
-    });
+    return handleCreateCommand({ userText, command: "新增一個任務", type: "task", label: "任務", example: "練習 LINE Bot" });
   }
 
   if (userText.startsWith("新增任務")) {
-    return handleCreateCommand({
-      userText,
-      command: "新增任務",
-      type: "task",
-      label: "任務",
-      example: "練習 LINE Bot",
-    });
+    return handleCreateCommand({ userText, command: "新增任務", type: "task", label: "任務", example: "練習 LINE Bot" });
   }
 
   if (userText.startsWith("新增一個完成標準")) {
-    return handleCreateCommand({
-      userText,
-      command: "新增一個完成標準",
-      type: "standard",
-      label: "完成標準",
-      example: "本週能說明一個學到的觀念",
-    });
+    return handleCreateCommand({ userText, command: "新增一個完成標準", type: "standard", label: "完成標準", example: "本週能說明一個學到的觀念" });
   }
 
   if (userText.startsWith("新增一個標準")) {
-    return handleCreateCommand({
-      userText,
-      command: "新增一個標準",
-      type: "standard",
-      label: "完成標準",
-      example: "本週能說明一個學到的觀念",
-    });
+    return handleCreateCommand({ userText, command: "新增一個標準", type: "standard", label: "完成標準", example: "本週能說明一個學到的觀念" });
   }
 
   if (userText.startsWith("新增標準")) {
-    return handleCreateCommand({
-      userText,
-      command: "新增標準",
-      type: "standard",
-      label: "完成標準",
-      example: "本週能說明一個學到的觀念",
-    });
+    return handleCreateCommand({ userText, command: "新增標準", type: "standard", label: "完成標準", example: "本週能說明一個學到的觀念" });
   }
 
   const operation = parseLineOperationCommand(userText);
 
   if (operation) {
     if (operation.error) return operation.error;
-
-    if (operation.action === "done") {
-      return handleDoneCommand({
-        numberText: operation.numberText,
-        type: operation.type,
-        label: operation.label,
-        done: true,
-      });
-    }
-
-    if (operation.action === "cancel") {
-      return handleDoneCommand({
-        numberText: operation.numberText,
-        type: operation.type,
-        label: operation.label,
-        done: false,
-      });
-    }
-
-    if (operation.action === "edit") {
-      return handleEditCommand({
-        sourceKey,
-        numberText: operation.numberText,
-        newTitle: operation.newTitle,
-        type: operation.type,
-        label: operation.label,
-      });
-    }
-
-    if (operation.action === "delete") {
-      return handleDeleteCommand({
-        numberText: operation.numberText,
-        type: operation.type,
-        label: operation.label,
-      });
-    }
+    if (operation.action === "done") return handleDoneCommand({ numberText: operation.numberText, type: operation.type, label: operation.label, done: true });
+    if (operation.action === "cancel") return handleDoneCommand({ numberText: operation.numberText, type: operation.type, label: operation.label, done: false });
+    if (operation.action === "edit") return handleEditCommand({ sourceKey, numberText: operation.numberText, newTitle: operation.newTitle, type: operation.type, label: operation.label });
+    if (operation.action === "delete") return handleDeleteCommand({ numberText: operation.numberText, type: operation.type, label: operation.label });
   }
 
   if (["完成", "已完成", "取消", "修改", "刪除", "新增"].some((prefix) => userText.startsWith(prefix))) {
@@ -2025,41 +1514,14 @@ app.post("/gas-queue", async (req, res) => {
   try {
     const { source, queueId, userId, messageText } = req.body || {};
 
-    if (source !== "gas_queue") {
-      return res.status(400).json({
-        ok: false,
-        message: "source 必須是 gas_queue",
-      });
-    }
-
-    if (!queueId) {
-      return res.status(400).json({
-        ok: false,
-        message: "缺少 queueId",
-      });
-    }
-
-    if (!userId) {
-      return res.status(400).json({
-        ok: false,
-        message: "缺少 userId",
-      });
-    }
+    if (source !== "gas_queue") return res.status(400).json({ ok: false, message: "source 必須是 gas_queue" });
+    if (!queueId) return res.status(400).json({ ok: false, message: "缺少 queueId" });
+    if (!userId) return res.status(400).json({ ok: false, message: "缺少 userId" });
 
     const userText = String(messageText || "").trim();
+    if (!userText) return res.status(400).json({ ok: false, message: "缺少 messageText" });
 
-    if (!userText) {
-      return res.status(400).json({
-        ok: false,
-        message: "缺少 messageText",
-      });
-    }
-
-    const replyResult = await handleLineTextCommand({
-      sourceKey: String(userId).trim(),
-      userText,
-    });
-
+    const replyResult = await handleLineTextCommand({ sourceKey: String(userId).trim(), userText });
     const normalizedReply = normalizeLineReplyResult(replyResult);
 
     return res.json({
@@ -2070,12 +1532,7 @@ app.post("/gas-queue", async (req, res) => {
     });
   } catch (error) {
     console.error("處理 /gas-queue 發生錯誤：", error);
-
-    return res.status(500).json({
-      ok: false,
-      message: "處理 GAS queue 訊息失敗",
-      error: error.message,
-    });
+    return res.status(500).json({ ok: false, message: "處理 GAS queue 訊息失敗", error: error.message });
   }
 });
 
@@ -2088,20 +1545,14 @@ app.post("/line/webhook", async (req, res) => {
 
       const sourceKey = getLineSourceKey(event);
       const userText = event.message.text.trim();
-      const replyResult = await handleLineTextCommand({
-        sourceKey,
-        userText,
-      });
+      const replyResult = await handleLineTextCommand({ sourceKey, userText });
 
       await replyToLine(event.replyToken, replyResult);
     } catch (error) {
       console.error("處理 LINE Webhook 發生錯誤：", error);
 
       if (event.replyToken) {
-        await replyToLine(
-          event.replyToken,
-          "管理局小櫃台剛剛卡住了，本局未更動資料。請稍後再試一次。"
-        );
+        await replyToLine(event.replyToken, "管理局小櫃台剛剛卡住了，本局未更動資料。請稍後再試一次。");
       }
     }
   }
@@ -2114,11 +1565,7 @@ app.get("/week-context", async (req, res) => {
     res.json(await fetchWeekContextFromGoogleSheets());
   } catch (error) {
     console.error("GET /week-context 讀取週次資料發生錯誤：", error);
-
-    res.status(500).json({
-      message: "讀取週次資料失敗",
-      error: error.message,
-    });
+    res.status(500).json({ message: "讀取週次資料失敗", error: error.message });
   }
 });
 
@@ -2134,11 +1581,7 @@ app.post("/weeks/complete-current", async (req, res) => {
     });
   } catch (error) {
     console.error("POST /weeks/complete-current 發生錯誤：", error);
-
-    res.status(500).json({
-      message: "本週結案失敗",
-      error: error.message,
-    });
+    res.status(500).json({ message: "本週結案失敗", error: error.message });
   }
 });
 
@@ -2147,11 +1590,7 @@ app.get("/items", async (req, res) => {
     res.json(await fetchItemsFromGoogleSheets());
   } catch (error) {
     console.error("GET /items 讀取 Google Sheets 發生錯誤：", error);
-
-    res.status(500).json({
-      message: "讀取 Google Sheets 資料失敗",
-      error: error.message,
-    });
+    res.status(500).json({ message: "讀取 Google Sheets 資料失敗", error: error.message });
   }
 });
 
@@ -2159,35 +1598,14 @@ app.post("/items", async (req, res) => {
   try {
     const { type, title, category, subCategory, difficulty, weekNumber } = req.body;
 
-    if (!type || !title) {
-      return res.status(400).json({
-        message: "type 和 title 都是必填",
-      });
-    }
+    if (!type || !title) return res.status(400).json({ message: "type 和 title 都是必填" });
+    if (type !== "task" && type !== "standard") return res.status(400).json({ message: "type 只能是 task 或 standard" });
 
-    if (type !== "task" && type !== "standard") {
-      return res.status(400).json({
-        message: "type 只能是 task 或 standard",
-      });
-    }
-
-    const createdItem = await createItemToGoogleSheets({
-      type,
-      title,
-      category,
-      subCategory,
-      difficulty,
-      weekNumber,
-    });
-
+    const createdItem = await createItemToGoogleSheets({ type, title, category, subCategory, difficulty, weekNumber });
     res.status(201).json(createdItem);
   } catch (error) {
     console.error("POST /items 新增 Google Sheets 發生錯誤：", error);
-
-    res.status(500).json({
-      message: "新增資料到 Google Sheets 失敗",
-      error: error.message,
-    });
+    res.status(500).json({ message: "新增資料到 Google Sheets 失敗", error: error.message });
   }
 });
 
@@ -2195,7 +1613,6 @@ app.patch("/items/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { title, done, category, subCategory, difficulty, weekNumber } = req.body;
-
     const updates = {};
 
     if (title !== undefined) updates.title = title;
@@ -2205,20 +1622,12 @@ app.patch("/items/:id", async (req, res) => {
     if (difficulty !== undefined) updates.difficulty = difficulty;
     if (weekNumber !== undefined) updates.weekNumber = weekNumber;
 
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({
-        message: "沒有收到要更新的欄位",
-      });
-    }
+    if (Object.keys(updates).length === 0) return res.status(400).json({ message: "沒有收到要更新的欄位" });
 
     res.json(await updateItemToGoogleSheets(id, updates));
   } catch (error) {
     console.error("PATCH /items/:id 更新 Google Sheets 發生錯誤：", error);
-
-    res.status(500).json({
-      message: "更新資料到 Google Sheets 失敗",
-      error: error.message,
-    });
+    res.status(500).json({ message: "更新資料到 Google Sheets 失敗", error: error.message });
   }
 });
 
@@ -2234,11 +1643,7 @@ app.delete("/items/:id", async (req, res) => {
     });
   } catch (error) {
     console.error("DELETE /items/:id 刪除 Google Sheets 發生錯誤：", error);
-
-    res.status(500).json({
-      message: "刪除 Google Sheets 資料失敗",
-      error: error.message,
-    });
+    res.status(500).json({ message: "刪除 Google Sheets 資料失敗", error: error.message });
   }
 });
 
