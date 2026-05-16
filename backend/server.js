@@ -475,21 +475,25 @@ function buildFlexTag(label, backgroundColor, textColor, options = {}) {
 
 function buildCategoryFlexTag(category) {
   const style = getCategoryFlexStyle(category);
+
   return buildFlexTag(category, style.backgroundColor, style.textColor, {
-    cornerRadius: "8px",
-    size: "xxs",
-    weight: "regular",
+    // 大分類：最大、最明顯，像主標籤
+    cornerRadius: "10px",
+    size: "sm",
+    weight: "bold",
     borderColor: style.borderColor,
-    paddingTop: "5px",
-    paddingBottom: "5px",
-    paddingStart: "9px",
-    paddingEnd: "9px",
+    paddingTop: "6px",
+    paddingBottom: "6px",
+    paddingStart: "12px",
+    paddingEnd: "12px",
   });
 }
 
 function buildSubCategoryFlexTag(subCategory) {
   const style = getSubCategoryFlexStyle(subCategory);
+
   return buildFlexTag(subCategory, style.backgroundColor, style.textColor, {
+    // 子分類：比大分類小一點，但保留彩色識別
     cornerRadius: "999px",
     size: "xs",
     weight: "bold",
@@ -513,10 +517,11 @@ function buildDifficultyFlexTag(difficulty) {
     paddingTop: "4px",
     paddingBottom: "4px",
     paddingStart: "6px",
-    paddingEnd: "9px",
+    paddingEnd: "8px",
     spacing: "xs",
     contents: [
       {
+        // 難度：用左側色條當識別，不搶主標籤戲份
         type: "box",
         layout: "vertical",
         width: "3px",
