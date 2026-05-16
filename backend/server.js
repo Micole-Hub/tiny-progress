@@ -386,12 +386,12 @@ const FLEX_COLORS = {
   mutedText: "#7A6E5F",
   red: "#B85F4B",
   gold: "#D8A85F",
-  programming: "#507592",
-  programmingText: "#FFFDF7",
-  wellness: "#8A6F7F",
-  wellnessText: "#FFFDF7",
-  interest: "#B9854A",
-  interestText: "#FFFDF7",
+  programming: "#E7EDF3",
+  programmingText: "#45637A",
+  wellness: "#EFE7EA",
+  wellnessText: "#7A5D69",
+  interest: "#F0E4D5",
+  interestText: "#8A5F32",
   video: "#6F7FA8",
   videoText: "#FFFDF7",
   practice: "#6E9B72",
@@ -413,10 +413,10 @@ const FLEX_ACCENTS = {
 function getCategoryFlexStyle(category) {
   const normalizedCategory = normalizeCategory(category);
 
-  if (normalizedCategory === "程式學習") return { backgroundColor: FLEX_COLORS.programming, textColor: FLEX_COLORS.programmingText };
-  if (normalizedCategory === "身心穩定") return { backgroundColor: FLEX_COLORS.wellness, textColor: FLEX_COLORS.wellnessText };
-  if (normalizedCategory === "興趣探索") return { backgroundColor: FLEX_COLORS.interest, textColor: FLEX_COLORS.interestText };
-  return { backgroundColor: "#DFE9DD", textColor: "#36533F" };
+  if (normalizedCategory === "程式學習") return { backgroundColor: FLEX_COLORS.programming, textColor: FLEX_COLORS.programmingText, borderColor: "#CBD8E2" };
+  if (normalizedCategory === "身心穩定") return { backgroundColor: FLEX_COLORS.wellness, textColor: FLEX_COLORS.wellnessText, borderColor: "#DDCCD3" };
+  if (normalizedCategory === "興趣探索") return { backgroundColor: FLEX_COLORS.interest, textColor: FLEX_COLORS.interestText, borderColor: "#DFC9AD" };
+  return { backgroundColor: "#DFE9DD", textColor: "#36533F", borderColor: "#C8D7C5" };
 }
 
 function getSubCategoryFlexStyle(subCategory) {
@@ -428,9 +428,9 @@ function getSubCategoryFlexStyle(subCategory) {
 
 function getDifficultyFlexStyle(difficulty) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
-  if (normalizedDifficulty === "簡單") return { backgroundColor: "#DBF0D5", textColor: "#315B35" };
-  if (normalizedDifficulty === "適中") return { backgroundColor: "#F4E4C7", textColor: "#6A4E21" };
-  return { backgroundColor: "#F0D8D2", textColor: "#6B3932" };
+  if (normalizedDifficulty === "簡單") return { backgroundColor: "#EAF3E5", textColor: "#607855", borderColor: "#C9DDC0" };
+  if (normalizedDifficulty === "適中") return { backgroundColor: "#F5E8CF", textColor: "#8A5A28", borderColor: "#E4CB9D" };
+  return { backgroundColor: "#F1DFDA", textColor: "#9D5245", borderColor: "#DCB8AF" };
 }
 
 function getDifficultyAccentColor(difficulty) {
@@ -448,17 +448,92 @@ function getDifficultyFooterCopy(difficulty, isCompleted) {
   return isCompleted ? "大案收妥，今天可以蓋一枚章。" : "大案也能小辦，不必硬闖。";
 }
 
-function buildFlexTag(label, backgroundColor, textColor) {
+function buildFlexTag(label, backgroundColor, textColor, options = {}) {
   return {
     type: "box",
     layout: "vertical",
     backgroundColor,
-    cornerRadius: "999px",
+    cornerRadius: options.cornerRadius || "999px",
+    paddingTop: options.paddingTop || "5px",
+    paddingBottom: options.paddingBottom || "5px",
+    paddingStart: options.paddingStart || "9px",
+    paddingEnd: options.paddingEnd || "9px",
+    borderColor: options.borderColor,
+    borderWidth: options.borderColor ? "1px" : undefined,
+    contents: [
+      {
+        type: "text",
+        text: label,
+        size: options.size || "xs",
+        weight: options.weight || "bold",
+        color: textColor,
+        align: "center",
+      },
+    ],
+  };
+}
+
+function buildCategoryFlexTag(category) {
+  const style = getCategoryFlexStyle(category);
+  return buildFlexTag(category, style.backgroundColor, style.textColor, {
+    cornerRadius: "8px",
+    size: "xxs",
+    weight: "regular",
+    borderColor: style.borderColor,
     paddingTop: "5px",
     paddingBottom: "5px",
     paddingStart: "9px",
     paddingEnd: "9px",
-    contents: [{ type: "text", text: label, size: "xs", weight: "bold", color: textColor, align: "center" }],
+  });
+}
+
+function buildSubCategoryFlexTag(subCategory) {
+  const style = getSubCategoryFlexStyle(subCategory);
+  return buildFlexTag(subCategory, style.backgroundColor, style.textColor, {
+    cornerRadius: "999px",
+    size: "xs",
+    weight: "bold",
+    paddingTop: "5px",
+    paddingBottom: "5px",
+    paddingStart: "10px",
+    paddingEnd: "10px",
+  });
+}
+
+function buildDifficultyFlexTag(difficulty) {
+  const style = getDifficultyFlexStyle(difficulty);
+
+  return {
+    type: "box",
+    layout: "horizontal",
+    backgroundColor: style.backgroundColor,
+    cornerRadius: "8px",
+    borderColor: style.borderColor,
+    borderWidth: "1px",
+    paddingTop: "4px",
+    paddingBottom: "4px",
+    paddingStart: "6px",
+    paddingEnd: "9px",
+    spacing: "xs",
+    contents: [
+      {
+        type: "box",
+        layout: "vertical",
+        width: "3px",
+        backgroundColor: style.textColor,
+        cornerRadius: "999px",
+        contents: [],
+      },
+      {
+        type: "text",
+        text: difficulty,
+        size: "xxs",
+        weight: "bold",
+        color: style.textColor,
+        align: "center",
+        flex: 0,
+      },
+    ],
   };
 }
 
@@ -512,19 +587,16 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
   const tagContents = [];
 
   if (showCategory) {
-    const categoryStyle = getCategoryFlexStyle(category);
-    tagContents.push(buildFlexTag(category, categoryStyle.backgroundColor, categoryStyle.textColor));
+    tagContents.push(buildCategoryFlexTag(category));
   }
 
   if (showSubCategory && category === "程式學習") {
     const subCategory = normalizeSubCategory(task.subCategory, category);
-    const subCategoryStyle = getSubCategoryFlexStyle(subCategory);
-    tagContents.push(buildFlexTag(subCategory, subCategoryStyle.backgroundColor, subCategoryStyle.textColor));
+    tagContents.push(buildSubCategoryFlexTag(subCategory));
   }
 
   if (showDifficulty) {
-    const difficultyStyle = getDifficultyFlexStyle(difficulty);
-    tagContents.push(buildFlexTag(difficulty, difficultyStyle.backgroundColor, difficultyStyle.textColor));
+    tagContents.push(buildDifficultyFlexTag(difficulty));
   }
 
   const rowContents = [
@@ -589,6 +661,25 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber }) {
   ].join("\n");
 }
 
+function buildTaskTagBox(task, showDifficulty) {
+  const category = normalizeCategory(task.category);
+  const tags = [];
+
+  tags.push(buildCategoryFlexTag(category));
+
+  if (category === "程式學習") {
+    const subCategory = normalizeSubCategory(task.subCategory, category);
+    tags.push(buildSubCategoryFlexTag(subCategory));
+  }
+
+  if (showDifficulty) {
+    const difficulty = normalizeDifficulty(task.difficulty);
+    tags.push(buildDifficultyFlexTag(difficulty));
+  }
+
+  return { type: "box", layout: "horizontal", spacing: "xs", margin: "sm", contents: tags };
+}
+
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
   const bubble = buildBaseFlexBubble({
     title: "本局今日先派這一件",
@@ -608,27 +699,6 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
   });
 
   return { type: "flex", altText: `Tiny Progress｜本局今日先派這一件：${selectedTask.title}`, contents: bubble };
-}
-
-function buildTaskTagBox(task, showDifficulty) {
-  const category = normalizeCategory(task.category);
-  const tags = [];
-  const categoryStyle = getCategoryFlexStyle(category);
-  tags.push(buildFlexTag(category, categoryStyle.backgroundColor, categoryStyle.textColor));
-
-  if (category === "程式學習") {
-    const subCategory = normalizeSubCategory(task.subCategory, category);
-    const subCategoryStyle = getSubCategoryFlexStyle(subCategory);
-    tags.push(buildFlexTag(subCategory, subCategoryStyle.backgroundColor, subCategoryStyle.textColor));
-  }
-
-  if (showDifficulty) {
-    const difficulty = normalizeDifficulty(task.difficulty);
-    const difficultyStyle = getDifficultyFlexStyle(difficulty);
-    tags.push(buildFlexTag(difficulty, difficultyStyle.backgroundColor, difficultyStyle.textColor));
-  }
-
-  return { type: "box", layout: "horizontal", spacing: "xs", margin: "sm", contents: tags };
 }
 
 async function handleDrawOneTaskCommand() {
