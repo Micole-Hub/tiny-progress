@@ -444,33 +444,36 @@ const FLEX_BRAND_NAME = "Tiny Progress";
 const FLEX_FIXED_LINE = "小小前進，也算數。";
 
 const FLEX_COLORS = {
-  // 亮奶油紙感：比原本更明亮，但不使用刺眼純白
-  cream: "#FFF7EA",
-  card: "#FFFDF6",
+  // 柔亮奶油紙感：比原本亮，但降低純白感，晚上看不刺眼
+  cream: "#FFF3E3",
+  card: "#FFF9EF",
   darkGreen: "#263D35",
-  greenFresh: "#9AC487",
-  beigeLine: "#EADBC7",
+  greenFresh: "#8FBA7C",
+  beigeLine: "#E6D4BD",
   mutedText: "#75695F",
-  red: "#CF765F",
-  gold: "#E3B866",
+  red: "#C96D5A",
+  gold: "#D9AA58",
 
-  // 大分類：改成淺底深字，讓 LINE 卡片整體更清爽
-  programming: "#E6F0FA",
+  // 大分類：淺底深字，但飽和度收斂，避免亮到漂浮
+  programming: "#E0EAF4",
   programmingText: "#3F6380",
-  wellness: "#F4E7EE",
+  wellness: "#EFE2E8",
   wellnessText: "#77576B",
-  interest: "#F8E8CF",
+  interest: "#F2DFC2",
   interestText: "#8A5A25",
 
-  // 子分類：保留藍紫 / 柔綠 / 杏棕方向，但柔化成亮色籤
-  video: "#E3E8F7",
-  videoText: "#4C5F8C",
-  practice: "#E6F3E1",
-  practiceText: "#4F764F",
-  note: "#F8E5CF",
-  noteText: "#8A5A25",
+  // 子分類：書籤造型，顏色比難度明顯，但不做高亮糖果色
+  video: "#D8E0F1",
+  videoText: "#405989",
+  videoAccent: "#6F7FA8",
+  practice: "#DCEBD8",
+  practiceText: "#466F48",
+  practiceAccent: "#6E9B72",
+  note: "#F1DAC0",
+  noteText: "#815426",
+  noteAccent: "#C28A5A",
 
-  uncategorized: "#EFE7DD",
+  uncategorized: "#EFE4D8",
   uncategorizedText: "#7A6E5F",
 };
 
@@ -486,45 +489,81 @@ function getCategoryFlexStyle(category) {
   const normalizedCategory = normalizeCategory(category);
 
   if (normalizedCategory === "程式學習") {
-    return { backgroundColor: FLEX_COLORS.programming, textColor: FLEX_COLORS.programmingText, borderColor: "#CFE0F0" };
+    return { backgroundColor: FLEX_COLORS.programming, textColor: FLEX_COLORS.programmingText, borderColor: "#C7D7E6" };
   }
 
   if (normalizedCategory === "身心穩定") {
-    return { backgroundColor: FLEX_COLORS.wellness, textColor: FLEX_COLORS.wellnessText, borderColor: "#E7D1DB" };
+    return { backgroundColor: FLEX_COLORS.wellness, textColor: FLEX_COLORS.wellnessText, borderColor: "#DEC9D3" };
   }
 
   if (normalizedCategory === "興趣探索") {
-    return { backgroundColor: FLEX_COLORS.interest, textColor: FLEX_COLORS.interestText, borderColor: "#EAD0A9" };
+    return { backgroundColor: FLEX_COLORS.interest, textColor: FLEX_COLORS.interestText, borderColor: "#E3C79F" };
   }
 
-  return { backgroundColor: "#EEF5EA", textColor: "#4F6F4D", borderColor: "#D7E5D1" };
+  return { backgroundColor: "#EAF2E6", textColor: "#4F6F4D", borderColor: "#D1DEC9" };
 }
 
 function getSubCategoryFlexStyle(subCategory) {
   if (subCategory === "觀看課程影片") {
-    return { backgroundColor: FLEX_COLORS.video, textColor: FLEX_COLORS.videoText, borderColor: "#CBD4EF" };
+    return {
+      backgroundColor: FLEX_COLORS.video,
+      textColor: FLEX_COLORS.videoText,
+      borderColor: "#BBC7E7",
+      accentColor: FLEX_COLORS.videoAccent,
+    };
   }
   if (subCategory === "練習") {
-    return { backgroundColor: FLEX_COLORS.practice, textColor: FLEX_COLORS.practiceText, borderColor: "#CEE4C8" };
+    return {
+      backgroundColor: FLEX_COLORS.practice,
+      textColor: FLEX_COLORS.practiceText,
+      borderColor: "#B9D9BC",
+      accentColor: FLEX_COLORS.practiceAccent,
+    };
   }
   if (subCategory === "寫筆記") {
-    return { backgroundColor: FLEX_COLORS.note, textColor: FLEX_COLORS.noteText, borderColor: "#EDCEAB" };
+    return {
+      backgroundColor: FLEX_COLORS.note,
+      textColor: FLEX_COLORS.noteText,
+      borderColor: "#DEBA8D",
+      accentColor: FLEX_COLORS.noteAccent,
+    };
   }
-  return { backgroundColor: FLEX_COLORS.uncategorized, textColor: FLEX_COLORS.uncategorizedText, borderColor: "#E0D4C6" };
+  return {
+    backgroundColor: FLEX_COLORS.uncategorized,
+    textColor: FLEX_COLORS.uncategorizedText,
+    borderColor: "#D9CCBC",
+    accentColor: "#B6A999",
+  };
 }
 
 function getDifficultyFlexStyle(difficulty) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
 
+  // 難度不再使用大面積彩色底，改成米白底 + 小色點，避免跟子分類混在一起
   if (normalizedDifficulty === "簡單") {
-    return { backgroundColor: "#EAF7E3", textColor: "#4E754A", borderColor: "#D2E8C8" };
+    return {
+      backgroundColor: "#FBF5EA",
+      textColor: "#6F7D62",
+      borderColor: "#DED3C4",
+      accentColor: "#7EAB67",
+    };
   }
 
   if (normalizedDifficulty === "適中") {
-    return { backgroundColor: "#FFF0D3", textColor: "#8A5F25", borderColor: "#ECD39C" };
+    return {
+      backgroundColor: "#FBF5EA",
+      textColor: "#8A6B35",
+      borderColor: "#DED3C4",
+      accentColor: "#D5A751",
+    };
   }
 
-  return { backgroundColor: "#F9E3DC", textColor: "#925A4B", borderColor: "#E9C4B9" };
+  return {
+    backgroundColor: "#FBF5EA",
+    textColor: "#9A5A55",
+    borderColor: "#DED3C4",
+    accentColor: "#C97769",
+  };
 }
 
 function getDifficultyAccentColor(difficulty) {
@@ -591,17 +630,42 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
   const style = getSubCategoryFlexStyle(subCategory);
   const displayLabel = getLineSubCategoryLabel(subCategory);
 
-  return buildFlexTag(displayLabel, style.backgroundColor, style.textColor, {
-    width: options.width || "66px",
-    cornerRadius: "999px",
-    size: "xxs",
-    weight: "bold",
+  return {
+    type: "box",
+    layout: "horizontal",
+    flex: 0,
+    width: options.width || "70px",
+    backgroundColor: style.backgroundColor,
+    cornerRadius: "10px",
     borderColor: style.borderColor,
+    borderWidth: "1px",
     paddingTop: "4px",
     paddingBottom: "4px",
-    paddingStart: "5px",
-    paddingEnd: "5px",
-  });
+    paddingStart: "0px",
+    paddingEnd: "6px",
+    spacing: "xs",
+    contents: [
+      {
+        // 子分類左側色條：像小書籤，和難度的圓點造型分開
+        type: "box",
+        layout: "vertical",
+        width: "4px",
+        backgroundColor: style.accentColor,
+        cornerRadius: "999px",
+        contents: [],
+      },
+      {
+        type: "text",
+        text: displayLabel,
+        size: "xxs",
+        weight: "bold",
+        color: style.textColor,
+        align: "center",
+        flex: 1,
+        maxLines: 1,
+      },
+    ],
+  };
 }
 
 function buildDifficultyFlexTag(difficulty, options = {}) {
@@ -611,16 +675,28 @@ function buildDifficultyFlexTag(difficulty, options = {}) {
     type: "box",
     layout: "horizontal",
     flex: 0,
-    width: options.width || "58px",
+    width: options.width || "56px",
     backgroundColor: style.backgroundColor,
-    cornerRadius: "999px",
+    cornerRadius: "7px",
     borderColor: style.borderColor,
     borderWidth: "1px",
     paddingTop: "3px",
     paddingBottom: "3px",
-    paddingStart: "5px",
-    paddingEnd: "5px",
+    paddingStart: "6px",
+    paddingEnd: "6px",
+    spacing: "xs",
     contents: [
+      {
+        // 難度用小圓點，不用大面積色塊，避免跟子分類長太像
+        type: "box",
+        layout: "vertical",
+        width: "6px",
+        height: "6px",
+        backgroundColor: style.accentColor,
+        cornerRadius: "999px",
+        margin: "sm",
+        contents: [],
+      },
       {
         type: "text",
         text: difficulty,
@@ -704,7 +780,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     const subCategory = normalizeSubCategory(task.subCategory, category);
     tagContents.push(
       buildSubCategoryFlexTag(subCategory, {
-        width: "66px",
+        width: "70px",
       })
     );
   }
@@ -712,7 +788,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
   if (showDifficulty) {
     tagContents.push(
       buildDifficultyFlexTag(difficulty, {
-        width: isProgrammingTask ? "58px" : "88px",
+        width: isProgrammingTask ? "56px" : "84px",
       })
     );
   }
@@ -722,7 +798,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
       type: "text",
       text: `${taskNumber}. ${checkbox} ${task.title}`,
       size: task.done ? "sm" : "md",
-      color: task.done ? "#9A8D82" : FLEX_COLORS.darkGreen,
+      color: task.done ? "#92867B" : FLEX_COLORS.darkGreen,
       wrap: true,
       weight: task.done ? "regular" : "bold",
     },
@@ -760,7 +836,7 @@ function buildStandardFlexRow({ standard, standardNumber }) {
         type: "text",
         text: `${standardNumber}. ${checkbox} ${standard.title}`,
         size: "sm",
-        color: standard.done ? "#9A8D82" : FLEX_COLORS.darkGreen,
+        color: standard.done ? "#92867B" : FLEX_COLORS.darkGreen,
         wrap: false,
         maxLines: 1,
         weight: standard.done ? "regular" : "bold",
@@ -779,7 +855,7 @@ function buildFlexFooterHint(lines) {
       type: "text",
       text: line,
       size: index === 0 ? "sm" : "xs",
-      color: index === 0 ? FLEX_COLORS.darkGreen : "#9A8D82",
+      color: index === 0 ? FLEX_COLORS.darkGreen : "#92867B",
       weight: index === 0 ? "bold" : "regular",
       wrap: true,
     })),
@@ -847,7 +923,7 @@ function buildTaskTagBox(task, showDifficulty) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
     tags.push(
       buildSubCategoryFlexTag(subCategory, {
-        width: "66px",
+        width: "70px",
       })
     );
   }
@@ -856,7 +932,7 @@ function buildTaskTagBox(task, showDifficulty) {
     const difficulty = normalizeDifficulty(task.difficulty);
     tags.push(
       buildDifficultyFlexTag(difficulty, {
-        width: isProgrammingTask ? "58px" : "88px",
+        width: isProgrammingTask ? "56px" : "84px",
       })
     );
   }
