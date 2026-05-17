@@ -340,6 +340,17 @@ function getLineSubCategoryLabel(subCategory) {
   return subCategory;
 }
 
+function getLineTaskTitle(title, maxLength = 16) {
+  const text = String(title || "").trim();
+
+  if (!text) return "未命名任務";
+
+  // LINE 卡片空間比較窄，任務名稱顯示短版，完整內容仍保留在資料裡
+  if (text.length > maxLength) return text.slice(0, maxLength) + "…";
+
+  return text;
+}
+
 function formatTaskSectionByCategory(tasks) {
   if (tasks.length === 0) return ["【本週任務】", "本週尚未立案。放一個小任務，就是好的開始。"].join("\n");
 
@@ -821,19 +832,6 @@ function buildFlexHeader(title, subtitle) {
             spacing: "sm",
             alignItems: "center",
             contents: [
-              {
-                type: "box",
-                layout: "vertical",
-                width: "18px",
-                height: "18px",
-                backgroundColor: FLEX_COLORS.stickerBg,
-                cornerRadius: "999px",
-                justifyContent: "center",
-                alignItems: "center",
-                contents: [
-                  { type: "text", text: "📎", size: "xxs", align: "center" },
-                ],
-              },
               { type: "text", text: FLEX_BRAND_NAME, size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold", flex: 0 },
             ],
           },
@@ -913,10 +911,11 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
   const rowContents = [
     {
       type: "text",
-      text: `${taskNumber}. ${checkbox} ${task.title}`,
+      text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title, 15)}`,
       size: task.done ? "sm" : "md",
       color: task.done ? "#92867B" : FLEX_COLORS.darkGreen,
-      wrap: true,
+      wrap: false,
+      maxLines: 1,
       weight: task.done ? "regular" : "bold",
     },
   ];
@@ -1038,7 +1037,7 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber }) {
     "完成後可以輸入：",
     `完成任務${taskNumber}`,
     "",
-    "先辦這件，其他公文先乖乖排隊。",
+    "先辦它就好。",
   ].join("\n");
 }
 
@@ -1119,16 +1118,17 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
           },
           {
             type: "text",
-            text: selectedTask.title,
+            text: getLineTaskTitle(selectedTask.title, 16),
             size: "lg",
             weight: "bold",
             color: FLEX_COLORS.darkGreen,
-            wrap: true,
+            wrap: false,
+            maxLines: 1,
           },
           buildTaskTagBox(selectedTask, true),
           {
             type: "text",
-            text: "先辦這件就好，其他公文先在抽屜裡睡一下。",
+            text: "先辦它就好。",
             size: "xs",
             color: FLEX_COLORS.mutedText,
             wrap: true,
@@ -1137,12 +1137,15 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
         { label: "今日小籤", emoji: "🐣", borderColor: "#E5C98F", backgroundColor: "#FFF6E3", labelColor: "#9A6B2E" }
       ),
     ],
-    footerContents: buildFlexFooterHint([`做完可以輸入：完成任務${taskNumber}`, "不要想整週，先讓這一件過關。"]),
+    footerContents: buildFlexFooterHint([
+      `完成後輸入：完成任務${taskNumber}`,
+      "先過這一關。",
+    ]),
   });
 
   return {
     type: "flex",
-    altText: `Tiny Progress｜今日抽到一件小案子：${selectedTask.title}`,
+    altText: `Tiny Progress｜今日抽到一件小案子：${getLineTaskTitle(selectedTask.title, 20)}`,
     contents: bubble,
   };
 }
@@ -1359,7 +1362,10 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     subtitle: "案件都在這裡，今天先辦一小件。",
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
-    footerContents: buildFlexFooterHint(["今天不用整櫃清空，先讓一件事情過關。", "需要操作說明請輸入：攻略"]),
+    footerContents: buildFlexFooterHint([
+      "今天先過一件。",
+      "輸入：攻略",
+    ]),
   });
 
   return {
