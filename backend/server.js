@@ -1078,8 +1078,39 @@ function buildTaskTagBox(task, showDifficulty) {
     contents: tags,
   };
 }
+function buildDrawTaskTagBox(task) {
+  const category = normalizeCategory(task.category);
+  const isProgrammingTask = category === "程式學習";
+  const tags = [];
+
+  tags.push(
+    buildCategoryFlexTag(category, {
+      width: isProgrammingTask ? "92px" : "120px",
+    })
+  );
+
+  if (isProgrammingTask) {
+    const subCategory = normalizeSubCategory(task.subCategory, category);
+
+    tags.push(
+      buildSubCategoryFlexTag(subCategory, {
+        width: subCategory === "W3Schools" ? "86px" : "68px",
+      })
+    );
+  }
+
+  return {
+    type: "box",
+    layout: "horizontal",
+    spacing: "sm",
+    margin: "sm",
+    contents: tags,
+  };
+}
 
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
+  const difficulty = normalizeDifficulty(selectedTask.difficulty);
+
   const bubble = buildBaseFlexBubble({
     title: "抽到一件小案子",
     subtitle: "本局已搖出今日小籤，先辦它就好。",
@@ -1096,8 +1127,8 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
               {
                 type: "box",
                 layout: "vertical",
-                width: "36px",
-                height: "36px",
+                width: "24px",
+                height: "24px",
                 backgroundColor: FLEX_COLORS.stickerBg,
                 cornerRadius: "999px",
                 justifyContent: "center",
@@ -1106,48 +1137,47 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
                   {
                     type: "text",
                     text: "🎲",
-                    size: "lg",
+                    size: "xs",
                     align: "center",
                   },
                 ],
               },
               {
-                type: "box",
-                layout: "vertical",
-                spacing: "xs",
+                type: "text",
+                text: `第 ${taskNumber} 個任務`,
+                size: "sm",
+                color: FLEX_COLORS.darkGreen,
+                weight: "bold",
                 flex: 1,
-                contents: [
-                  {
-                    type: "text",
-                    text: `第 ${taskNumber} 個任務`,
-                    size: "xs",
-                    color: FLEX_COLORS.mutedText,
-                    weight: "bold",
-                  },
-                ],
               },
+              buildDifficultyFlexTag(difficulty, {
+                width: "54px",
+              }),
             ],
           },
           {
             type: "text",
-            text: getLineTaskTitle(selectedTask.title, 16),
-            size: "lg",
+            text: getLineTaskTitle(selectedTask.title, 18),
+            size: "md",
             weight: "bold",
             color: FLEX_COLORS.darkGreen,
+
+            // 任務名稱往上靠，並維持單行
+            margin: "xs",
             wrap: false,
             maxLines: 1,
           },
-          buildTaskTagBox(selectedTask, true),
+          buildDrawTaskTagBox(selectedTask),
           {
             type: "text",
             text: "先辦這件就好，其他公文先排隊。",
             size: "xs",
             color: FLEX_COLORS.mutedText,
             wrap: true,
+            margin: "sm",
           },
         ],
         {
-          // 不放 label / emoji，避免出現「🐣 今日小籤」
           borderColor: "#E5C98F",
           backgroundColor: "#FFF6E3",
         }
