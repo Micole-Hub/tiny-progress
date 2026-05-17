@@ -1081,8 +1081,8 @@ function buildTaskTagBox(task, showDifficulty) {
 
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
   const bubble = buildBaseFlexBubble({
-    title: "今日抽到一件小案子",
-    subtitle: "本局已搖出今日小籤，先辦這件就好。",
+    title: "抽到一件小案子",
+    subtitle: "本局已搖出今日小籤，先辦它就好。",
     accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
       buildFlexInfoCard(
@@ -1102,7 +1102,14 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
                 cornerRadius: "999px",
                 justifyContent: "center",
                 alignItems: "center",
-                contents: [{ type: "text", text: "🎲", size: "lg", align: "center" }],
+                contents: [
+                  {
+                    type: "text",
+                    text: "🎲",
+                    size: "lg",
+                    align: "center",
+                  },
+                ],
               },
               {
                 type: "box",
@@ -1110,8 +1117,13 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
                 spacing: "xs",
                 flex: 1,
                 contents: [
-                  { type: "text", text: `第 ${taskNumber} 個任務`, size: "xs", color: FLEX_COLORS.mutedText, weight: "bold" },
-                  { type: "text", text: "本局今日小籤", size: "sm", color: FLEX_COLORS.gold, weight: "bold" },
+                  {
+                    type: "text",
+                    text: `第 ${taskNumber} 個任務`,
+                    size: "xs",
+                    color: FLEX_COLORS.mutedText,
+                    weight: "bold",
+                  },
                 ],
               },
             ],
@@ -1134,7 +1146,11 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
             wrap: true,
           },
         ],
-        { label: "今日小籤", emoji: "🐣", borderColor: "#E5C98F", backgroundColor: "#FFF6E3", labelColor: "#9A6B2E" }
+        {
+          // 不放 label / emoji，避免出現「🐣 今日小籤」
+          borderColor: "#E5C98F",
+          backgroundColor: "#FFF6E3",
+        }
       ),
     ],
     footerContents: buildFlexFooterHint([
@@ -1145,11 +1161,10 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
 
   return {
     type: "flex",
-    altText: `Tiny Progress｜今日抽到一件小案子：${getLineTaskTitle(selectedTask.title, 20)}`,
+    altText: `Tiny Progress｜今日抽到一件小案子：${selectedTask.title}`,
     contents: bubble,
   };
 }
-
 async function handleDrawOneTaskCommand() {
   const board = await getTaskBoardForLine();
   const unfinishedTasks = board.tasks.filter((task) => !task.done);
