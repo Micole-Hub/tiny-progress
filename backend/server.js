@@ -14,7 +14,7 @@ const pendingActions = new Map();
 const PENDING_ACTION_TTL_MS = 10 * 60 * 1000;
 
 const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
-const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記"];
+const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools"];
 const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
 
 const DEFAULT_CATEGORY = "程式學習";
@@ -336,6 +336,7 @@ function getTaskMetaText(task, includeDifficulty = true) {
 function getLineSubCategoryLabel(subCategory) {
   if (subCategory === "觀看課程影片") return "看課程";
   if (subCategory === "寫筆記") return "筆記";
+  if (subCategory === "W3Schools") return "W3Schools";
   return subCategory;
 }
 
@@ -484,6 +485,9 @@ const FLEX_COLORS = {
   note: "#F1DAC0",
   noteText: "#815426",
   noteAccent: "#C28A5A",
+  w3schools: "#F1DDE0",
+  w3schoolsText: "#7A4B52",
+  w3schoolsAccent: "#C47F88",
 
   uncategorized: "#EFE4D8",
   uncategorizedText: "#7A6E5F",
@@ -538,6 +542,14 @@ function getSubCategoryFlexStyle(subCategory) {
       textColor: FLEX_COLORS.noteText,
       borderColor: "#DEBA8D",
       accentColor: FLEX_COLORS.noteAccent,
+    };
+  }
+  if (subCategory === "W3Schools") {
+    return {
+      backgroundColor: FLEX_COLORS.w3schools,
+      textColor: FLEX_COLORS.w3schoolsText,
+      borderColor: "#D9B7BE",
+      accentColor: FLEX_COLORS.w3schoolsAccent,
     };
   }
   return {
@@ -733,6 +745,10 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
   };
 }
 
+function getSubCategoryFlexTagWidth(subCategory) {
+  return subCategory === "W3Schools" ? "82px" : "70px";
+}
+
 function buildDifficultyFlexTag(difficulty, options = {}) {
   const style = getDifficultyFlexStyle(difficulty);
 
@@ -881,7 +897,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     const subCategory = normalizeSubCategory(task.subCategory, category);
     tagContents.push(
       buildSubCategoryFlexTag(subCategory, {
-        width: "70px",
+        width: getSubCategoryFlexTagWidth(subCategory),
       })
     );
   }
@@ -1041,7 +1057,7 @@ function buildTaskTagBox(task, showDifficulty) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
     tags.push(
       buildSubCategoryFlexTag(subCategory, {
-        width: "70px",
+        width: getSubCategoryFlexTagWidth(subCategory),
       })
     );
   }
@@ -1066,7 +1082,7 @@ function buildTaskTagBox(task, showDifficulty) {
 
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
   const bubble = buildBaseFlexBubble({
-    title: "抽到一件小案子",
+    title: "今日抽到一件小案子",
     subtitle: "本局已搖出今日小籤，先辦它就好。",
     accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
@@ -1112,7 +1128,7 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
           buildTaskTagBox(selectedTask, true),
           {
             type: "text",
-            text: "先辦這件，其他公文先乖乖排隊。",
+            text: "先辦這件就好，其他公文先在抽屜裡睡一下。",
             size: "xs",
             color: FLEX_COLORS.mutedText,
             wrap: true,
@@ -1343,7 +1359,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     subtitle: "案件都在這裡，今天先辦一小件。",
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
-    footerContents: buildFlexFooterHint(["不用整櫃清空，先讓一件事情過關。", "需要操作說明請輸入：攻略"]),
+    footerContents: buildFlexFooterHint(["今天不用整櫃清空，先讓一件事情過關。", "需要操作說明請輸入：攻略"]),
   });
 
   return {
@@ -1445,7 +1461,7 @@ function getGuideText() {
     "新增標準 本週能說明一個學到的觀念",
     "",
     "分類可用：程式學習、身心穩定、興趣探索",
-    "程式學習子分類：觀看課程影片、練習、寫筆記",
+    "程式學習子分類：觀看課程影片、練習、寫筆記、W3Schools",
     "難度可用：簡單、適中、困難",
     "",
     "【辦理】",
