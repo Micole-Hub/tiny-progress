@@ -893,30 +893,39 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
 
   if (showSubCategory && isProgrammingTask) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
+
     tagContents.push(
       buildSubCategoryFlexTag(subCategory, {
-        width: getSubCategoryFlexTagWidth(subCategory),
-      })
-    );
-  }
-
-  if (showDifficulty) {
-    tagContents.push(
-      buildDifficultyFlexTag(difficulty, {
-        width: isProgrammingTask ? "56px" : "84px",
+        width: subCategory === "W3Schools" ? "86px" : "70px",
       })
     );
   }
 
   const rowContents = [
     {
-      type: "text",
-      text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title, 15)}`,
-      size: task.done ? "sm" : "md",
-      color: task.done ? "#92867B" : FLEX_COLORS.darkGreen,
-      wrap: false,
-      maxLines: 1,
-      weight: task.done ? "regular" : "bold",
+      type: "box",
+      layout: "horizontal",
+      spacing: "sm",
+      alignItems: "center",
+      contents: [
+        {
+          type: "text",
+          text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title, 15)}`,
+          size: task.done ? "sm" : "md",
+          color: task.done ? "#92867B" : FLEX_COLORS.darkGreen,
+          wrap: false,
+          maxLines: 1,
+          weight: task.done ? "regular" : "bold",
+          flex: 1,
+        },
+        ...(showDifficulty
+          ? [
+              buildDifficultyFlexTag(difficulty, {
+                width: isProgrammingTask ? "54px" : "62px",
+              }),
+            ]
+          : []),
+      ],
     },
   ];
 
