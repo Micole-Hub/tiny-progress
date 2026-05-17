@@ -146,8 +146,6 @@ async function fetchWeekContextFromGoogleSheets() {
   return {
     currentWeek: data.currentWeek || null,
     nextWeek: data.nextWeek || null,
-
-    // 是否開放下週預排，由 Code.gs 統一判斷
     canPlanNextWeek: data.canPlanNextWeek === true,
   };
 }
@@ -446,31 +444,34 @@ const FLEX_BRAND_NAME = "Tiny Progress";
 const FLEX_FIXED_LINE = "小小前進，也算數。";
 
 const FLEX_COLORS = {
-  cream: "#F7F0E6",
-  card: "#FFF9EF",
-  darkGreen: "#203A32",
-  greenFresh: "#7DB46C",
-  beigeLine: "#DDD1BD",
-  mutedText: "#7A6E5F",
-  red: "#B85F4B",
-  gold: "#D8A85F",
+  // 亮奶油紙感：比原本更明亮，但不使用刺眼純白
+  cream: "#FFF7EA",
+  card: "#FFFDF6",
+  darkGreen: "#263D35",
+  greenFresh: "#9AC487",
+  beigeLine: "#EADBC7",
+  mutedText: "#75695F",
+  red: "#CF765F",
+  gold: "#E3B866",
 
-  programming: "#507592",
-  programmingText: "#FFFDF7",
-  wellness: "#8A6F7F",
-  wellnessText: "#FFFDF7",
-  interest: "#B9854A",
-  interestText: "#FFFDF7",
+  // 大分類：改成淺底深字，讓 LINE 卡片整體更清爽
+  programming: "#E6F0FA",
+  programmingText: "#3F6380",
+  wellness: "#F4E7EE",
+  wellnessText: "#77576B",
+  interest: "#F8E8CF",
+  interestText: "#8A5A25",
 
-  video: "#6F7FA8",
-  videoText: "#FFFDF7",
-  practice: "#6E9B72",
-  practiceText: "#FFFDF7",
-  note: "#C28A5A",
-  noteText: "#FFFDF7",
+  // 子分類：保留藍紫 / 柔綠 / 杏棕方向，但柔化成亮色籤
+  video: "#E3E8F7",
+  videoText: "#4C5F8C",
+  practice: "#E6F3E1",
+  practiceText: "#4F764F",
+  note: "#F8E5CF",
+  noteText: "#8A5A25",
 
-  uncategorized: "#9A8D82",
-  uncategorizedText: "#FFFDF7",
+  uncategorized: "#EFE7DD",
+  uncategorizedText: "#7A6E5F",
 };
 
 const FLEX_ACCENTS = {
@@ -485,39 +486,45 @@ function getCategoryFlexStyle(category) {
   const normalizedCategory = normalizeCategory(category);
 
   if (normalizedCategory === "程式學習") {
-    return { backgroundColor: FLEX_COLORS.programming, textColor: FLEX_COLORS.programmingText, borderColor: "#507592" };
+    return { backgroundColor: FLEX_COLORS.programming, textColor: FLEX_COLORS.programmingText, borderColor: "#CFE0F0" };
   }
 
   if (normalizedCategory === "身心穩定") {
-    return { backgroundColor: FLEX_COLORS.wellness, textColor: FLEX_COLORS.wellnessText, borderColor: "#8A6F7F" };
+    return { backgroundColor: FLEX_COLORS.wellness, textColor: FLEX_COLORS.wellnessText, borderColor: "#E7D1DB" };
   }
 
   if (normalizedCategory === "興趣探索") {
-    return { backgroundColor: FLEX_COLORS.interest, textColor: FLEX_COLORS.interestText, borderColor: "#B9854A" };
+    return { backgroundColor: FLEX_COLORS.interest, textColor: FLEX_COLORS.interestText, borderColor: "#EAD0A9" };
   }
 
-  return { backgroundColor: "#DFE9DD", textColor: "#36533F", borderColor: "#C8D7C5" };
+  return { backgroundColor: "#EEF5EA", textColor: "#4F6F4D", borderColor: "#D7E5D1" };
 }
 
 function getSubCategoryFlexStyle(subCategory) {
-  if (subCategory === "觀看課程影片") return { backgroundColor: FLEX_COLORS.video, textColor: FLEX_COLORS.videoText };
-  if (subCategory === "練習") return { backgroundColor: FLEX_COLORS.practice, textColor: FLEX_COLORS.practiceText };
-  if (subCategory === "寫筆記") return { backgroundColor: FLEX_COLORS.note, textColor: FLEX_COLORS.noteText };
-  return { backgroundColor: FLEX_COLORS.uncategorized, textColor: FLEX_COLORS.uncategorizedText };
+  if (subCategory === "觀看課程影片") {
+    return { backgroundColor: FLEX_COLORS.video, textColor: FLEX_COLORS.videoText, borderColor: "#CBD4EF" };
+  }
+  if (subCategory === "練習") {
+    return { backgroundColor: FLEX_COLORS.practice, textColor: FLEX_COLORS.practiceText, borderColor: "#CEE4C8" };
+  }
+  if (subCategory === "寫筆記") {
+    return { backgroundColor: FLEX_COLORS.note, textColor: FLEX_COLORS.noteText, borderColor: "#EDCEAB" };
+  }
+  return { backgroundColor: FLEX_COLORS.uncategorized, textColor: FLEX_COLORS.uncategorizedText, borderColor: "#E0D4C6" };
 }
 
 function getDifficultyFlexStyle(difficulty) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
 
   if (normalizedDifficulty === "簡單") {
-    return { backgroundColor: "#DBF0D5", textColor: "#315B35", borderColor: "#C4DFC0" };
+    return { backgroundColor: "#EAF7E3", textColor: "#4E754A", borderColor: "#D2E8C8" };
   }
 
   if (normalizedDifficulty === "適中") {
-    return { backgroundColor: "#F4E4C7", textColor: "#6A4E21", borderColor: "#E5CCA0" };
+    return { backgroundColor: "#FFF0D3", textColor: "#8A5F25", borderColor: "#ECD39C" };
   }
 
-  return { backgroundColor: "#F0D8D2", textColor: "#6B3932", borderColor: "#DEBDB6" };
+  return { backgroundColor: "#F9E3DC", textColor: "#925A4B", borderColor: "#E9C4B9" };
 }
 
 function getDifficultyAccentColor(difficulty) {
@@ -568,7 +575,7 @@ function buildCategoryFlexTag(category, options = {}) {
   const style = getCategoryFlexStyle(category);
 
   return buildFlexTag(category, style.backgroundColor, style.textColor, {
-    width: options.width || "104px",
+    width: options.width || "100px",
     cornerRadius: "999px",
     size: "xs",
     weight: "bold",
@@ -585,10 +592,11 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
   const displayLabel = getLineSubCategoryLabel(subCategory);
 
   return buildFlexTag(displayLabel, style.backgroundColor, style.textColor, {
-    width: options.width || "64px",
+    width: options.width || "66px",
     cornerRadius: "999px",
     size: "xxs",
     weight: "bold",
+    borderColor: style.borderColor,
     paddingTop: "4px",
     paddingBottom: "4px",
     paddingStart: "5px",
@@ -687,7 +695,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
   if (showCategory) {
     tagContents.push(
       buildCategoryFlexTag(category, {
-        width: isProgrammingTask ? "104px" : "132px",
+        width: isProgrammingTask ? "100px" : "128px",
       })
     );
   }
@@ -696,7 +704,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     const subCategory = normalizeSubCategory(task.subCategory, category);
     tagContents.push(
       buildSubCategoryFlexTag(subCategory, {
-        width: "64px",
+        width: "66px",
       })
     );
   }
@@ -714,7 +722,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
       type: "text",
       text: `${taskNumber}. ${checkbox} ${task.title}`,
       size: task.done ? "sm" : "md",
-      color: task.done ? "#8A7E6E" : FLEX_COLORS.darkGreen,
+      color: task.done ? "#9A8D82" : FLEX_COLORS.darkGreen,
       wrap: true,
       weight: task.done ? "regular" : "bold",
     },
@@ -724,8 +732,8 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     rowContents.push({
       type: "box",
       layout: "horizontal",
-      spacing: "xs",
-      margin: "xs",
+      spacing: "sm",
+      margin: "sm",
       contents: tagContents,
     });
   }
@@ -752,7 +760,7 @@ function buildStandardFlexRow({ standard, standardNumber }) {
         type: "text",
         text: `${standardNumber}. ${checkbox} ${standard.title}`,
         size: "sm",
-        color: standard.done ? "#8A7E6E" : FLEX_COLORS.darkGreen,
+        color: standard.done ? "#9A8D82" : FLEX_COLORS.darkGreen,
         wrap: false,
         maxLines: 1,
         weight: standard.done ? "regular" : "bold",
@@ -771,7 +779,7 @@ function buildFlexFooterHint(lines) {
       type: "text",
       text: line,
       size: index === 0 ? "sm" : "xs",
-      color: index === 0 ? FLEX_COLORS.darkGreen : "#8A7E6E",
+      color: index === 0 ? FLEX_COLORS.darkGreen : "#9A8D82",
       weight: index === 0 ? "bold" : "regular",
       wrap: true,
     })),
@@ -831,7 +839,7 @@ function buildTaskTagBox(task, showDifficulty) {
 
   tags.push(
     buildCategoryFlexTag(category, {
-      width: isProgrammingTask ? "104px" : "132px",
+      width: isProgrammingTask ? "100px" : "128px",
     })
   );
 
@@ -839,7 +847,7 @@ function buildTaskTagBox(task, showDifficulty) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
     tags.push(
       buildSubCategoryFlexTag(subCategory, {
-        width: "64px",
+        width: "66px",
       })
     );
   }
@@ -856,7 +864,7 @@ function buildTaskTagBox(task, showDifficulty) {
   return {
     type: "box",
     layout: "horizontal",
-    spacing: "xs",
+    spacing: "sm",
     margin: "sm",
     contents: tags,
   };
