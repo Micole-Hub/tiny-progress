@@ -134,14 +134,21 @@ function buildGoogleSheetsResourceUrl(resource) {
 
 async function fetchWeekContextFromGoogleSheets() {
   const response = await fetch(buildGoogleSheetsResourceUrl("week-context"));
-  if (!response.ok) throw new Error("呼叫 Google Apps Script 週次資料失敗，狀態碼：" + response.status);
+  if (!response.ok) {
+    throw new Error("呼叫 Google Apps Script 週次資料失敗，狀態碼：" + response.status);
+  }
 
   const data = await response.json();
-  if (!data.ok) throw new Error(data.message || "Google Apps Script 回傳週次資料失敗");
+  if (!data.ok) {
+    throw new Error(data.message || "Google Apps Script 回傳週次資料失敗");
+  }
 
   return {
-    currentWeek: data.currentWeek,
-    nextWeek: data.nextWeek,
+    currentWeek: data.currentWeek || null,
+    nextWeek: data.nextWeek || null,
+
+    // 是否開放下週預排，由 Code.gs 統一判斷
+    canPlanNextWeek: data.canPlanNextWeek === true,
   };
 }
 

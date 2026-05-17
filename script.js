@@ -107,7 +107,11 @@ const DAILY_QUOTES = [
 ];
 
 let items = [];
-let weekContext = { currentWeek: null, nextWeek: null };
+let weekContext = {
+  currentWeek: null,
+  nextWeek: null,
+  canPlanNextWeek: false,
+};
 let selectedWeekView = "current";
 
 const taskList = document.querySelector("#taskList");
@@ -191,9 +195,16 @@ function isCurrentWeekView() { return selectedWeekView === "current"; }
 function isNextWeekView() { return selectedWeekView === "next"; }
 function canAddToSelectedWeek() {
   const selectedWeek = getSelectedWeek();
+
+  // 沒有週次資料就不能新增
   if (!selectedWeek || !selectedWeek.weekNumber) return false;
+
+  // 本週永遠可以新增
   if (isCurrentWeekView()) return true;
-  if (isNextWeekView()) return isSundayNoonOrLater();
+
+  // 下週是否可預排，交給後端判斷
+  if (isNextWeekView()) return weekContext.canPlanNextWeek === true;
+
   return false;
 }
 function setWeekTabActiveState() {
@@ -434,11 +445,22 @@ async function loadWeekContext() {
   try {
     const response = await fetch(`${API_BASE_URL}/week-context`);
     if (!response.ok) throw new Error("後端週次資料回應失敗");
+
     const data = await response.json();
-    weekContext = { currentWeek: data.currentWeek || null, nextWeek: data.nextWeek || null };
+
+    weekContext = {
+      currentWeek: data.currentWeek || null,
+      nextWeek: data.nextWeek || null,
+      canPlanNextWeek: data.canPlanNextWeek === true,
+    };
   } catch (error) {
     console.error("讀取週次資料失敗：", error);
-    weekContext = { currentWeek: null, nextWeek: null };
+
+    weekContext = {
+      currentWeek: null,
+      nextWeek: null,
+      canPlanNextWeek: false,
+    };
   }
 }
 async function loadItems() {
