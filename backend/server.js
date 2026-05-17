@@ -441,32 +441,44 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
 }
 
 const FLEX_BRAND_NAME = "Tiny Progress";
-const FLEX_FIXED_LINE = "小小前進，也算數。";
+const FLEX_FIXED_LINE = "小小前進，也算數。今天慢慢辦也可以。";
 
 const FLEX_COLORS = {
-  // 柔亮奶油紙感：比原本亮，但降低純白感，晚上看不刺眼
-  cream: "#FFF3E3",
-  card: "#FFF9EF",
-  darkGreen: "#263D35",
-  greenFresh: "#8FBA7C",
-  beigeLine: "#E6D4BD",
-  mutedText: "#75695F",
-  red: "#C96D5A",
-  gold: "#D9AA58",
+  // 柔亮奶油公文封：亮一點，但不白到刺眼
+  cream: "#FBF1E3",
+  card: "#FFF8ED",
+  paper: "#FFFDF7",
+  cardSoft: "#FFF3E4",
 
-  // 大分類：淺底深字，但飽和度收斂，避免亮到漂浮
-  programming: "#E0EAF4",
+  darkGreen: "#263D35",
+  greenFresh: "#91B980",
+  beigeLine: "#E5D2BA",
+  mutedText: "#75695F",
+  softText: "#93867A",
+
+  red: "#C97461",
+  gold: "#DDB36A",
+  peach: "#F2C6B6",
+  mint: "#EAF3E3",
+
+  stampBg: "#F8DDD2",
+  stampText: "#A75D4B",
+  stickerBg: "#FFF6D8",
+  stickerText: "#95662B",
+
+  // 大分類：淺底深字，保留公文標籤感
+  programming: "#E2ECF6",
   programmingText: "#3F6380",
-  wellness: "#EFE2E8",
+  wellness: "#F0E2E9",
   wellnessText: "#77576B",
-  interest: "#F2DFC2",
+  interest: "#F4E0C3",
   interestText: "#8A5A25",
 
-  // 子分類：書籤造型，顏色比難度明顯，但不做高亮糖果色
-  video: "#D8E0F1",
+  // 子分類：小書籤造型，和難度小印章分開
+  video: "#D9E1F2",
   videoText: "#405989",
   videoAccent: "#6F7FA8",
-  practice: "#DCEBD8",
+  practice: "#DDEBD8",
   practiceText: "#466F48",
   practiceAccent: "#6E9B72",
   note: "#F1DAC0",
@@ -579,6 +591,59 @@ function getDifficultyFooterCopy(difficulty, isCompleted) {
   if (normalizedDifficulty === "簡單") return isCompleted ? "熱身完成，今天已經有動起來。" : "先熱身一下，本局不催跑。";
   if (normalizedDifficulty === "適中") return isCompleted ? "穩穩辦完，本局予以記錄。" : "穩穩推進，不用開倍速。";
   return isCompleted ? "大案收妥，今天可以蓋一枚章。" : "大案也能小辦，不必硬闖。";
+}
+
+function buildTinyStamp(text, options = {}) {
+  return {
+    type: "box",
+    layout: "vertical",
+    flex: 0,
+    backgroundColor: options.backgroundColor || FLEX_COLORS.stampBg,
+    cornerRadius: "999px",
+    paddingTop: "3px",
+    paddingBottom: "3px",
+    paddingStart: "8px",
+    paddingEnd: "8px",
+    contents: [
+      {
+        type: "text",
+        text,
+        size: "xxs",
+        weight: "bold",
+        color: options.color || FLEX_COLORS.stampText,
+        align: "center",
+        flex: 0,
+      },
+    ],
+  };
+}
+
+function buildCuteSectionLabel(emoji, text, color) {
+  return {
+    type: "box",
+    layout: "horizontal",
+    spacing: "sm",
+    alignItems: "center",
+    contents: [
+      { type: "text", text: emoji, size: "sm", flex: 0 },
+      {
+        type: "text",
+        text,
+        size: "sm",
+        weight: "bold",
+        color: color || FLEX_COLORS.mutedText,
+        flex: 1,
+      },
+    ],
+  };
+}
+
+function buildCuteEmptyNote(title, note, emoji) {
+  return [
+    { type: "text", text: emoji || "🐣", size: "lg", align: "center" },
+    { type: "text", text: title, size: "md", color: FLEX_COLORS.darkGreen, weight: "bold", wrap: true, align: "center" },
+    { type: "text", text: note, size: "sm", color: FLEX_COLORS.mutedText, wrap: true, align: "center" },
+  ];
 }
 
 function buildFlexTag(label, backgroundColor, textColor, options = {}) {
@@ -726,9 +791,39 @@ function buildFlexHeader(title, subtitle) {
   return {
     type: "box",
     layout: "vertical",
-    spacing: "xs",
+    spacing: "sm",
     contents: [
-      { type: "text", text: FLEX_BRAND_NAME, size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold" },
+      {
+        type: "box",
+        layout: "horizontal",
+        justifyContent: "space-between",
+        alignItems: "center",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            spacing: "sm",
+            alignItems: "center",
+            contents: [
+              {
+                type: "box",
+                layout: "vertical",
+                width: "18px",
+                height: "18px",
+                backgroundColor: FLEX_COLORS.stickerBg,
+                cornerRadius: "999px",
+                justifyContent: "center",
+                alignItems: "center",
+                contents: [
+                  { type: "text", text: "📎", size: "xxs", align: "center" },
+                ],
+              },
+              { type: "text", text: FLEX_BRAND_NAME, size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold", flex: 0 },
+            ],
+          },
+          buildTinyStamp("小小前進", { backgroundColor: FLEX_COLORS.stampBg, color: FLEX_COLORS.stampText }),
+        ],
+      },
       { type: "text", text: title, size: "xl", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true },
       { type: "text", text: subtitle || FLEX_FIXED_LINE, size: "sm", color: FLEX_COLORS.mutedText, wrap: true },
     ],
@@ -736,16 +831,22 @@ function buildFlexHeader(title, subtitle) {
 }
 
 function buildFlexInfoCard(contents, options = {}) {
+  const cardContents = [];
+
+  if (options.label || options.emoji) {
+    cardContents.push(buildCuteSectionLabel(options.emoji || "📎", options.label || "小櫃台", options.labelColor || FLEX_COLORS.mutedText));
+  }
+
   return {
     type: "box",
     layout: "vertical",
     spacing: "sm",
     backgroundColor: options.backgroundColor || FLEX_COLORS.card,
-    cornerRadius: "16px",
+    cornerRadius: "18px",
     paddingAll: "16px",
-    borderColor: options.borderColor || "#E5D7C3",
+    borderColor: options.borderColor || "#E6D4BD",
     borderWidth: "1px",
-    contents,
+    contents: cardContents.concat(contents),
   };
 }
 
@@ -864,7 +965,23 @@ function buildFlexFooterHint(lines) {
 
 function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor }) {
   const contents = [
-    buildAccentBar(accentColor),
+    {
+      type: "box",
+      layout: "horizontal",
+      spacing: "xs",
+      contents: [
+        buildAccentBar(accentColor),
+        {
+          type: "box",
+          layout: "vertical",
+          width: "12px",
+          height: "6px",
+          backgroundColor: "#F2D8C4",
+          cornerRadius: "999px",
+          contents: [],
+        },
+      ],
+    },
     buildFlexHeader(title, subtitle),
     { type: "separator", margin: "md", color: FLEX_COLORS.beigeLine },
     ...bodyContents,
@@ -894,17 +1011,17 @@ function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, ac
 
 function buildDrawOneTaskFallbackText({ selectedTask, taskNumber }) {
   return [
-    "🎲 Tiny Progress｜本局今日先派這一件",
+    "🎲 Tiny Progress｜今日抽到一件小案子",
     "",
     `第 ${taskNumber} 個任務`,
     `☐ ${selectedTask.title}`,
     "",
     `分類：${getTaskMetaText(selectedTask)}`,
     "",
-    "做完可以輸入：",
+    "完成後可以輸入：",
     `完成任務${taskNumber}`,
     "",
-    "不用想太多，先開這一案。",
+    "先辦這件，其他公文先乖乖排隊。",
   ].join("\n");
 }
 
@@ -948,25 +1065,67 @@ function buildTaskTagBox(task, showDifficulty) {
 
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
   const bubble = buildBaseFlexBubble({
-    title: "本局今日先派這一件",
-    subtitle: FLEX_FIXED_LINE,
+    title: "今日抽到一件小案子",
+    subtitle: "本局已搖出今日小籤，先辦它就好。",
     accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
       buildFlexInfoCard(
         [
-          { type: "text", text: `第 ${taskNumber} 個任務`, size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
-          { type: "text", text: selectedTask.title, size: "lg", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true },
+          {
+            type: "box",
+            layout: "horizontal",
+            spacing: "sm",
+            alignItems: "center",
+            contents: [
+              {
+                type: "box",
+                layout: "vertical",
+                width: "36px",
+                height: "36px",
+                backgroundColor: FLEX_COLORS.stickerBg,
+                cornerRadius: "999px",
+                justifyContent: "center",
+                alignItems: "center",
+                contents: [{ type: "text", text: "🎲", size: "lg", align: "center" }],
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                spacing: "xs",
+                flex: 1,
+                contents: [
+                  { type: "text", text: `第 ${taskNumber} 個任務`, size: "xs", color: FLEX_COLORS.mutedText, weight: "bold" },
+                  { type: "text", text: "本局今日小籤", size: "sm", color: FLEX_COLORS.gold, weight: "bold" },
+                ],
+              },
+            ],
+          },
+          {
+            type: "text",
+            text: selectedTask.title,
+            size: "lg",
+            weight: "bold",
+            color: FLEX_COLORS.darkGreen,
+            wrap: true,
+          },
           buildTaskTagBox(selectedTask, true),
+          {
+            type: "text",
+            text: "先辦這件就好，其他公文先在抽屜裡睡一下。",
+            size: "xs",
+            color: FLEX_COLORS.mutedText,
+            wrap: true,
+          },
         ],
-        { borderColor: "#E8C887", backgroundColor: "#FFF8EA" }
+        { label: "今日小籤", emoji: "🐣", borderColor: "#E5C98F", backgroundColor: "#FFF6E3", labelColor: "#9A6B2E" }
       ),
     ],
-    footerContents: buildFlexFooterHint([`做完可以輸入：完成任務${taskNumber}`, "不用想太多，先開這一案。"]),
+    footerContents: buildFlexFooterHint([`做完可以輸入：完成任務${taskNumber}`, "不要想整週，先讓這一件過關。"]),
   });
 
   return {
     type: "flex",
-    altText: `Tiny Progress｜本局今日先派這一件：${selectedTask.title}`,
+    altText: `Tiny Progress｜今日抽到一件小案子：${selectedTask.title}`,
     contents: bubble,
   };
 }
@@ -977,10 +1136,10 @@ async function handleDrawOneTaskCommand() {
 
   if (unfinishedTasks.length === 0) {
     return [
-      "🎲 Tiny Progress｜本局抽籤結果",
+      "🎲 Tiny Progress｜抽籤小櫃台",
       "",
       "本週沒有未完成任務可以抽。",
-      "如果都完成了，請給自己蓋一枚小章。",
+      "如果都完成了，請給自己蓋一枚小章，今日可以少一點罪惡感。",
       "",
       "可以輸入「清單」確認目前案件板。",
     ].join("\n");
@@ -1011,48 +1170,55 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
 
   if (matchedTasks.length === 0) {
     bodyContents = [
-      buildFlexInfoCard([
-        { type: "text", text: `目前沒有${difficulty}任務。`, size: "md", color: FLEX_COLORS.darkGreen, weight: "bold", wrap: true },
-        { type: "text", text: "沒有案件也無妨，先喝水，本局不追殺。", size: "sm", color: FLEX_COLORS.mutedText, wrap: true },
-      ]),
+      buildFlexInfoCard(
+        buildCuteEmptyNote(
+          `目前沒有${difficulty}任務。`,
+          "抽屜是空的，先喝水，本局不追殺。",
+          "🫧"
+        ),
+        { label: `${difficulty}任務小抽屜`, emoji: "🗂️", backgroundColor: FLEX_COLORS.paper }
+      ),
     ];
   } else {
     const limitedEntries = matchedTasks.slice(0, 8);
 
     bodyContents = [
-      buildFlexInfoCard([
-        { type: "text", text: `未完成：${unfinishedCount} 件`, size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
-        ...limitedEntries.map((entry) =>
-          buildTaskFlexRow({
-            task: entry.task,
-            taskNumber: entry.originalNumber,
-            showDifficulty: false,
-            showCategory: true,
-          })
-        ),
-        ...(matchedTasks.length > limitedEntries.length
-          ? [
-              {
-                type: "text",
-                text: `還有 ${matchedTasks.length - limitedEntries.length} 件未顯示，可輸入「清單」查看完整案件板。`,
-                size: "xs",
-                color: FLEX_COLORS.mutedText,
-                wrap: true,
-              },
-            ]
-          : []),
-      ]),
+      buildFlexInfoCard(
+        [
+          { type: "text", text: `未完成：${unfinishedCount} 件`, size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
+          ...limitedEntries.map((entry) =>
+            buildTaskFlexRow({
+              task: entry.task,
+              taskNumber: entry.originalNumber,
+              showDifficulty: false,
+              showCategory: true,
+            })
+          ),
+          ...(matchedTasks.length > limitedEntries.length
+            ? [
+                {
+                  type: "text",
+                  text: `還有 ${matchedTasks.length - limitedEntries.length} 件躲在完整清單裡，可輸入「清單」查看。`,
+                  size: "xs",
+                  color: FLEX_COLORS.mutedText,
+                  wrap: true,
+                },
+              ]
+            : []),
+        ],
+        { label: `${difficulty}任務小抽屜`, emoji: "🗂️", backgroundColor: FLEX_COLORS.paper }
+      ),
     ];
   }
 
   const bubble = buildBaseFlexBubble({
     title: `本週${difficulty}任務`,
-    subtitle: "以上編號沿用完整清單",
+    subtitle: "同一個案件板，打開比較剛好的小抽屜。",
     accentColor: getDifficultyAccentColor(difficulty),
     bodyContents,
     footerContents: buildFlexFooterHint(
       matchedTasks.length === 0
-        ? ["需要完整清單請輸入：清單", "沒有案件也算一種清爽。"]
+        ? ["需要完整清單請輸入：清單", "沒有案件也算一種清爽，抽屜今天很乖。"]
         : buildDifficultyTaskFooterLines(matchedTasks, difficulty)
     ),
   });
@@ -1095,73 +1261,90 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   );
 
   const bodyContents = [
-    buildFlexInfoCard([
-      { type: "text", text: weekTitle, size: "xs", color: FLEX_COLORS.mutedText, weight: "bold", wrap: false, maxLines: 1 },
-      buildProgressLine("任務進度", taskDoneCount, tasks.length),
-      buildProgressLine("標準進度", standardDoneCount, standards.length),
-    ]),
+    buildFlexInfoCard(
+      [
+        { type: "text", text: weekTitle, size: "xs", color: FLEX_COLORS.mutedText, weight: "bold", wrap: false, maxLines: 1 },
+        buildProgressLine("任務進度", taskDoneCount, tasks.length),
+        buildProgressLine("標準進度", standardDoneCount, standards.length),
+      ],
+      { label: "本週小章", emoji: "🐾", backgroundColor: "#FFF6E3", borderColor: "#E5C98F", labelColor: "#9A6B2E" }
+    ),
   ];
 
   if (tasks.length === 0) {
     bodyContents.push(
-      buildFlexInfoCard([
-        { type: "text", text: "本週任務尚未立案。", size: "md", color: FLEX_COLORS.darkGreen, weight: "bold", wrap: true },
-        { type: "text", text: "放一個小任務，就是好的開始。", size: "sm", color: FLEX_COLORS.mutedText, wrap: true },
-      ])
+      buildFlexInfoCard(
+        buildCuteEmptyNote(
+          "本週任務尚未立案。",
+          "放一個小任務，就是好的開始。管理局小櫃台已經開燈。",
+          "🐣"
+        ),
+        { label: "本週任務櫃", emoji: "🗂️", backgroundColor: FLEX_COLORS.paper }
+      )
     );
   } else {
     bodyContents.push(
-      buildFlexInfoCard([
-        { type: "text", text: "本週任務", size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
-        ...taskRows,
-        ...(tasks.length > taskRows.length
-          ? [
-              {
-                type: "text",
-                text: `還有 ${tasks.length - taskRows.length} 件任務未顯示，可打開任務板查看完整內容。`,
-                size: "xs",
-                color: FLEX_COLORS.mutedText,
-                wrap: true,
-              },
-            ]
-          : []),
-      ])
+      buildFlexInfoCard(
+        [
+          { type: "text", text: "本週任務櫃", size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
+          ...taskRows,
+          ...(tasks.length > taskRows.length
+            ? [
+                {
+                  type: "text",
+                  text: `還有 ${tasks.length - taskRows.length} 件任務在完整任務板裡，先不用把整櫃搬出來。`,
+                  size: "xs",
+                  color: FLEX_COLORS.mutedText,
+                  wrap: true,
+                },
+              ]
+            : []),
+        ],
+        { label: "今日案件夾", emoji: "📎", backgroundColor: FLEX_COLORS.paper }
+      )
     );
   }
 
   if (standards.length === 0) {
     bodyContents.push(
-      buildFlexInfoCard([
-        { type: "text", text: "本週驗收標準尚未成文。", size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold", wrap: true },
-        { type: "text", text: "寫下一個方向，慢慢前進。", size: "xs", color: FLEX_COLORS.mutedText, wrap: true },
-      ])
+      buildFlexInfoCard(
+        buildCuteEmptyNote(
+          "本週驗收標準尚未成文。",
+          "先寫下一個方向就好，標準不是拿來咬自己的。",
+          "🌷"
+        ),
+        { label: "驗收小紙條", emoji: "📝", backgroundColor: "#FFF8EF" }
+      )
     );
   } else {
     bodyContents.push(
-      buildFlexInfoCard([
-        { type: "text", text: "本週驗收標準", size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
-        ...standardRows,
-        ...(standards.length > standardRows.length
-          ? [
-              {
-                type: "text",
-                text: `還有 ${standards.length - standardRows.length} 則標準未顯示。`,
-                size: "xs",
-                color: FLEX_COLORS.mutedText,
-                wrap: true,
-              },
-            ]
-          : []),
-      ])
+      buildFlexInfoCard(
+        [
+          { type: "text", text: "驗收小紙條", size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
+          ...standardRows,
+          ...(standards.length > standardRows.length
+            ? [
+                {
+                  type: "text",
+                  text: `還有 ${standards.length - standardRows.length} 則標準在任務板裡安靜排隊。`,
+                  size: "xs",
+                  color: FLEX_COLORS.mutedText,
+                  wrap: true,
+                },
+              ]
+            : []),
+        ],
+        { label: "驗收小紙條", emoji: "📝", backgroundColor: "#FFF8EF" }
+      )
     );
   }
 
   const bubble = buildBaseFlexBubble({
     title: "本週案件板",
-    subtitle: FLEX_FIXED_LINE,
+    subtitle: "案件都在這裡，今天先辦一小件。",
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
-    footerContents: buildFlexFooterHint(["案件都在這裡，今天先辦一小件。", "需要操作說明請輸入：攻略"]),
+    footerContents: buildFlexFooterHint(["今天不用整櫃清空，先讓一件事情過關。", "需要操作說明請輸入：攻略"]),
   });
 
   return {
