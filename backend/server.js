@@ -955,10 +955,11 @@ function buildFlexFooterHint(lines) {
     contents: lines.map((line, index) => ({
       type: "text",
       text: line,
-      size: index === 0 ? "sm" : "xs",
+      size: index === 0 ? "sm" : "xxs",
       color: index === 0 ? FLEX_COLORS.darkGreen : "#92867B",
       weight: index === 0 ? "bold" : "regular",
-      wrap: true,
+      wrap: index === 0,
+      maxLines: 1,
     })),
   };
 }
@@ -1065,7 +1066,7 @@ function buildTaskTagBox(task, showDifficulty) {
 
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
   const bubble = buildBaseFlexBubble({
-    title: "今日抽到一件小案子",
+    title: "抽到一件小案子",
     subtitle: "本局已搖出今日小籤，先辦它就好。",
     accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
@@ -1111,7 +1112,7 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
           buildTaskTagBox(selectedTask, true),
           {
             type: "text",
-            text: "先辦這件就好，其他公文先在抽屜裡睡一下。",
+            text: "先辦這件，其他公文先乖乖排隊。",
             size: "xs",
             color: FLEX_COLORS.mutedText,
             wrap: true,
@@ -1286,7 +1287,6 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     bodyContents.push(
       buildFlexInfoCard(
         [
-          { type: "text", text: "本週任務櫃", size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
           ...taskRows,
           ...(tasks.length > taskRows.length
             ? [
@@ -1300,7 +1300,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
               ]
             : []),
         ],
-        { label: "今日案件夾", emoji: "📎", backgroundColor: FLEX_COLORS.paper }
+        { label: "本週任務櫃", emoji: "🗂️", backgroundColor: FLEX_COLORS.paper }
       )
     );
   }
@@ -1320,7 +1320,6 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     bodyContents.push(
       buildFlexInfoCard(
         [
-          { type: "text", text: "驗收小紙條", size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
           ...standardRows,
           ...(standards.length > standardRows.length
             ? [
@@ -1344,7 +1343,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     subtitle: "案件都在這裡，今天先辦一小件。",
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
-    footerContents: buildFlexFooterHint(["今天不用整櫃清空，先讓一件事情過關。", "需要操作說明請輸入：攻略"]),
+    footerContents: buildFlexFooterHint(["不用整櫃清空，先讓一件事情過關。", "需要操作說明請輸入：攻略"]),
   });
 
   return {
