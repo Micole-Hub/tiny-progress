@@ -1037,7 +1037,7 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber }) {
     "完成後可以輸入：",
     `完成任務${taskNumber}`,
     "",
-    "先辦它就好。",
+    "先辦這件就好，其他公文先排隊。",
   ].join("\n");
 }
 
@@ -1082,7 +1082,7 @@ function buildTaskTagBox(task, showDifficulty) {
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
   const bubble = buildBaseFlexBubble({
     title: "今日抽到一件小案子",
-    subtitle: "本局已搖出今日小籤，先辦它就好。",
+    subtitle: "本局已搖出今日小籤，先辦這件就好。",
     accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
       buildFlexInfoCard(
@@ -1128,7 +1128,7 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
           buildTaskTagBox(selectedTask, true),
           {
             type: "text",
-            text: "先辦它就好。",
+            text: "先辦這件就好，其他公文先排隊。",
             size: "xs",
             color: FLEX_COLORS.mutedText,
             wrap: true,
@@ -1139,7 +1139,7 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
     ],
     footerContents: buildFlexFooterHint([
       `完成後輸入：完成任務${taskNumber}`,
-      "先過這一關。",
+      "不用想整週，先過這一關。",
     ]),
   });
 
@@ -1363,8 +1363,8 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
     footerContents: buildFlexFooterHint([
-      "今天先過一件。",
-      "輸入：攻略",
+      "今天不用清空整櫃，先辦一件。",
+      "需要操作說明請輸入：攻略",
     ]),
   });
 
