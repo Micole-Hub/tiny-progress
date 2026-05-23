@@ -348,16 +348,17 @@ function getLineSubCategoryLabel(subCategory) {
   return subCategory;
 }
 
-function getLineTaskTitle(title, maxLength = 16) {
-  const text = String(title || "").trim();
+function getLineTaskTitle(title, maxLength = 14) {
+  const text = String(title || "").trim().replace(/\s+/g, " ");
 
   if (!text) return "未命名任務";
 
-  // LINE 卡片空間比較窄，任務名稱顯示短版，完整內容仍保留在資料裡
+  // LINE 卡片空間窄：所有任務名稱都先做短版，完整內容仍保留在資料裡
   if (text.length > maxLength) return text.slice(0, maxLength) + "…";
 
   return text;
 }
+
 
 function formatTaskSectionByCategory(tasks) {
   if (tasks.length === 0) return ["【本週任務】", "本週尚未立案。放一個小任務，就是好的開始。"].join("\n");
@@ -776,10 +777,11 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
 }
 
 function getSubCategoryFlexTagWidth(subCategory) {
-  if (subCategory === "W3Schools") return "82px";
+  if (subCategory === "W3Schools") return "86px";
   if (subCategory === "freeCodeCamp") return "96px";
   return "70px";
 }
+
 
 function buildDifficultyFlexTag(difficulty, options = {}) {
   const style = getDifficultyFlexStyle(difficulty);
@@ -931,7 +933,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
       contents: [
         {
           type: "text",
-          text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title, 15)}`,
+          text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title, 14)}`,
           size: task.done ? "sm" : "md",
           color: task.done ? "#92867B" : FLEX_COLORS.darkGreen,
           wrap: false,
@@ -969,6 +971,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
   };
 }
 
+
 function buildStandardFlexRow({ standard, standardNumber }) {
   const checkbox = standard.done ? "☑" : "☐";
 
@@ -980,7 +983,7 @@ function buildStandardFlexRow({ standard, standardNumber }) {
     contents: [
       {
         type: "text",
-        text: `${standardNumber}. ${checkbox} ${standard.title}`,
+        text: `${standardNumber}. ${checkbox} ${getLineTaskTitle(standard.title, 16)}`,
         size: "sm",
         color: standard.done ? "#92867B" : FLEX_COLORS.darkGreen,
         wrap: false,
@@ -990,6 +993,7 @@ function buildStandardFlexRow({ standard, standardNumber }) {
     ],
   };
 }
+
 
 function buildFlexFooterHint(lines) {
   return {
@@ -1109,10 +1113,97 @@ function buildTaskTagBox(task, showDifficulty) {
   };
 }
 
-function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
+function buildDrawTaskTagBox(task) {
+  const category = normalizeCategory(task.category);
+  const isProgrammingTask = category === "程式學習";
+  const tags = [];
+
+  tags.push(
+    buildCategoryFlexTag(category, {
+      width: isProgrammingTask ? "92px" : "120px",
+    })
+  );
+
+  if (isProgrammingTask) {
+    const subCategory = normalizeSubCategory(task.subCategory, category);
+
+    tags.push(
+      buildSubCategoryFlexTag(subCategory, {
+        width: getSubCategoryFlexTagWidth(subCategory),
+      })
+    );
+  }
+
+  return {
+    type: "box",
+    layout: "horizontal",
+    spacing: "sm",
+    margin: "sm",
+    contents: tags,
+  };
+}
+
+function buildDrawEmptyFlexMessage() {
   const bubble = buildBaseFlexBubble({
-    title: "今日抽到一件小案子",
-    subtitle: "本局已搖出今日小籤，先辦這件就好。",
+    title: "今日抽到空抽屜",
+    subtitle: "本週暫時沒有未完成任務，可以先整理一下小櫃台。",
+    accentColor: FLEX_ACCENTS.draw,
+    bodyContents: [
+      buildFlexInfoCard(
+        [
+          {
+            type: "text",
+            text: "🐣",
+            size: "xxl",
+            align: "center",
+          },
+          {
+            type: "text",
+            text: "目前沒有任務可以抽。",
+            size: "md",
+            color: FLEX_COLORS.darkGreen,
+            weight: "bold",
+            wrap: true,
+            align: "center",
+          },
+          {
+            type: "text",
+            text: "先放一個小任務，抽籤櫃就能開張。",
+            size: "sm",
+            color: FLEX_COLORS.mutedText,
+            wrap: true,
+            align: "center",
+          },
+        ],
+        {
+          label: "抽籤小櫃台",
+          emoji: "🥚",
+          borderColor: "#E5C98F",
+          backgroundColor: "#FFF6E3",
+          labelColor: "#9A6B2E",
+        }
+      ),
+    ],
+    footerContents: buildFlexFooterHint([
+      "可以輸入：清單",
+      "先確認案件板，再決定要不要立案。",
+    ]),
+  });
+
+  return {
+    type: "flex",
+    altText: "Tiny Progress｜目前沒有任務可以抽",
+    contents: bubble,
+  };
+}
+
+
+function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
+  const difficulty = normalizeDifficulty(selectedTask.difficulty);
+
+  const bubble = buildBaseFlexBubble({
+    title: "抽到一件小案子",
+    subtitle: "本局已搖出今日小籤，先辦它就好。",
     accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
       buildFlexInfoCard(
@@ -1126,45 +1217,60 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
               {
                 type: "box",
                 layout: "vertical",
-                width: "36px",
-                height: "36px",
+                width: "24px",
+                height: "24px",
                 backgroundColor: FLEX_COLORS.stickerBg,
                 cornerRadius: "999px",
                 justifyContent: "center",
                 alignItems: "center",
-                contents: [{ type: "text", text: "🎲", size: "lg", align: "center" }],
-              },
-              {
-                type: "box",
-                layout: "vertical",
-                spacing: "xs",
-                flex: 1,
                 contents: [
-                  { type: "text", text: `第 ${taskNumber} 個任務`, size: "xs", color: FLEX_COLORS.mutedText, weight: "bold" },
-                  { type: "text", text: "本局今日小籤", size: "sm", color: FLEX_COLORS.gold, weight: "bold" },
+                  {
+                    type: "text",
+                    text: "🎲",
+                    size: "xs",
+                    align: "center",
+                  },
                 ],
               },
+              {
+                type: "text",
+                text: `第 ${taskNumber} 個任務`,
+                size: "sm",
+                color: FLEX_COLORS.darkGreen,
+                weight: "bold",
+                flex: 1,
+                wrap: false,
+                maxLines: 1,
+              },
+              buildDifficultyFlexTag(difficulty, {
+                width: "54px",
+              }),
             ],
           },
           {
             type: "text",
-            text: getLineTaskTitle(selectedTask.title, 16),
-            size: "lg",
+            text: getLineTaskTitle(selectedTask.title, 14),
+            size: "md",
             weight: "bold",
             color: FLEX_COLORS.darkGreen,
+            margin: "xs",
             wrap: false,
             maxLines: 1,
           },
-          buildTaskTagBox(selectedTask, true),
+          buildDrawTaskTagBox(selectedTask),
           {
             type: "text",
             text: "先辦這件就好，其他公文先排隊。",
             size: "xs",
             color: FLEX_COLORS.mutedText,
             wrap: true,
+            margin: "sm",
           },
         ],
-        { label: "今日小籤", emoji: "🐣", borderColor: "#E5C98F", backgroundColor: "#FFF6E3", labelColor: "#9A6B2E" }
+        {
+          borderColor: "#E5C98F",
+          backgroundColor: "#FFF6E3",
+        }
       ),
     ],
     footerContents: buildFlexFooterHint([
@@ -1180,19 +1286,23 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
   };
 }
 
+
 async function handleDrawOneTaskCommand() {
   const board = await getTaskBoardForLine();
   const unfinishedTasks = board.tasks.filter((task) => !task.done);
 
   if (unfinishedTasks.length === 0) {
-    return [
-      "🎲 Tiny Progress｜抽籤小櫃台",
-      "",
-      "本週沒有未完成任務可以抽。",
-      "如果都完成了，請給自己蓋一枚小章，今日可以少一點罪惡感。",
-      "",
-      "可以輸入「清單」確認目前案件板。",
-    ].join("\n");
+    return {
+      replyText: [
+        "🎲 Tiny Progress｜抽籤小櫃台",
+        "",
+        "目前沒有未完成任務可以抽。",
+        "先放一個小任務，抽籤櫃就能開張。",
+        "",
+        "可以輸入「清單」確認目前案件板。",
+      ].join("\n"),
+      replyMessages: [buildDrawEmptyFlexMessage()],
+    };
   }
 
   const selectedTask = unfinishedTasks[Math.floor(Math.random() * unfinishedTasks.length)];
@@ -1203,6 +1313,7 @@ async function handleDrawOneTaskCommand() {
     replyMessages: [buildDrawOneTaskFlexMessage({ selectedTask, taskNumber })],
   };
 }
+
 
 function buildDifficultyTaskFooterLines(matchedTasks, difficulty) {
   const firstUnfinishedEntry = matchedTasks.find((entry) => !entry.task.done);
@@ -1324,12 +1435,26 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   if (tasks.length === 0) {
     bodyContents.push(
       buildFlexInfoCard(
-        buildCuteEmptyNote(
-          "本週任務尚未立案。",
-          "放一個小任務，就是好的開始。管理局小櫃台已經開燈。",
-          "🐣"
-        ),
-        { label: "本週任務櫃", emoji: "🗂️", backgroundColor: FLEX_COLORS.paper }
+        [
+          {
+            type: "text",
+            text: "本週任務尚未立案。",
+            size: "md",
+            color: FLEX_COLORS.darkGreen,
+            weight: "bold",
+            wrap: true,
+            align: "center",
+          },
+          {
+            type: "text",
+            text: "先放一個小任務，就能開張。",
+            size: "sm",
+            color: FLEX_COLORS.mutedText,
+            wrap: true,
+            align: "center",
+          },
+        ],
+        { label: "本週任務櫃", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
       )
     );
   } else {
@@ -1349,7 +1474,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
               ]
             : []),
         ],
-        { label: "本週任務櫃", emoji: "🗂️", backgroundColor: FLEX_COLORS.paper }
+        { label: "本週任務櫃", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
       )
     );
   }
@@ -1357,12 +1482,26 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   if (standards.length === 0) {
     bodyContents.push(
       buildFlexInfoCard(
-        buildCuteEmptyNote(
-          "本週驗收標準尚未成文。",
-          "先寫下一個方向就好，標準不是拿來咬自己的。",
-          "🌷"
-        ),
-        { label: "驗收小紙條", emoji: "📝", backgroundColor: "#FFF8EF" }
+        [
+          {
+            type: "text",
+            text: "本週驗收標準尚未成文。",
+            size: "md",
+            color: FLEX_COLORS.darkGreen,
+            weight: "bold",
+            wrap: true,
+            align: "center",
+          },
+          {
+            type: "text",
+            text: "先寫一個方向，慢慢孵出成果。",
+            size: "sm",
+            color: FLEX_COLORS.mutedText,
+            wrap: true,
+            align: "center",
+          },
+        ],
+        { label: "驗收小紙條", emoji: "🥚", backgroundColor: "#FFF8EF" }
       )
     );
   } else {
@@ -1382,7 +1521,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
               ]
             : []),
         ],
-        { label: "驗收小紙條", emoji: "📝", backgroundColor: "#FFF8EF" }
+        { label: "驗收小紙條", emoji: "🥚", backgroundColor: "#FFF8EF" }
       )
     );
   }
@@ -1404,6 +1543,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     contents: bubble,
   };
 }
+
 
 async function handleAllListFlexCommand() {
   const board = await getTaskBoardForLine();
