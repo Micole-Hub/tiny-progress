@@ -75,7 +75,7 @@ window.fetch = async function (input, options = {}) {
 const API_BASE_URL = "https://no-effort-time-bureau.onrender.com";
 
 const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
-const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools"];
+const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools", "freeCodeCamp"];
 const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
 
 const DEFAULT_CATEGORY = "程式學習";
@@ -107,7 +107,7 @@ const DAILY_QUOTES = [
 ];
 
 let items = [];
-let weekContext = { currentWeek: null, nextWeek: null, canPlanNextWeek: false };
+let weekContext = { previousWeek: null, currentWeek: null, nextWeek: null, canPlanNextWeek: false };
 let selectedWeekView = "current";
 
 const taskList = document.querySelector("#taskList");
@@ -137,6 +137,7 @@ const weekEndText = document.querySelector("#weekEndText");
 const dailyQuote = document.querySelector("#dailyQuote");
 const currentWeekNumber = document.querySelector("#currentWeekNumber");
 const planStatusText = document.querySelector("#planStatusText");
+const previousWeekTab = document.querySelector("#previousWeekTab");
 const currentWeekTab = document.querySelector("#currentWeekTab");
 const nextWeekTab = document.querySelector("#nextWeekTab");
 const selectedWeekLabel = document.querySelector("#selectedWeekLabel");
@@ -159,12 +160,13 @@ function getCurrentWeekRange(baseDate = new Date()) {
 }
 function renderWeekRange() {
   if (!weekStartText || !weekEndText) return;
-  const currentWeek = weekContext.currentWeek;
-  if (currentWeek && currentWeek.weekStart && currentWeek.weekEnd) {
-    weekStartText.textContent = currentWeek.weekStart.replaceAll("-", "/");
-    weekStartText.setAttribute("datetime", currentWeek.weekStart);
-    weekEndText.textContent = currentWeek.weekEnd.replaceAll("-", "/");
-    weekEndText.setAttribute("datetime", currentWeek.weekEnd);
+  const selectedWeek = getSelectedWeek();
+  const displayWeek = selectedWeek || weekContext.currentWeek;
+  if (displayWeek && displayWeek.weekStart && displayWeek.weekEnd) {
+    weekStartText.textContent = displayWeek.weekStart.replaceAll("-", "/");
+    weekStartText.setAttribute("datetime", displayWeek.weekStart);
+    weekEndText.textContent = displayWeek.weekEnd.replaceAll("-", "/");
+    weekEndText.setAttribute("datetime", displayWeek.weekEnd);
     return;
   }
   const range = getCurrentWeekRange();
@@ -182,28 +184,33 @@ function renderDailyQuote() {
   dailyQuote.textContent = `本日金句：${DAILY_QUOTES[getDayOfYear() % DAILY_QUOTES.length]}`;
 }
 function isSundayNoonOrLater(date = new Date()) { return date.getDay() === 0 && date.getHours() >= 12; }
-function getSelectedWeek() { return selectedWeekView === "next" ? weekContext.nextWeek : weekContext.currentWeek; }
+function getSelectedWeek() {
+  if (selectedWeekView === "previous") return weekContext.previousWeek;
+  if (selectedWeekView === "next") return weekContext.nextWeek;
+  return weekContext.currentWeek;
+}
 function getSelectedWeekNumber() { const selectedWeek = getSelectedWeek(); return selectedWeek && selectedWeek.weekNumber ? Number(selectedWeek.weekNumber) : null; }
-function getSelectedWeekDisplayLabel() { return selectedWeekView === "next" ? "下週" : "本週"; }
-function getSelectedWeekLabelText() { return selectedWeekView === "next" ? "下週主題" : "本週主題"; }
-function getAchievementLabelText() { return selectedWeekView === "next" ? "下週達成" : "本週達成"; }
+function getSelectedWeekDisplayLabel() { if (selectedWeekView === "previous") return "已結案"; return selectedWeekView === "next" ? "下週" : "本週"; }
+function getSelectedWeekLabelText() { if (selectedWeekView === "previous") return "已結案主題"; return selectedWeekView === "next" ? "下週主題" : "本週主題"; }
+function getAchievementLabelText() { if (selectedWeekView === "previous") return "結案達成"; return selectedWeekView === "next" ? "下週達成" : "本週達成"; }
+function isPreviousWeekView() { return selectedWeekView === "previous"; }
 function isCurrentWeekView() { return selectedWeekView === "current"; }
 function isNextWeekView() { return selectedWeekView === "next"; }
+function canEditSelectedWeek() { return isCurrentWeekView() && !!getSelectedWeekNumber(); }
 function canAddToSelectedWeek() {
   const selectedWeek = getSelectedWeek();
   if (!selectedWeek || !selectedWeek.weekNumber) return false;
-  if (isCurrentWeekView()) return true;
-  if (isNextWeekView()) return false;
-  return false;
+  return isCurrentWeekView();
 }
 function setWeekTabActiveState() {
-  if (!currentWeekTab || !nextWeekTab) return;
-  currentWeekTab.classList.toggle("is-active", selectedWeekView === "current");
-  nextWeekTab.classList.toggle("is-active", selectedWeekView === "next");
+  if (previousWeekTab) previousWeekTab.classList.toggle("is-active", selectedWeekView === "previous");
+  if (currentWeekTab) currentWeekTab.classList.toggle("is-active", selectedWeekView === "current");
+  if (nextWeekTab) nextWeekTab.classList.toggle("is-active", selectedWeekView === "next");
 }
 function renderPlanCard() {
   if (!currentWeekNumber || !planStatusText || !selectedWeekLabel || !selectedWeekTitle || !selectedWeekAchievement) return;
   const currentWeek = weekContext.currentWeek;
+  const previousWeek = weekContext.previousWeek;
   const nextWeek = weekContext.nextWeek;
   const selectedWeek = getSelectedWeek();
   setWeekTabActiveState();
@@ -215,12 +222,16 @@ function renderPlanCard() {
     selectedWeekAchievement.textContent = "請確認後端 /week-context 是否正常，以及 weeks 工作表是否有 current。";
     return;
   }
-  currentWeekNumber.textContent = String(currentWeek.weekNumber || "-");
-  planStatusText.textContent = nextWeek ? `目前第 ${currentWeek.weekNumber} 週，下週預告第 ${nextWeek.weekNumber} 週。` : `目前第 ${currentWeek.weekNumber} 週，尚未設定下週。`;
+  currentWeekNumber.textContent = selectedWeek && selectedWeek.weekNumber ? String(selectedWeek.weekNumber) : String(currentWeek.weekNumber || "-");
+  if (isPreviousWeekView()) {
+    planStatusText.textContent = previousWeek ? `正在查看第 ${previousWeek.weekNumber} 週已結案紀錄；目前進行第 ${currentWeek.weekNumber} 週。` : "目前沒有已結案紀錄。";
+  } else {
+    planStatusText.textContent = nextWeek ? `目前第 ${currentWeek.weekNumber} 週，下週預告第 ${nextWeek.weekNumber} 週。` : `目前第 ${currentWeek.weekNumber} 週，尚未設定下週。`;
+  }
   if (!selectedWeek) {
-    selectedWeekLabel.textContent = "下週主題";
-    selectedWeekTitle.textContent = "尚未設定下週";
-    selectedWeekAchievement.textContent = "可以先在 weeks 工作表補上 status = next 的週次。";
+    selectedWeekLabel.textContent = getSelectedWeekLabelText();
+    selectedWeekTitle.textContent = isPreviousWeekView() ? "尚無已結案紀錄" : "尚未設定下週";
+    selectedWeekAchievement.textContent = isPreviousWeekView() ? "完成第一週結案後，這裡會保留上一週紀錄。" : "可以先在 weeks 工作表補上 status = next 的週次。";
     return;
   }
   selectedWeekLabel.textContent = getSelectedWeekLabelText();
@@ -236,11 +247,16 @@ function renderBoardLabels() {
   if (standardProgressLabel) standardProgressLabel.textContent = `${label}驗收標準`;
   if (taskSectionTitle) taskSectionTitle.textContent = `${label}任務`;
   if (standardSectionTitle) standardSectionTitle.textContent = `${label}驗收標準`;
+  if (isPreviousWeekView()) {
+    if (progressNote) progressNote.textContent = "這是已結案週次，資料保留查閱，不再修改。";
+    if (taskSectionNote) taskSectionNote.textContent = "已結案任務只能查看，不能新增、勾選、修訂或撤案。";
+    if (standardSectionNote) standardSectionNote.textContent = "已結案驗收標準已封存，不再補件。";
+    return;
+  }
   if (isNextWeekView()) {
-    const nextWeekCanAdd = canAddToSelectedWeek();
-    if (progressNote) progressNote.textContent = nextWeekCanAdd ? "下週已開放預先立案，先替未來鋪一小段路。" : "下週先預覽，不急著提前開張。";
-    if (taskSectionNote) taskSectionNote.textContent = nextWeekCanAdd ? "週日中午已過，可以先把下週任務安靜放進資料夾。" : "這裡先預覽下週案件，週日中午 12 點後開放新增。";
-    if (standardSectionNote) standardSectionNote.textContent = nextWeekCanAdd ? "可以先替下週寫下驗收方向，但正式開工仍待本週結案。" : "下週目前僅供預覽，週日中午 12 點後可先立案。";
+    if (progressNote) progressNote.textContent = "下週先預覽；要正式開工，請按本週結案。";
+    if (taskSectionNote) taskSectionNote.textContent = "這裡先預覽下週案件；結案後才會成為新的本週。";
+    if (standardSectionNote) standardSectionNote.textContent = "下週目前僅供預覽；結案後才會正式開張。";
     return;
   }
   if (progressNote) progressNote.textContent = "本局只記本週靠近了哪裡，不翻舊帳。";
@@ -252,11 +268,12 @@ function renderAddFormState() {
   [taskInput, taskCategory, taskSubCategory, taskDifficulty, addTaskBtn, standardInput, addStandardBtn].forEach((control) => {
     if (control) control.disabled = !canAdd;
   });
+  if (completeWeekBtn) completeWeekBtn.disabled = !isCurrentWeekView() || !weekContext.nextWeek;
   renderSubCategoryControl();
-  if (taskInput) taskInput.placeholder = isCurrentWeekView() ? "立一個小案件，例如：練習 CSS Flex" : canAdd ? "先替下週立一個小案件，例如：練習 JavaScript" : "下週目前只供預覽，週日中午 12 點後可先立案";
-  if (standardInput) standardInput.placeholder = isCurrentWeekView() ? "寫一個本週想靠近的方向，例如：本週能說明一個學到的觀念" : canAdd ? "先寫一個下週驗收方向" : "下週目前只供預覽，週日中午 12 點後可先新增";
+  if (taskInput) taskInput.placeholder = isPreviousWeekView() ? "已結案週次僅供查看" : isCurrentWeekView() ? "立一個小案件，例如：練習 CSS Flex" : "下週僅供預覽，結案後才可新增";
+  if (standardInput) standardInput.placeholder = isPreviousWeekView() ? "已結案週次僅供查看" : isCurrentWeekView() ? "寫一個本週想靠近的方向，例如：本週能說明一個學到的觀念" : "下週僅供預覽，結案後才可新增";
 }
-function switchWeekView(view) { if (view !== "current" && view !== "next") return; selectedWeekView = view; renderAll(); }
+function switchWeekView(view) { if (view !== "previous" && view !== "current" && view !== "next") return; selectedWeekView = view; renderAll(); }
 function normalizeCategory(value) { const category = String(value || "").trim(); return CATEGORY_OPTIONS.includes(category) ? category : DEFAULT_CATEGORY; }
 function normalizeSubCategory(value, category = DEFAULT_CATEGORY) {
   const normalizedCategory = normalizeCategory(category);
@@ -300,7 +317,7 @@ function replaceItem(updatedItem) { const normalizedUpdatedItem = normalizeItem(
 function replaceItemById(targetId, newItem) { const normalizedNewItem = normalizeItem(newItem); items = items.map((item) => item.id === targetId ? normalizedNewItem : item); }
 function createEmptyMessage(text) { const emptyItem = document.createElement("li"); emptyItem.className = "empty-message"; emptyItem.textContent = text; return emptyItem; }
 function getCategoryClass(category) { if (category === "程式學習") return "programming"; if (category === "身心穩定") return "wellness"; if (category === "興趣探索") return "interest"; return ""; }
-function getSubCategoryClass(subCategory) { if (subCategory === "觀看課程影片") return "video"; if (subCategory === "練習") return "practice"; if (subCategory === "寫筆記") return "note"; if (subCategory === "W3Schools") return "w3schools"; return "uncategorized"; }
+function getSubCategoryClass(subCategory) { if (subCategory === "觀看課程影片") return "video"; if (subCategory === "練習") return "practice"; if (subCategory === "寫筆記") return "note"; if (subCategory === "W3Schools") return "w3schools"; if (subCategory === "freeCodeCamp") return "freecodecamp"; return "uncategorized"; }
 function createCategoryHeading(category) {
   const heading = document.createElement("li");
   const categoryClass = getCategoryClass(category);
@@ -315,8 +332,16 @@ function createSubCategoryHeading(subCategory) {
   return heading;
 }
 function getDifficultyClass(difficulty) { if (difficulty === "簡單") return "easy"; if (difficulty === "適中") return "medium"; if (difficulty === "困難") return "hard"; return ""; }
-function getTaskEmptyMessage() { if (!getSelectedWeek()) return "目前還沒有可顯示的週次資料。"; return isNextWeekView() ? "下週目前還沒有任務，先讓未來安靜排隊。" : "今天還沒立案也無妨，放一個小任務，就是好的開始。"; }
-function getStandardEmptyMessage() { if (!getSelectedWeek()) return "目前還沒有可顯示的週次資料。"; return isNextWeekView() ? "下週標準尚未成文，等時機到了再慢慢補。" : "本週標準尚未成文，寫下一個方向，慢慢前進。"; }
+function getTaskEmptyMessage() {
+  if (!getSelectedWeek()) return isPreviousWeekView() ? "目前沒有已結案任務紀錄。" : "目前還沒有可顯示的週次資料。";
+  if (isPreviousWeekView()) return "這週已結案，當時沒有任務紀錄。";
+  return isNextWeekView() ? "下週目前還沒有任務，先讓未來安靜排隊。" : "今天還沒立案也無妨，放一個小任務，就是好的開始。";
+}
+function getStandardEmptyMessage() {
+  if (!getSelectedWeek()) return isPreviousWeekView() ? "目前沒有已結案驗收標準紀錄。" : "目前還沒有可顯示的週次資料。";
+  if (isPreviousWeekView()) return "這週已結案，當時沒有驗收標準紀錄。";
+  return isNextWeekView() ? "下週標準尚未成文，等時機到了再慢慢補。" : "本週標準尚未成文，寫下一個方向，慢慢前進。";
+}
 function createChip(text, className) { const chip = document.createElement("span"); chip.className = className; chip.textContent = text; return chip; }
 function createCheckItem(item, displayNumber) {
   const normalizedItem = normalizeItem(item);
@@ -325,6 +350,7 @@ function createCheckItem(item, displayNumber) {
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.checked = normalizedItem.done;
+  checkbox.disabled = !canEditSelectedWeek();
   const content = document.createElement("div");
   content.className = "item-content";
   const topLine = document.createElement("div");
@@ -359,6 +385,8 @@ function createCheckItem(item, displayNumber) {
   deleteBtn.className = "text-btn danger";
   deleteBtn.type = "button";
   deleteBtn.textContent = "撤案";
+  editBtn.disabled = !canEditSelectedWeek();
+  deleteBtn.disabled = !canEditSelectedWeek();
   checkbox.addEventListener("change", async () => updateItem(normalizedItem.id, { done: checkbox.checked }));
   editBtn.addEventListener("click", async () => {
     const newTitle = prompt("請輸入修訂後的公文內容", normalizedItem.title);
@@ -432,13 +460,14 @@ async function loadWeekContext() {
     if (!response.ok) throw new Error("後端週次資料回應失敗");
     const data = await response.json();
     weekContext = {
+      previousWeek: data.previousWeek || null,
       currentWeek: data.currentWeek || null,
       nextWeek: data.nextWeek || null,
       canPlanNextWeek: data.canPlanNextWeek === true,
     };
   } catch (error) {
     console.error("讀取週次資料失敗：", error);
-    weekContext = { currentWeek: null, nextWeek: null, canPlanNextWeek: false };
+    weekContext = { previousWeek: null, currentWeek: null, nextWeek: null, canPlanNextWeek: false };
   }
 }
 async function loadItems() {
@@ -471,7 +500,7 @@ async function refreshItems() {
 }
 async function addItem(type, inputElement, options = {}) {
   if (!canAddToSelectedWeek()) {
-    alert(isNextWeekView() ? "下週目前只供預覽，週日中午 12 點後才可先新增。" : "目前還沒有可新增的週次資料。");
+    alert(isNextWeekView() ? "下週目前只供預覽；按本週結案後，才會成為新的本週。" : "目前還沒有可新增的週次資料。");
     return;
   }
   const title = inputElement.value.trim();
@@ -561,7 +590,7 @@ function buildCompleteWeekConfirmText(currentWeek, nextWeek) {
     "若確認，請輸入：結案"
   );
 
-  return lines.join("\n)");
+  return lines.join("\n");
 }
 async function completeCurrentWeek() {
   const currentWeek = weekContext.currentWeek;
@@ -580,10 +609,12 @@ async function completeCurrentWeek() {
     const response = await fetch(`${API_BASE_URL}/weeks/complete-current`, { method: "POST" });
     if (!response.ok) throw new Error("本週結案失敗");
     const data = await response.json();
-    selectedWeekView = "current";
+    selectedWeekView = "previous";
     await Promise.all([loadWeekContext(), loadItems()]);
     renderAll();
-    alert(`第 ${data.completedWeek.weekNumber} 週已結案，現在進入第 ${data.currentWeek.weekNumber} 週。`);
+    alert(`第 ${data.completedWeek.weekNumber} 週已結案，已切到已結案檢視。
+
+現在第 ${data.currentWeek.weekNumber} 週已開張，可切回「本週」新增任務。`);
   } catch (error) {
     console.error("本週結案失敗：", error);
     alert("本局暫時無法結案，週次未更動。請稍後再試。");
@@ -601,6 +632,7 @@ async function initApp() {
   addStandardBtn.addEventListener("click", addStandard);
   if (taskCategory) taskCategory.addEventListener("change", renderSubCategoryControl);
   if (refreshBtn) refreshBtn.addEventListener("click", refreshItems);
+  if (previousWeekTab) previousWeekTab.addEventListener("click", () => switchWeekView("previous"));
   if (currentWeekTab) currentWeekTab.addEventListener("click", () => switchWeekView("current"));
   if (nextWeekTab) nextWeekTab.addEventListener("click", () => switchWeekView("next"));
   if (completeWeekBtn) completeWeekBtn.addEventListener("click", completeCurrentWeek);

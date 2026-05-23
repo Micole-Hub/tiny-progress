@@ -150,6 +150,7 @@ async function fetchWeekContextFromGoogleSheets() {
   }
 
   return {
+    previousWeek: data.previousWeek || null,
     currentWeek: data.currentWeek || null,
     nextWeek: data.nextWeek || null,
     canPlanNextWeek: data.canPlanNextWeek === true,
@@ -1492,8 +1493,8 @@ function getGuideText() {
     "【新增】",
     "新增任務 練習 CSS",
     "新增任務 練習 CSS Flex｜程式學習｜練習｜適中",
-    "新增任務 看完 HTML 課程｜程式學習｜觀看課程影片｜簡單
-    新增任務 解 freeCodeCamp 表單題｜程式學習｜freeCodeCamp｜適中",
+    "新增任務 看完 HTML 課程｜程式學習｜觀看課程影片｜簡單",
+    "新增任務 解 freeCodeCamp 表單題｜程式學習｜freeCodeCamp｜適中",
     "新增標準 本週能說明一個學到的觀念",
     "",
     "分類可用：程式學習、身心穩定、興趣探索",
