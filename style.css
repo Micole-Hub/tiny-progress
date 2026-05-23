@@ -32,9 +32,6 @@
   --subcategory-video: #6f7fa8;
   --subcategory-practice: #6e9b72;
   --subcategory-note: #c28a5a;
-  --subcategory-w3schools-bg: #f1dde0;
-  --subcategory-w3schools-text: #7a4b52;
-  --subcategory-w3schools-line: rgba(122, 75, 82, 0.22);
 
   --shadow: 0 18px 42px rgba(59, 51, 45, 0.1);
   --soft-shadow: 0 10px 26px rgba(59, 51, 45, 0.075);
@@ -785,12 +782,6 @@ body.is-busy button {
 
 .chip-subcategory.note {
   background: var(--subcategory-note);
-}
-
-.chip-subcategory.w3schools {
-  background: var(--subcategory-w3schools-bg);
-  color: var(--subcategory-w3schools-text);
-  border-color: var(--subcategory-w3schools-line);
 }
 
 .chip-subcategory.uncategorized {

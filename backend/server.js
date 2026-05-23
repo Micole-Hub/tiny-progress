@@ -14,7 +14,7 @@ const pendingActions = new Map();
 const PENDING_ACTION_TTL_MS = 10 * 60 * 1000;
 
 const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
-const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools"];
+const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools", "freeCodeCamp"];
 const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
 
 const DEFAULT_CATEGORY = "程式學習";
@@ -65,6 +65,12 @@ function normalizeDifficulty(value) {
 
 function normalizeDone(value) {
   return value === true || String(value).toUpperCase() === "TRUE";
+}
+
+function getApiErrorStatus(error) {
+  const message = String((error && error.message) || "");
+  if (message.includes("已結案封存")) return 409;
+  return 500;
 }
 
 function normalizeItem(item) {
@@ -337,6 +343,7 @@ function getLineSubCategoryLabel(subCategory) {
   if (subCategory === "觀看課程影片") return "看課程";
   if (subCategory === "寫筆記") return "筆記";
   if (subCategory === "W3Schools") return "W3Schools";
+  if (subCategory === "freeCodeCamp") return "freeCodeCamp";
   return subCategory;
 }
 
@@ -499,6 +506,9 @@ const FLEX_COLORS = {
   w3schools: "#F1DDE0",
   w3schoolsText: "#7A4B52",
   w3schoolsAccent: "#C47F88",
+  freecodecamp: "#E6DDF1",
+  freecodecampText: "#604A78",
+  freecodecampAccent: "#9A80BF",
 
   uncategorized: "#EFE4D8",
   uncategorizedText: "#7A6E5F",
@@ -561,6 +571,14 @@ function getSubCategoryFlexStyle(subCategory) {
       textColor: FLEX_COLORS.w3schoolsText,
       borderColor: "#D9B7BE",
       accentColor: FLEX_COLORS.w3schoolsAccent,
+    };
+  }
+  if (subCategory === "freeCodeCamp") {
+    return {
+      backgroundColor: FLEX_COLORS.freecodecamp,
+      textColor: FLEX_COLORS.freecodecampText,
+      borderColor: "#CABADD",
+      accentColor: FLEX_COLORS.freecodecampAccent,
     };
   }
   return {
@@ -757,7 +775,9 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
 }
 
 function getSubCategoryFlexTagWidth(subCategory) {
-  return subCategory === "W3Schools" ? "82px" : "70px";
+  if (subCategory === "W3Schools") return "82px";
+  if (subCategory === "freeCodeCamp") return "96px";
+  return "70px";
 }
 
 function buildDifficultyFlexTag(difficulty, options = {}) {
@@ -896,7 +916,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
 
     tagContents.push(
       buildSubCategoryFlexTag(subCategory, {
-        width: subCategory === "W3Schools" ? "86px" : "70px",
+        width: getSubCategoryFlexTagWidth(subCategory),
       })
     );
   }
@@ -1087,42 +1107,11 @@ function buildTaskTagBox(task, showDifficulty) {
     contents: tags,
   };
 }
-function buildDrawTaskTagBox(task) {
-  const category = normalizeCategory(task.category);
-  const isProgrammingTask = category === "程式學習";
-  const tags = [];
-
-  tags.push(
-    buildCategoryFlexTag(category, {
-      width: isProgrammingTask ? "92px" : "120px",
-    })
-  );
-
-  if (isProgrammingTask) {
-    const subCategory = normalizeSubCategory(task.subCategory, category);
-
-    tags.push(
-      buildSubCategoryFlexTag(subCategory, {
-        width: subCategory === "W3Schools" ? "86px" : "68px",
-      })
-    );
-  }
-
-  return {
-    type: "box",
-    layout: "horizontal",
-    spacing: "sm",
-    margin: "sm",
-    contents: tags,
-  };
-}
 
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
-  const difficulty = normalizeDifficulty(selectedTask.difficulty);
-
   const bubble = buildBaseFlexBubble({
-    title: "抽到一件小案子",
-    subtitle: "本局已搖出今日小籤，先辦它就好。",
+    title: "今日抽到一件小案子",
+    subtitle: "本局已搖出今日小籤，先辦這件就好。",
     accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
       buildFlexInfoCard(
@@ -1136,60 +1125,45 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
               {
                 type: "box",
                 layout: "vertical",
-                width: "24px",
-                height: "24px",
+                width: "36px",
+                height: "36px",
                 backgroundColor: FLEX_COLORS.stickerBg,
                 cornerRadius: "999px",
                 justifyContent: "center",
                 alignItems: "center",
-                contents: [
-                  {
-                    type: "text",
-                    text: "🎲",
-                    size: "xs",
-                    align: "center",
-                  },
-                ],
+                contents: [{ type: "text", text: "🎲", size: "lg", align: "center" }],
               },
               {
-                type: "text",
-                text: `第 ${taskNumber} 個任務`,
-                size: "sm",
-                color: FLEX_COLORS.darkGreen,
-                weight: "bold",
+                type: "box",
+                layout: "vertical",
+                spacing: "xs",
                 flex: 1,
+                contents: [
+                  { type: "text", text: `第 ${taskNumber} 個任務`, size: "xs", color: FLEX_COLORS.mutedText, weight: "bold" },
+                  { type: "text", text: "本局今日小籤", size: "sm", color: FLEX_COLORS.gold, weight: "bold" },
+                ],
               },
-              buildDifficultyFlexTag(difficulty, {
-                width: "54px",
-              }),
             ],
           },
           {
             type: "text",
-            text: getLineTaskTitle(selectedTask.title, 18),
-            size: "md",
+            text: getLineTaskTitle(selectedTask.title, 16),
+            size: "lg",
             weight: "bold",
             color: FLEX_COLORS.darkGreen,
-
-            // 任務名稱往上靠，並維持單行
-            margin: "xs",
             wrap: false,
             maxLines: 1,
           },
-          buildDrawTaskTagBox(selectedTask),
+          buildTaskTagBox(selectedTask, true),
           {
             type: "text",
             text: "先辦這件就好，其他公文先排隊。",
             size: "xs",
             color: FLEX_COLORS.mutedText,
             wrap: true,
-            margin: "sm",
           },
         ],
-        {
-          borderColor: "#E5C98F",
-          backgroundColor: "#FFF6E3",
-        }
+        { label: "今日小籤", emoji: "🐣", borderColor: "#E5C98F", backgroundColor: "#FFF6E3", labelColor: "#9A6B2E" }
       ),
     ],
     footerContents: buildFlexFooterHint([
@@ -1200,10 +1174,11 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
 
   return {
     type: "flex",
-    altText: `Tiny Progress｜今日抽到一件小案子：${selectedTask.title}`,
+    altText: `Tiny Progress｜今日抽到一件小案子：${getLineTaskTitle(selectedTask.title, 20)}`,
     contents: bubble,
   };
 }
+
 async function handleDrawOneTaskCommand() {
   const board = await getTaskBoardForLine();
   const unfinishedTasks = board.tasks.filter((task) => !task.done);
@@ -1517,11 +1492,12 @@ function getGuideText() {
     "【新增】",
     "新增任務 練習 CSS",
     "新增任務 練習 CSS Flex｜程式學習｜練習｜適中",
-    "新增任務 看完 HTML 課程｜程式學習｜觀看課程影片｜簡單",
+    "新增任務 看完 HTML 課程｜程式學習｜觀看課程影片｜簡單
+    新增任務 解 freeCodeCamp 表單題｜程式學習｜freeCodeCamp｜適中",
     "新增標準 本週能說明一個學到的觀念",
     "",
     "分類可用：程式學習、身心穩定、興趣探索",
-    "程式學習子分類：觀看課程影片、練習、寫筆記、W3Schools",
+    "程式學習子分類：觀看課程影片、練習、寫筆記、W3Schools、freeCodeCamp",
     "難度可用：簡單、適中、困難",
     "",
     "【辦理】",
@@ -1954,7 +1930,7 @@ app.post("/items", async (req, res) => {
     res.status(201).json(createdItem);
   } catch (error) {
     console.error("POST /items 新增 Google Sheets 發生錯誤：", error);
-    res.status(500).json({ message: "新增資料到 Google Sheets 失敗", error: error.message });
+    res.status(getApiErrorStatus(error)).json({ message: "新增資料到 Google Sheets 失敗", error: error.message });
   }
 });
 
@@ -1976,7 +1952,7 @@ app.patch("/items/:id", async (req, res) => {
     res.json(await updateItemToGoogleSheets(id, updates));
   } catch (error) {
     console.error("PATCH /items/:id 更新 Google Sheets 發生錯誤：", error);
-    res.status(500).json({ message: "更新資料到 Google Sheets 失敗", error: error.message });
+    res.status(getApiErrorStatus(error)).json({ message: "更新資料到 Google Sheets 失敗", error: error.message });
   }
 });
 
@@ -1992,7 +1968,7 @@ app.delete("/items/:id", async (req, res) => {
     });
   } catch (error) {
     console.error("DELETE /items/:id 刪除 Google Sheets 發生錯誤：", error);
-    res.status(500).json({ message: "刪除 Google Sheets 資料失敗", error: error.message });
+    res.status(getApiErrorStatus(error)).json({ message: "刪除 Google Sheets 資料失敗", error: error.message });
   }
 });
 
