@@ -1146,17 +1146,11 @@ function buildDrawTaskTagBox(task) {
 function buildDrawEmptyFlexMessage() {
   const bubble = buildBaseFlexBubble({
     title: "今日抽到空抽屜",
-    subtitle: "本週暫時沒有未完成任務，可以先整理一下小櫃台。",
+    subtitle: "本週暫時沒有未完成任務。",
     accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
       buildFlexInfoCard(
         [
-          {
-            type: "text",
-            text: "🐣",
-            size: "xxl",
-            align: "center",
-          },
           {
             type: "text",
             text: "目前沒有任務可以抽。",
@@ -1164,30 +1158,17 @@ function buildDrawEmptyFlexMessage() {
             color: FLEX_COLORS.darkGreen,
             weight: "bold",
             wrap: true,
-            align: "center",
-          },
-          {
-            type: "text",
-            text: "先放一個小任務，抽籤櫃就能開張。",
-            size: "sm",
-            color: FLEX_COLORS.mutedText,
-            wrap: true,
-            align: "center",
           },
         ],
         {
           label: "抽籤小櫃台",
-          emoji: "🥚",
+          emoji: "🐣",
           borderColor: "#E5C98F",
           backgroundColor: "#FFF6E3",
           labelColor: "#9A6B2E",
         }
       ),
     ],
-    footerContents: buildFlexFooterHint([
-      "可以輸入：清單",
-      "先確認案件板，再決定要不要立案。",
-    ]),
   });
 
   return {
@@ -1196,7 +1177,6 @@ function buildDrawEmptyFlexMessage() {
     contents: bubble,
   };
 }
-
 
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
   const difficulty = normalizeDifficulty(selectedTask.difficulty);
@@ -1296,10 +1276,7 @@ async function handleDrawOneTaskCommand() {
       replyText: [
         "🎲 Tiny Progress｜抽籤小櫃台",
         "",
-        "目前沒有未完成任務可以抽。",
-        "先放一個小任務，抽籤櫃就能開張。",
-        "",
-        "可以輸入「清單」確認目前案件板。",
+        "目前沒有任務可以抽。",
       ].join("\n"),
       replyMessages: [buildDrawEmptyFlexMessage()],
     };
@@ -1403,7 +1380,9 @@ async function handleDifficultyTaskFlexCommand(difficulty) {
 function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   const taskDoneCount = tasks.filter((task) => task.done).length;
   const standardDoneCount = standards.filter((standard) => standard.done).length;
-  const weekTitle = currentWeek ? `第${currentWeek.weekNumber}週｜${currentWeek.title}` : "本週案件板";
+  const weekTitle = currentWeek
+    ? `第${currentWeek.weekNumber}週｜${currentWeek.title}`
+    : "本週案件板";
 
   const taskRows = tasks.slice(0, 8).map((task, index) =>
     buildTaskFlexRow({
@@ -1424,11 +1403,25 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   const bodyContents = [
     buildFlexInfoCard(
       [
-        { type: "text", text: weekTitle, size: "xs", color: FLEX_COLORS.mutedText, weight: "bold", wrap: false, maxLines: 1 },
+        {
+          type: "text",
+          text: weekTitle,
+          size: "xs",
+          color: FLEX_COLORS.mutedText,
+          weight: "bold",
+          wrap: false,
+          maxLines: 1,
+        },
         buildProgressLine("任務進度", taskDoneCount, tasks.length),
         buildProgressLine("標準進度", standardDoneCount, standards.length),
       ],
-      { label: "本週小章", emoji: "🐾", backgroundColor: "#FFF6E3", borderColor: "#E5C98F", labelColor: "#9A6B2E" }
+      {
+        label: "本週小章",
+        emoji: "🐾",
+        backgroundColor: "#FFF6E3",
+        borderColor: "#E5C98F",
+        labelColor: "#9A6B2E",
+      }
     ),
   ];
 
@@ -1443,18 +1436,13 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
             color: FLEX_COLORS.darkGreen,
             weight: "bold",
             wrap: true,
-            align: "center",
-          },
-          {
-            type: "text",
-            text: "先放一個小任務，就能開張。",
-            size: "sm",
-            color: FLEX_COLORS.mutedText,
-            wrap: true,
-            align: "center",
           },
         ],
-        { label: "本週任務櫃", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
+        {
+          label: "本週任務櫃",
+          emoji: "🐣",
+          backgroundColor: FLEX_COLORS.paper,
+        }
       )
     );
   } else {
@@ -1466,7 +1454,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
             ? [
                 {
                   type: "text",
-                  text: `還有 ${tasks.length - taskRows.length} 件任務在完整任務板裡，先不用把整櫃搬出來。`,
+                  text: `還有 ${tasks.length - taskRows.length} 件任務在完整任務板裡。`,
                   size: "xs",
                   color: FLEX_COLORS.mutedText,
                   wrap: true,
@@ -1474,7 +1462,11 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
               ]
             : []),
         ],
-        { label: "本週任務櫃", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
+        {
+          label: "本週任務櫃",
+          emoji: "🐣",
+          backgroundColor: FLEX_COLORS.paper,
+        }
       )
     );
   }
@@ -1490,18 +1482,13 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
             color: FLEX_COLORS.darkGreen,
             weight: "bold",
             wrap: true,
-            align: "center",
-          },
-          {
-            type: "text",
-            text: "先寫一個方向，慢慢孵出成果。",
-            size: "sm",
-            color: FLEX_COLORS.mutedText,
-            wrap: true,
-            align: "center",
           },
         ],
-        { label: "驗收小紙條", emoji: "🥚", backgroundColor: "#FFF8EF" }
+        {
+          label: "驗收小紙條",
+          emoji: "🥚",
+          backgroundColor: "#FFF8EF",
+        }
       )
     );
   } else {
@@ -1513,7 +1500,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
             ? [
                 {
                   type: "text",
-                  text: `還有 ${standards.length - standardRows.length} 則標準在任務板裡安靜排隊。`,
+                  text: `還有 ${standards.length - standardRows.length} 則標準在任務板裡。`,
                   size: "xs",
                   color: FLEX_COLORS.mutedText,
                   wrap: true,
@@ -1521,7 +1508,11 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
               ]
             : []),
         ],
-        { label: "驗收小紙條", emoji: "🥚", backgroundColor: "#FFF8EF" }
+        {
+          label: "驗收小紙條",
+          emoji: "🥚",
+          backgroundColor: "#FFF8EF",
+        }
       )
     );
   }
@@ -1543,7 +1534,6 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     contents: bubble,
   };
 }
-
 
 async function handleAllListFlexCommand() {
   const board = await getTaskBoardForLine();
