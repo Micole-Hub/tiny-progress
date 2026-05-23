@@ -435,8 +435,6 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
       "",
       `目前沒有${difficulty}任務。`,
       "",
-      "沒有案件也無妨，先喝水，本局不追殺。",
-      "",
       "需要完整清單請輸入：清單",
     ].join("\n");
   }
@@ -1309,12 +1307,22 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
   if (matchedTasks.length === 0) {
     bodyContents = [
       buildFlexInfoCard(
-        buildCuteEmptyNote(
-          `目前沒有${difficulty}任務。`,
-          "抽屜是空的，先喝水，本局不追殺。",
-          "🫧"
-        ),
-        { label: `${difficulty}任務小抽屜`, emoji: "🗂️", backgroundColor: FLEX_COLORS.paper }
+        [
+          {
+            type: "text",
+            text: `目前沒有${difficulty}任務。`,
+            size: "md",
+            color: FLEX_COLORS.darkGreen,
+            weight: "bold",
+            wrap: true,
+            align: "center",
+          },
+        ],
+        {
+          label: `${difficulty}任務小抽屜`,
+          emoji: "🗂️",
+          backgroundColor: FLEX_COLORS.paper,
+        }
       ),
     ];
   } else {
@@ -1323,7 +1331,13 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
     bodyContents = [
       buildFlexInfoCard(
         [
-          { type: "text", text: `未完成：${unfinishedCount} 件`, size: "sm", color: FLEX_COLORS.mutedText, weight: "bold" },
+          {
+            type: "text",
+            text: `未完成：${unfinishedCount} 件`,
+            size: "sm",
+            color: FLEX_COLORS.mutedText,
+            weight: "bold",
+          },
           ...limitedEntries.map((entry) =>
             buildTaskFlexRow({
               task: entry.task,
@@ -1344,7 +1358,11 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
               ]
             : []),
         ],
-        { label: `${difficulty}任務小抽屜`, emoji: "🗂️", backgroundColor: FLEX_COLORS.paper }
+        {
+          label: `${difficulty}任務小抽屜`,
+          emoji: "🗂️",
+          backgroundColor: FLEX_COLORS.paper,
+        }
       ),
     ];
   }
@@ -1356,7 +1374,7 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
     bodyContents,
     footerContents: buildFlexFooterHint(
       matchedTasks.length === 0
-        ? ["需要完整清單請輸入：清單", "沒有案件也算一種清爽，抽屜今天很乖。"]
+        ? ["需要完整清單請輸入：清單"]
         : buildDifficultyTaskFooterLines(matchedTasks, difficulty)
     ),
   });
