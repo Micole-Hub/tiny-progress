@@ -219,26 +219,26 @@ function renderPlanCard() {
     planStatusText.textContent = "目前讀不到週次資料。";
     selectedWeekLabel.textContent = "週次主題";
     selectedWeekTitle.textContent = "尚無資料";
-    selectedWeekAchievement.textContent = "請確認後端 /week-context 是否正常，以及 weeks 工作表是否有 current。";
+    selectedWeekAchievement.textContent = "請確認後端 /week-context 是否正常，以及 weeks 工作表是否有 status = current。";
     return;
   }
   currentWeekNumber.textContent = selectedWeek && selectedWeek.weekNumber ? String(selectedWeek.weekNumber) : String(currentWeek.weekNumber || "-");
   if (isPreviousWeekView()) {
-    planStatusText.textContent = previousWeek ? `正在查看第 ${previousWeek.weekNumber} 週已結案紀錄；目前進行第 ${currentWeek.weekNumber} 週。` : "目前沒有已結案紀錄。";
+    planStatusText.textContent = previousWeek ? `正在查看第 ${previousWeek.weekNumber} 週已結案紀錄；目前進行第 ${currentWeek.weekNumber} 週。` : "目前沒有已結案紀錄。完成一次結案後，這裡會顯示上一週檔案。";
   } else {
     planStatusText.textContent = nextWeek ? `目前第 ${currentWeek.weekNumber} 週，下週預告第 ${nextWeek.weekNumber} 週。` : `目前第 ${currentWeek.weekNumber} 週，尚未設定下週。`;
   }
   if (!selectedWeek) {
     selectedWeekLabel.textContent = getSelectedWeekLabelText();
     selectedWeekTitle.textContent = isPreviousWeekView() ? "尚無已結案紀錄" : "尚未設定下週";
-    selectedWeekAchievement.textContent = isPreviousWeekView() ? "完成第一週結案後，這裡會保留上一週紀錄。" : "可以先在 weeks 工作表補上 status = next 的週次。";
+    selectedWeekAchievement.textContent = isPreviousWeekView() ? "完成第一次結案後，這裡會保留上一週檔案。" : "請先在 weeks 工作表補上 status = next 的週次。";
     return;
   }
   selectedWeekLabel.textContent = getSelectedWeekLabelText();
   selectedWeekTitle.textContent = selectedWeek.title || "尚未填寫主題";
   const achievementBoxLabel = document.querySelector(".achievement-box span");
   if (achievementBoxLabel) achievementBoxLabel.textContent = getAchievementLabelText();
-  selectedWeekAchievement.textContent = selectedWeek.achievement || "尚未填寫本週達成。";
+  selectedWeekAchievement.textContent = selectedWeek.achievement || "尚未填寫本週達成說明。";
 }
 function renderBoardLabels() {
   const label = getSelectedWeekDisplayLabel();
@@ -248,20 +248,20 @@ function renderBoardLabels() {
   if (taskSectionTitle) taskSectionTitle.textContent = `${label}任務`;
   if (standardSectionTitle) standardSectionTitle.textContent = `${label}驗收標準`;
   if (isPreviousWeekView()) {
-    if (progressNote) progressNote.textContent = "這是已結案週次，資料保留查閱，不再修改。";
-    if (taskSectionNote) taskSectionNote.textContent = "已結案任務只能查看，不能新增、勾選、修訂或撤案。";
-    if (standardSectionNote) standardSectionNote.textContent = "已結案驗收標準已封存，不再補件。";
+    if (progressNote) progressNote.textContent = "已結案週次只供查閱；任務與驗收標準都已封存。";
+    if (taskSectionNote) taskSectionNote.textContent = "這是結案檔案櫃：可查看，不能新增、勾選、修訂或撤案。";
+    if (standardSectionNote) standardSectionNote.textContent = "驗收標準已封存；如需調整，請回到目前本週重新立案。";
     return;
   }
   if (isNextWeekView()) {
-    if (progressNote) progressNote.textContent = "下週先預覽；要正式開工，請按本週結案。";
-    if (taskSectionNote) taskSectionNote.textContent = "這裡先預覽下週案件；結案後才會成為新的本週。";
-    if (standardSectionNote) standardSectionNote.textContent = "下週目前僅供預覽；結案後才會正式開張。";
+    if (progressNote) progressNote.textContent = "下週目前只供預覽；本週結案後，才會正式開張。";
+    if (taskSectionNote) taskSectionNote.textContent = "預覽下週任務內容；要新增請先完成本週結案。";
+    if (standardSectionNote) standardSectionNote.textContent = "預覽下週驗收條件；結案後才能新增或修訂。";
     return;
   }
-  if (progressNote) progressNote.textContent = "本局只記本週靠近了哪裡，不翻舊帳。";
-  if (taskSectionNote) taskSectionNote.textContent = "本局會依分類排好，陪你一件一件辦。";
-  if (standardSectionNote) standardSectionNote.textContent = "這不是拿來責備自己，而是看見本週靠近了哪裡。";
+  if (progressNote) progressNote.textContent = "本局統計本週完成狀態；完成就打勾，結案後會封存。";
+  if (taskSectionNote) taskSectionNote.textContent = "新增任務時，請寫清楚要做什麼，並選好分類與難度。";
+  if (standardSectionNote) standardSectionNote.textContent = "驗收條件用來判斷任務是否完成，請寫成可檢查的一句話。";
 }
 function renderAddFormState() {
   const canAdd = canAddToSelectedWeek();
@@ -270,8 +270,8 @@ function renderAddFormState() {
   });
   if (completeWeekBtn) completeWeekBtn.disabled = !isCurrentWeekView() || !weekContext.nextWeek;
   renderSubCategoryControl();
-  if (taskInput) taskInput.placeholder = isPreviousWeekView() ? "已結案週次僅供查看" : isCurrentWeekView() ? "立一個小案件，例如：練習 CSS Flex" : "下週僅供預覽，結案後才可新增";
-  if (standardInput) standardInput.placeholder = isPreviousWeekView() ? "已結案週次僅供查看" : isCurrentWeekView() ? "寫一個本週想靠近的方向，例如：本週能說明一個學到的觀念" : "下週僅供預覽，結案後才可新增";
+  if (taskInput) taskInput.placeholder = isPreviousWeekView() ? "已結案週次僅供查看，不能新增任務" : isCurrentWeekView() ? "輸入任務，例如：練習 CSS Flex 排版" : "下週僅供預覽；本週結案後才可新增任務";
+  if (standardInput) standardInput.placeholder = isPreviousWeekView() ? "已結案週次僅供查看，不能新增驗收條件" : isCurrentWeekView() ? "輸入驗收條件，例如：能說明 flex 排版怎麼運作" : "下週僅供預覽；本週結案後才可新增驗收條件";
 }
 function switchWeekView(view) { if (view !== "previous" && view !== "current" && view !== "next") return; selectedWeekView = view; renderAll(); }
 function normalizeCategory(value) { const category = String(value || "").trim(); return CATEGORY_OPTIONS.includes(category) ? category : DEFAULT_CATEGORY; }
@@ -333,14 +333,14 @@ function createSubCategoryHeading(subCategory) {
 }
 function getDifficultyClass(difficulty) { if (difficulty === "簡單") return "easy"; if (difficulty === "適中") return "medium"; if (difficulty === "困難") return "hard"; return ""; }
 function getTaskEmptyMessage() {
-  if (!getSelectedWeek()) return isPreviousWeekView() ? "目前沒有已結案任務紀錄。" : "目前還沒有可顯示的週次資料。";
+  if (!getSelectedWeek()) return isPreviousWeekView() ? "目前沒有已結案任務檔案。" : "目前還沒有可顯示的週次資料。";
   if (isPreviousWeekView()) return "這週已結案，當時沒有任務紀錄。";
-  return isNextWeekView() ? "下週目前還沒有任務，先讓未來安靜排隊。" : "今天還沒立案也無妨，放一個小任務，就是好的開始。";
+  return isNextWeekView() ? "下週目前沒有任務；結案後可在新的本週新增。" : "本週尚未立案。請先新增一個小任務。";
 }
 function getStandardEmptyMessage() {
-  if (!getSelectedWeek()) return isPreviousWeekView() ? "目前沒有已結案驗收標準紀錄。" : "目前還沒有可顯示的週次資料。";
+  if (!getSelectedWeek()) return isPreviousWeekView() ? "目前沒有已結案驗收標準檔案。" : "目前還沒有可顯示的週次資料。";
   if (isPreviousWeekView()) return "這週已結案，當時沒有驗收標準紀錄。";
-  return isNextWeekView() ? "下週標準尚未成文，等時機到了再慢慢補。" : "本週標準尚未成文，寫下一個方向，慢慢前進。";
+  return isNextWeekView() ? "下週目前沒有驗收條件；結案後可在新的本週新增。" : "本週尚未新增驗收條件。請寫下怎樣算完成。";
 }
 function createChip(text, className) { const chip = document.createElement("span"); chip.className = className; chip.textContent = text; return chip; }
 function createCheckItem(item, displayNumber) {
@@ -389,14 +389,14 @@ function createCheckItem(item, displayNumber) {
   deleteBtn.disabled = !canEditSelectedWeek();
   checkbox.addEventListener("change", async () => updateItem(normalizedItem.id, { done: checkbox.checked }));
   editBtn.addEventListener("click", async () => {
-    const newTitle = prompt("請輸入修訂後的公文內容", normalizedItem.title);
+    const newTitle = prompt("請輸入修訂後內容", normalizedItem.title);
     if (newTitle === null) return;
     const trimmedTitle = newTitle.trim();
-    if (trimmedTitle === "") { alert("公文內容不可空白。本局未更動資料。"); return; }
+    if (trimmedTitle === "") { alert("內容不可空白，本局未更動資料。"); return; }
     await updateItem(normalizedItem.id, { title: trimmedTitle });
   });
   deleteBtn.addEventListener("click", async () => {
-    const message = normalizedItem.type === "task" ? `確定要將這項${getSelectedWeekDisplayLabel()}任務撤案嗎？本局會將它移出案件板。` : `確定要將這項${getSelectedWeekDisplayLabel()}驗收標準撤案嗎？本局會將它移出案件板。`;
+    const message = normalizedItem.type === "task" ? `確定要撤案這項${getSelectedWeekDisplayLabel()}任務嗎？刪除後會從案件板移除。` : `確定要撤案這項${getSelectedWeekDisplayLabel()}驗收標準嗎？刪除後會從案件板移除。`;
     if (!confirm(message)) return;
     await deleteItem(normalizedItem.id);
   });
@@ -500,7 +500,7 @@ async function refreshItems() {
 }
 async function addItem(type, inputElement, options = {}) {
   if (!canAddToSelectedWeek()) {
-    alert(isNextWeekView() ? "下週目前只供預覽；按本週結案後，才會成為新的本週。" : "目前還沒有可新增的週次資料。");
+    alert(isNextWeekView() ? "下週目前只供預覽；按本週結案後，才會成為新的本週。" : "目前沒有可新增的週次資料。");
     return;
   }
   const title = inputElement.value.trim();
@@ -529,7 +529,7 @@ async function addItem(type, inputElement, options = {}) {
     items = items.filter((item) => item.id !== tempItem.id);
     inputElement.value = title;
     renderAll();
-    alert("新增失敗，已恢復畫面。請確認 Render 後端是否正常運作。");
+    alert("新增失敗，畫面已恢復；請確認後端是否正常。");
   }
 }
 async function updateItem(id, updates) {
@@ -548,7 +548,7 @@ async function updateItem(id, updates) {
     console.error("更新資料失敗：", error);
     replaceItem(previousItem);
     renderAll();
-    alert("本局暫時無法修訂案件，畫面已恢復，資料未更動。請稍後再試。");
+    alert("本局暫時無法修訂，畫面已恢復，資料未更動。請稍後再試。");
   }
 }
 async function deleteItem(id) {
@@ -572,22 +572,25 @@ function buildCompleteWeekConfirmText(currentWeek, nextWeek) {
   const upcomingWeekNumber = nextWeekNumberValue + 1;
 
   const lines = [
-    "結案確認",
+    "本週結案確認",
     "",
-    `第 ${currentWeekNumberValue} 週：current → completed`,
-    `第 ${nextWeekNumberValue} 週：next → current`,
+    `第 ${currentWeekNumberValue} 週會封存為：已結案`,
+    `第 ${nextWeekNumberValue} 週會接手為：新的本週`,
   ];
 
   lines.push(
     upcomingWeekNumber <= 12
-      ? `第 ${upcomingWeekNumber} 週：upcoming → next`
-      : "目前已接近最後一週，可能沒有新的 upcoming 可接成 next。"
+      ? `第 ${upcomingWeekNumber} 週會成為：新的下週預告`
+      : "目前已接近最後一週，可能沒有新的下週預告。"
   );
 
   lines.push(
     "",
-    "封存後，已結案週次不能再新增、修訂、撤案或勾選。",
-    "若確認，請輸入：結案"
+    "結案後：",
+    "1. 已結案週次只能查看，不能新增、勾選、修訂或撤案。",
+    "2. 新的本週可以立刻新增任務與驗收條件。",
+    "",
+    "若確認要蓋章封存，請輸入：結案"
   );
 
   return lines.join("\n");
@@ -612,9 +615,9 @@ async function completeCurrentWeek() {
     selectedWeekView = "previous";
     await Promise.all([loadWeekContext(), loadItems()]);
     renderAll();
-    alert(`第 ${data.completedWeek.weekNumber} 週已結案，已切到已結案檢視。
+    alert(`第 ${data.completedWeek.weekNumber} 週已結案並封存。
 
-現在第 ${data.currentWeek.weekNumber} 週已開張，可切回「本週」新增任務。`);
+現在第 ${data.currentWeek.weekNumber} 週已開張。畫面已切到「已結案」，你可以切回「本週」新增資料。`);
   } catch (error) {
     console.error("本週結案失敗：", error);
     alert("本局暫時無法結案，週次未更動。請稍後再試。");

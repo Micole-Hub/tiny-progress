@@ -7,8 +7,8 @@
   <title>Tiny Progress</title>
 
   <link rel="icon" href="App-icon.png" />
-  <link rel="stylesheet" href="style.css?v=20260523-freecodecamp-lock-1" />
-  <script src="script.js?v=20260523-freecodecamp-lock-1" defer></script>
+  <link rel="stylesheet" href="style.css?v=20260523-clear-copy-1" />
+  <script src="script.js?v=20260523-clear-copy-1" defer></script>
   </head>
 
 <body>
@@ -96,7 +96,7 @@
       </div>
 
       <button id="completeWeekBtn" class="complete-week-btn" type="button">
-        本週結案，進入下一週
+        本週結案，封存並進入下一週
       </button>
     </section>
 
@@ -105,7 +105,7 @@
         <div>
           <h2 id="progressTitle">本週進度</h2>
           <p class="section-note" id="progressNote">
-            本局只記本週靠近了哪裡，不翻舊帳。
+            本局統計本週完成狀態；結案後會封存查閱。
           </p>
         </div>
       </div>
@@ -154,7 +154,7 @@
         <div>
           <h2 id="taskSectionTitle">本週任務</h2>
           <p class="section-note" id="taskSectionNote">
-            本局會依分類排好，陪你一件一件辦。
+            新增本週任務，請寫清楚要做什麼，並選好分類與難度。
           </p>
         </div>
       </div>
@@ -163,7 +163,7 @@
         <input
           id="taskInput"
           type="text"
-          placeholder="立一個小案件，例如：練習 CSS Flex"
+          placeholder="輸入任務，例如：練習 CSS Flex 排版"
         />
 
         <select id="taskCategory" aria-label="任務分類">
@@ -201,7 +201,7 @@
         <div>
           <h2 id="standardSectionTitle">本週驗收標準</h2>
           <p class="section-note" id="standardSectionNote">
-            這不是拿來責備自己，而是看見本週靠近了哪裡。
+            新增驗收條件：用一句話寫出怎樣算完成。
           </p>
         </div>
       </div>
@@ -210,7 +210,7 @@
         <input
           id="standardInput"
           type="text"
-          placeholder="寫一個本週想靠近的方向，例如：本週能說明一個學到的觀念"
+          placeholder="輸入驗收條件，例如：能說明 flex 排版怎麼運作"
         />
 
         <button id="addStandardBtn" class="add-btn" type="button">
