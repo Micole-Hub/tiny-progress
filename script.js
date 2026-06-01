@@ -1,3 +1,154 @@
+// === 自訂對話框系統（取代原生 alert / confirm / prompt）===
+
+function ensureModalRoot() {
+  let root = document.getElementById("tp-modal-root");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "tp-modal-root";
+    document.body.appendChild(root);
+  }
+  return root;
+}
+
+function closeModal(overlay) {
+  overlay.classList.remove("tp-modal-open");
+  overlay.addEventListener("transitionend", () => overlay.remove(), { once: true });
+}
+
+function showAlert(message, { type = "info" } = {}) {
+  return new Promise((resolve) => {
+    const root = ensureModalRoot();
+    const iconMap = {
+      info:    "📋",
+      success: "✅",
+      warning: "⚠️",
+      danger:  "🚨",
+    };
+    const overlay = document.createElement("div");
+    overlay.className = "tp-modal-overlay";
+    overlay.innerHTML = `
+      <div class="tp-modal tp-modal-alert" role="alertdialog" aria-modal="true">
+        <div class="tp-modal-icon tp-modal-icon--${type}">${iconMap[type] || iconMap.info}</div>
+        <p class="tp-modal-body">${message.replace(/\n/g, "<br>")}</p>
+        <div class="tp-modal-actions">
+          <button class="tp-btn tp-btn-primary" data-action="ok">確認</button>
+        </div>
+      </div>`;
+    root.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("tp-modal-open"));
+    overlay.querySelector("[data-action='ok']").addEventListener("click", () => {
+      closeModal(overlay);
+      resolve();
+    });
+    overlay.querySelector(".tp-btn-primary").focus();
+  });
+}
+
+function showConfirm(message, { type = "warning" } = {}) {
+  return new Promise((resolve) => {
+    const root = ensureModalRoot();
+    const iconMap = {
+      info:    "📋",
+      success: "✅",
+      warning: "⚠️",
+      danger:  "🚨",
+    };
+    const overlay = document.createElement("div");
+    overlay.className = "tp-modal-overlay";
+    overlay.innerHTML = `
+      <div class="tp-modal tp-modal-confirm" role="alertdialog" aria-modal="true">
+        <div class="tp-modal-icon tp-modal-icon--${type}">${iconMap[type] || iconMap.warning}</div>
+        <p class="tp-modal-body">${message.replace(/\n/g, "<br>")}</p>
+        <div class="tp-modal-actions">
+          <button class="tp-btn tp-btn-ghost" data-action="cancel">取消</button>
+          <button class="tp-btn tp-btn-danger" data-action="ok">確認撤案</button>
+        </div>
+      </div>`;
+    root.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("tp-modal-open"));
+    overlay.querySelector("[data-action='ok']").addEventListener("click", () => {
+      closeModal(overlay);
+      resolve(true);
+    });
+    overlay.querySelector("[data-action='cancel']").addEventListener("click", () => {
+      closeModal(overlay);
+      resolve(false);
+    });
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) { closeModal(overlay); resolve(false); }
+    });
+    overlay.querySelector("[data-action='cancel']").focus();
+  });
+}
+
+function showPrompt(message, defaultValue = "") {
+  return new Promise((resolve) => {
+    const root = ensureModalRoot();
+    const overlay = document.createElement("div");
+    overlay.className = "tp-modal-overlay";
+    overlay.innerHTML = `
+      <div class="tp-modal tp-modal-prompt" role="dialog" aria-modal="true">
+        <div class="tp-modal-icon tp-modal-icon--info">📝</div>
+        <p class="tp-modal-body">${message.replace(/\n/g, "<br>")}</p>
+        <input class="tp-modal-input" type="text" value="${defaultValue}" />
+        <div class="tp-modal-actions">
+          <button class="tp-btn tp-btn-ghost" data-action="cancel">取消</button>
+          <button class="tp-btn tp-btn-primary" data-action="ok">確認</button>
+        </div>
+      </div>`;
+    root.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("tp-modal-open"));
+    const input = overlay.querySelector(".tp-modal-input");
+    const ok = overlay.querySelector("[data-action='ok']");
+    const cancel = overlay.querySelector("[data-action='cancel']");
+    const submit = () => { closeModal(overlay); resolve(input.value); };
+    const dismiss = () => { closeModal(overlay); resolve(null); };
+    ok.addEventListener("click", submit);
+    cancel.addEventListener("click", dismiss);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submit();
+      if (e.key === "Escape") dismiss();
+    });
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
+    input.focus();
+    input.select();
+  });
+}
+
+// 專門用於結案確認的 prompt（含多行說明 + 輸入框）
+function showCompleteWeekPrompt(message) {
+  return new Promise((resolve) => {
+    const root = ensureModalRoot();
+    const overlay = document.createElement("div");
+    overlay.className = "tp-modal-overlay";
+    overlay.innerHTML = `
+      <div class="tp-modal tp-modal-complete" role="dialog" aria-modal="true">
+        <div class="tp-modal-icon tp-modal-icon--warning">📦</div>
+        <div class="tp-modal-body tp-modal-preformatted">${message.replace(/\n/g, "<br>")}</div>
+        <input class="tp-modal-input" type="text" placeholder="請輸入：結案" />
+        <div class="tp-modal-actions">
+          <button class="tp-btn tp-btn-ghost" data-action="cancel">再考慮一下</button>
+          <button class="tp-btn tp-btn-seal" data-action="ok">🔏 蓋章封存</button>
+        </div>
+      </div>`;
+    root.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("tp-modal-open"));
+    const input = overlay.querySelector(".tp-modal-input");
+    const ok = overlay.querySelector("[data-action='ok']");
+    const cancel = overlay.querySelector("[data-action='cancel']");
+    const submit = () => { closeModal(overlay); resolve(input.value); };
+    const dismiss = () => { closeModal(overlay); resolve(null); };
+    ok.addEventListener("click", submit);
+    cancel.addEventListener("click", dismiss);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submit();
+      if (e.key === "Escape") dismiss();
+    });
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
+    input.focus();
+  });
+}
+
 // === 全域 API 等待狀態 ===
 let activeApiRequestCount = 0;
 let disabledButtonsBeforeBusy = [];
@@ -388,18 +539,29 @@ function createCheckItem(item, displayNumber) {
   editBtn.disabled = !canEditSelectedWeek();
   deleteBtn.disabled = !canEditSelectedWeek();
   checkbox.addEventListener("change", async () => updateItem(normalizedItem.id, { done: checkbox.checked }));
+
+  // ── 修訂（原 prompt）──
   editBtn.addEventListener("click", async () => {
-    const newTitle = prompt("請輸入修訂後內容", normalizedItem.title);
+    const newTitle = await showPrompt("請輸入修訂後內容", normalizedItem.title);
     if (newTitle === null) return;
     const trimmedTitle = newTitle.trim();
-    if (trimmedTitle === "") { alert("內容不可空白，本局未更動資料。"); return; }
+    if (trimmedTitle === "") {
+      await showAlert("內容不可空白，本局未更動資料。", { type: "warning" });
+      return;
+    }
     await updateItem(normalizedItem.id, { title: trimmedTitle });
   });
+
+  // ── 撤案（原 confirm）──
   deleteBtn.addEventListener("click", async () => {
-    const message = normalizedItem.type === "task" ? `確定要撤案這項${getSelectedWeekDisplayLabel()}任務嗎？刪除後會從案件板移除。` : `確定要撤案這項${getSelectedWeekDisplayLabel()}驗收標準嗎？刪除後會從案件板移除。`;
-    if (!confirm(message)) return;
+    const message = normalizedItem.type === "task"
+      ? `確定要撤案這項${getSelectedWeekDisplayLabel()}任務嗎？<br>刪除後會從案件板移除。`
+      : `確定要撤案這項${getSelectedWeekDisplayLabel()}驗收標準嗎？<br>刪除後會從案件板移除。`;
+    const confirmed = await showConfirm(message, { type: "danger" });
+    if (!confirmed) return;
     await deleteItem(normalizedItem.id);
   });
+
   actions.appendChild(editBtn);
   actions.appendChild(deleteBtn);
   itemElement.appendChild(checkbox);
@@ -478,7 +640,8 @@ async function loadItems() {
     items = data.map(normalizeItem);
   } catch (error) {
     console.error("讀取任務資料失敗：", error);
-    alert("本局暫時讀不到案件板，資料未更動。請稍後再重新整理。");
+    // ── 原 alert ──
+    await showAlert("本局暫時讀不到案件板，資料未更動。\n請稍後再重新整理。", { type: "warning" });
     items = [];
   }
 }
@@ -492,7 +655,8 @@ async function refreshItems() {
     refreshBtn.textContent = "重新整理案件板";
   } catch (error) {
     console.error("重新整理資料失敗：", error);
-    alert("重新整理資料失敗，請稍後再試。");
+    // ── 原 alert ──
+    await showAlert("重新整理資料失敗，請稍後再試。", { type: "danger" });
     refreshBtn.textContent = "重新整理案件板";
   } finally {
     refreshBtn.disabled = false;
@@ -500,7 +664,13 @@ async function refreshItems() {
 }
 async function addItem(type, inputElement, options = {}) {
   if (!canAddToSelectedWeek()) {
-    alert(isNextWeekView() ? "下週目前只供預覽；按本週結案後，才會成為新的本週。" : "目前沒有可新增的週次資料。");
+    // ── 原 alert ──
+    await showAlert(
+      isNextWeekView()
+        ? "下週目前只供預覽；\n按本週結案後，才會成為新的本週。"
+        : "目前沒有可新增的週次資料。",
+      { type: "info" }
+    );
     return;
   }
   const title = inputElement.value.trim();
@@ -529,7 +699,8 @@ async function addItem(type, inputElement, options = {}) {
     items = items.filter((item) => item.id !== tempItem.id);
     inputElement.value = title;
     renderAll();
-    alert("新增失敗，畫面已恢復；請確認後端是否正常。");
+    // ── 原 alert ──
+    await showAlert("新增失敗，畫面已恢復；請確認後端是否正常。", { type: "danger" });
   }
 }
 async function updateItem(id, updates) {
@@ -548,7 +719,8 @@ async function updateItem(id, updates) {
     console.error("更新資料失敗：", error);
     replaceItem(previousItem);
     renderAll();
-    alert("本局暫時無法修訂，畫面已恢復，資料未更動。請稍後再試。");
+    // ── 原 alert ──
+    await showAlert("本局暫時無法修訂，畫面已恢復，資料未更動。\n請稍後再試。", { type: "danger" });
   }
 }
 async function deleteItem(id) {
@@ -563,7 +735,8 @@ async function deleteItem(id) {
     console.error("刪除資料失敗：", error);
     items = previousItems;
     renderAll();
-    alert("本局暫時無法撤案，案件已放回原位，資料未更動。請稍後再試。");
+    // ── 原 alert ──
+    await showAlert("本局暫時無法撤案，案件已放回原位，資料未更動。\n請稍後再試。", { type: "danger" });
   }
 }
 function buildCompleteWeekConfirmText(currentWeek, nextWeek) {
@@ -572,40 +745,42 @@ function buildCompleteWeekConfirmText(currentWeek, nextWeek) {
   const upcomingWeekNumber = nextWeekNumberValue + 1;
 
   const lines = [
-    "本週結案確認",
+    "📦 本週結案確認",
     "",
-    `第 ${currentWeekNumberValue} 週會封存為：已結案`,
-    `第 ${nextWeekNumberValue} 週會接手為：新的本週`,
-  ];
-
-  lines.push(
+    `第 ${currentWeekNumberValue} 週　→　封存為「已結案」`,
+    `第 ${nextWeekNumberValue} 週　→　接手為「新的本週」`,
     upcomingWeekNumber <= 12
-      ? `第 ${upcomingWeekNumber} 週會成為：新的下週預告`
-      : "目前已接近最後一週，可能沒有新的下週預告。"
-  );
-
-  lines.push(
+      ? `第 ${upcomingWeekNumber} 週　→　成為「新的下週預告」`
+      : "目前已接近最後一週，可能沒有新的下週預告。",
     "",
     "結案後：",
-    "1. 已結案週次只能查看，不能新增、勾選、修訂或撤案。",
-    "2. 新的本週可以立刻新增任務與驗收條件。",
+    "• 已結案週次只能查看，不能新增或修改。",
+    "• 新的本週可以立刻新增任務與驗收條件。",
     "",
-    "若確認要蓋章封存，請輸入：結案"
-  );
+    "若確認要蓋章封存，請在下方輸入：結案",
+  ];
 
   return lines.join("\n");
 }
 async function completeCurrentWeek() {
   const currentWeek = weekContext.currentWeek;
   const nextWeek = weekContext.nextWeek;
-  if (!currentWeek) { alert("目前讀不到本週資料，暫時無法結案。"); return; }
-  if (!nextWeek) { alert("目前尚未設定下週，暫時無法進入下一週。"); return; }
-  const confirmationText = prompt(buildCompleteWeekConfirmText(currentWeek, nextWeek));
+  if (!currentWeek) {
+    await showAlert("目前讀不到本週資料，暫時無法結案。", { type: "warning" });
+    return;
+  }
+  if (!nextWeek) {
+    await showAlert("目前尚未設定下週，暫時無法進入下一週。", { type: "warning" });
+    return;
+  }
+
+  // ── 原 prompt（結案專用）──
+  const confirmationText = await showCompleteWeekPrompt(buildCompleteWeekConfirmText(currentWeek, nextWeek));
 
   if (confirmationText === null) return;
 
   if (confirmationText.trim() !== "結案") {
-    alert("未輸入「結案」，本局未更動週次。");
+    await showAlert("未輸入「結案」，本局未更動週次。", { type: "info" });
     return;
   }
   try {
@@ -615,12 +790,14 @@ async function completeCurrentWeek() {
     selectedWeekView = "previous";
     await Promise.all([loadWeekContext(), loadItems()]);
     renderAll();
-    alert(`第 ${data.completedWeek.weekNumber} 週已結案並封存。
-
-現在第 ${data.currentWeek.weekNumber} 週已開張。畫面已切到「已結案」，你可以切回「本週」新增資料。`);
+    // ── 原 alert（結案成功）──
+    await showAlert(
+      `第 ${data.completedWeek.weekNumber} 週已結案並封存。\n現在第 ${data.currentWeek.weekNumber} 週已開張。\n\n畫面已切到「已結案」，你可以切回「本週」新增資料。`,
+      { type: "success" }
+    );
   } catch (error) {
     console.error("本週結案失敗：", error);
-    alert("本局暫時無法結案，週次未更動。請稍後再試。");
+    await showAlert("本局暫時無法結案，週次未更動。\n請稍後再試。", { type: "danger" });
   }
 }
 function addTask() { addItem("task", taskInput, { category: taskCategory.value, subCategory: taskSubCategory ? taskSubCategory.value : DEFAULT_SUBCATEGORY, difficulty: taskDifficulty.value }); }

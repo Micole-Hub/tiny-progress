@@ -962,6 +962,220 @@ body.is-busy button {
   transform: translateX(-50%) translateY(0);
 }
 
+/* =============================================
+   自訂對話框 Modal（公文紙風格）
+   ============================================= */
+
+#tp-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+/* ── 遮罩層 ── */
+.tp-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(59, 51, 45, 0);
+  backdrop-filter: blur(0px);
+  transition: background 0.22s ease, backdrop-filter 0.22s ease;
+  pointer-events: none;
+}
+
+.tp-modal-overlay.tp-modal-open {
+  background: rgba(59, 51, 45, 0.48);
+  backdrop-filter: blur(3px);
+  pointer-events: all;
+}
+
+/* ── 卡片主體 ── */
+.tp-modal {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(255, 253, 247, 0.98), rgba(251, 246, 236, 0.96)),
+    var(--paper);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  box-shadow:
+    0 2px 4px rgba(59, 51, 45, 0.06),
+    0 20px 48px rgba(59, 51, 45, 0.18);
+  padding: 28px 24px 22px;
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transform: translateY(14px) scale(0.97);
+  opacity: 0;
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.22s ease;
+}
+
+/* 公文紙內框線 */
+.tp-modal::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border: 1px dashed rgba(184, 95, 75, 0.2);
+  border-radius: 18px;
+  pointer-events: none;
+}
+
+.tp-modal-overlay.tp-modal-open .tp-modal {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+/* 結案 modal 稍寬 */
+.tp-modal-complete {
+  max-width: 460px;
+}
+
+/* ── 圖示區 ── */
+.tp-modal-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── 文字內容 ── */
+.tp-modal-body {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink);
+  text-align: center;
+}
+
+/* 結案多行說明區塊 */
+.tp-modal-preformatted {
+  text-align: left;
+  font-size: 13.5px;
+  line-height: 1.75;
+  background: var(--paper-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  padding: 14px 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #5a4c40;
+}
+
+/* ── 輸入框 ── */
+.tp-modal-input {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line-dark);
+  border-radius: var(--radius-pill);
+  padding: 10px 16px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--ink);
+  background: #fffefb;
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  font-family: inherit;
+}
+
+.tp-modal-input::placeholder {
+  color: #a7998c;
+}
+
+.tp-modal-input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 4px rgba(143, 167, 131, 0.2);
+  background: #fff;
+}
+
+/* ── 操作列 ── */
+.tp-modal-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+/* ── 按鈕 ── */
+.tp-btn {
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.12s, background 0.15s;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.tp-btn:hover  { opacity: 0.88; }
+.tp-btn:active { transform: scale(0.97); }
+
+/* 主要（確認） */
+.tp-btn-primary {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(59, 51, 45, 0.18);
+}
+
+.tp-btn-primary:hover {
+  background: var(--green-dark);
+  opacity: 1;
+}
+
+/* 幽靈（取消） */
+.tp-btn-ghost {
+  background: var(--paper-3);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.tp-btn-ghost:hover {
+  background: var(--line);
+  color: var(--ink);
+  opacity: 1;
+}
+
+/* 危險（撤案） */
+.tp-btn-danger {
+  background: var(--stamp);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(184, 95, 75, 0.22);
+}
+
+.tp-btn-danger:hover {
+  background: #9d4a38;
+  opacity: 1;
+}
+
+/* 結案蓋章 */
+.tp-btn-seal {
+  background: var(--green-dark);
+  color: #fff;
+  letter-spacing: 0.03em;
+  box-shadow: 0 6px 16px rgba(96, 120, 85, 0.22);
+}
+
+.tp-btn-seal:hover {
+  background: #4d6344;
+  opacity: 1;
+}
+
 /* === 手機版 === */
 
 @media (max-width: 680px) {
@@ -1044,6 +1258,27 @@ body.is-busy button {
     right: 14px;
     bottom: 12px;
     font-size: 12px;
+  }
+
+  /* Modal 手機版 */
+  .tp-modal {
+    padding: 22px 18px 18px;
+    border-radius: var(--radius-md);
+    max-width: 100%;
+  }
+
+  .tp-modal::before {
+    inset: 8px;
+  }
+
+  .tp-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .tp-btn {
+    width: 100%;
+    text-align: center;
+    padding: 11px 18px;
   }
 }
 
