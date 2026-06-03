@@ -13,6 +13,14 @@ const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const pendingActions = new Map();
 const PENDING_ACTION_TTL_MS = 10 * 60 * 1000;
 
+// ── 定期清理過期的 pendingActions（每 5 分鐘掃一次）──
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of pendingActions.entries()) {
+    if (now - val.createdAt > PENDING_ACTION_TTL_MS) pendingActions.delete(key);
+  }
+}, 5 * 60 * 1000);
+
 const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
 const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools", "freeCodeCamp"];
 const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
@@ -21,6 +29,10 @@ const DEFAULT_CATEGORY = "程式學習";
 const DEFAULT_SUBCATEGORY = "觀看課程影片";
 const EMPTY_SUBCATEGORY = "未分類";
 const DEFAULT_DIFFICULTY = "簡單";
+
+// 截字長度常數
+const TASK_TITLE_MAX_LENGTH = 12;
+const STANDARD_TITLE_MAX_LENGTH = 14;
 
 if (!GOOGLE_SHEETS_API_URL) {
   throw new Error("缺少環境變數 GOOGLE_SHEETS_API_URL");
@@ -340,25 +352,27 @@ function getTaskMetaText(task, includeDifficulty = true) {
   return parts.join("｜");
 }
 
+// ── 子分類標籤顯示名稱；未分類回傳空字串，呼叫端再決定是否渲染 ──
 function getLineSubCategoryLabel(subCategory) {
   if (subCategory === "觀看課程影片") return "看課程";
   if (subCategory === "寫筆記") return "筆記";
   if (subCategory === "W3Schools") return "W3Schools";
   if (subCategory === "freeCodeCamp") return "freeCodeCamp";
+  if (subCategory === EMPTY_SUBCATEGORY || !subCategory) return "";
   return subCategory;
 }
 
-function getLineTaskTitle(title, maxLength = 14) {
+// ── 統一截字：任務 12 字、驗收標準 14 字 ──
+function getLineTaskTitle(title, maxLength = TASK_TITLE_MAX_LENGTH) {
   const text = String(title || "").trim().replace(/\s+/g, " ");
-
   if (!text) return "未命名任務";
-
-  // LINE 卡片空間窄：所有任務名稱都先做短版，完整內容仍保留在資料裡
   if (text.length > maxLength) return text.slice(0, maxLength) + "…";
-
   return text;
 }
 
+function getLineStandardTitle(title) {
+  return getLineTaskTitle(title, STANDARD_TITLE_MAX_LENGTH);
+}
 
 function formatTaskSectionByCategory(tasks) {
   if (tasks.length === 0) return ["【本週任務】", "本週尚未立案。放一個小任務，就是好的開始。"].join("\n");
@@ -379,6 +393,10 @@ function formatTaskSectionByCategory(tasks) {
         });
 
         if (groupTasks.length === 0) return;
+
+        // 純文字版也補上子分類小標題，和 Flex 版一致
+        const subLabel = getLineSubCategoryLabel(subCategory);
+        if (subLabel) lines.push(`  ［${subLabel}］`);
 
         groupTasks.forEach(function (task) {
           const checkbox = task.done ? "☑" : "☐";
@@ -463,7 +481,6 @@ const FLEX_BRAND_NAME = "Tiny Progress";
 const FLEX_FIXED_LINE = "小小前進，也算數。今天慢慢辦也可以。";
 
 const FLEX_COLORS = {
-  // 柔亮奶油公文封：亮一點，但不白到刺眼
   cream: "#FBF1E3",
   card: "#FFF8ED",
   paper: "#FFFDF7",
@@ -485,7 +502,6 @@ const FLEX_COLORS = {
   stickerBg: "#FFF6D8",
   stickerText: "#95662B",
 
-  // 大分類：淺底深字，保留公文標籤感
   programming: "#E2ECF6",
   programmingText: "#3F6380",
   wellness: "#F0E2E9",
@@ -493,7 +509,6 @@ const FLEX_COLORS = {
   interest: "#F4E0C3",
   interestText: "#8A5A25",
 
-  // 子分類：小書籤造型，和難度小印章分開
   video: "#D9E1F2",
   videoText: "#405989",
   videoAccent: "#6F7FA8",
@@ -542,81 +557,35 @@ function getCategoryFlexStyle(category) {
 
 function getSubCategoryFlexStyle(subCategory) {
   if (subCategory === "觀看課程影片") {
-    return {
-      backgroundColor: FLEX_COLORS.video,
-      textColor: FLEX_COLORS.videoText,
-      borderColor: "#BBC7E7",
-      accentColor: FLEX_COLORS.videoAccent,
-    };
+    return { backgroundColor: FLEX_COLORS.video, textColor: FLEX_COLORS.videoText, borderColor: "#BBC7E7", accentColor: FLEX_COLORS.videoAccent };
   }
   if (subCategory === "練習") {
-    return {
-      backgroundColor: FLEX_COLORS.practice,
-      textColor: FLEX_COLORS.practiceText,
-      borderColor: "#B9D9BC",
-      accentColor: FLEX_COLORS.practiceAccent,
-    };
+    return { backgroundColor: FLEX_COLORS.practice, textColor: FLEX_COLORS.practiceText, borderColor: "#B9D9BC", accentColor: FLEX_COLORS.practiceAccent };
   }
   if (subCategory === "寫筆記") {
-    return {
-      backgroundColor: FLEX_COLORS.note,
-      textColor: FLEX_COLORS.noteText,
-      borderColor: "#DEBA8D",
-      accentColor: FLEX_COLORS.noteAccent,
-    };
+    return { backgroundColor: FLEX_COLORS.note, textColor: FLEX_COLORS.noteText, borderColor: "#DEBA8D", accentColor: FLEX_COLORS.noteAccent };
   }
   if (subCategory === "W3Schools") {
-    return {
-      backgroundColor: FLEX_COLORS.w3schools,
-      textColor: FLEX_COLORS.w3schoolsText,
-      borderColor: "#D9B7BE",
-      accentColor: FLEX_COLORS.w3schoolsAccent,
-    };
+    return { backgroundColor: FLEX_COLORS.w3schools, textColor: FLEX_COLORS.w3schoolsText, borderColor: "#D9B7BE", accentColor: FLEX_COLORS.w3schoolsAccent };
   }
   if (subCategory === "freeCodeCamp") {
-    return {
-      backgroundColor: FLEX_COLORS.freecodecamp,
-      textColor: FLEX_COLORS.freecodecampText,
-      borderColor: "#CABADD",
-      accentColor: FLEX_COLORS.freecodecampAccent,
-    };
+    return { backgroundColor: FLEX_COLORS.freecodecamp, textColor: FLEX_COLORS.freecodecampText, borderColor: "#CABADD", accentColor: FLEX_COLORS.freecodecampAccent };
   }
-  return {
-    backgroundColor: FLEX_COLORS.uncategorized,
-    textColor: FLEX_COLORS.uncategorizedText,
-    borderColor: "#D9CCBC",
-    accentColor: "#B6A999",
-  };
+  return { backgroundColor: FLEX_COLORS.uncategorized, textColor: FLEX_COLORS.uncategorizedText, borderColor: "#D9CCBC", accentColor: "#B6A999" };
 }
 
 function getDifficultyFlexStyle(difficulty) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
 
-  // 難度不再使用大面積彩色底，改成米白底 + 小色點，避免跟子分類混在一起
   if (normalizedDifficulty === "簡單") {
-    return {
-      backgroundColor: "#FBF5EA",
-      textColor: "#6F7D62",
-      borderColor: "#DED3C4",
-      accentColor: "#7EAB67",
-    };
+    return { backgroundColor: "#FBF5EA", textColor: "#6F7D62", borderColor: "#DED3C4", accentColor: "#7EAB67" };
   }
 
   if (normalizedDifficulty === "適中") {
-    return {
-      backgroundColor: "#FBF5EA",
-      textColor: "#8A6B35",
-      borderColor: "#DED3C4",
-      accentColor: "#D5A751",
-    };
+    return { backgroundColor: "#FBF5EA", textColor: "#8A6B35", borderColor: "#DED3C4", accentColor: "#D5A751" };
   }
 
-  return {
-    backgroundColor: "#FBF5EA",
-    textColor: "#9A5A55",
-    borderColor: "#DED3C4",
-    accentColor: "#C97769",
-  };
+  return { backgroundColor: "#FBF5EA", textColor: "#9A5A55", borderColor: "#DED3C4", accentColor: "#C97769" };
 }
 
 function getDifficultyAccentColor(difficulty) {
@@ -732,9 +701,12 @@ function buildCategoryFlexTag(category, options = {}) {
   });
 }
 
+// ── 子分類標籤：未分類回傳 null，呼叫端需判斷後才放入 contents ──
 function buildSubCategoryFlexTag(subCategory, options = {}) {
+  const label = getLineSubCategoryLabel(subCategory);
+  if (!label) return null;
+
   const style = getSubCategoryFlexStyle(subCategory);
-  const displayLabel = getLineSubCategoryLabel(subCategory);
 
   return {
     type: "box",
@@ -752,7 +724,6 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
     spacing: "xs",
     contents: [
       {
-        // 子分類左側色條：像小書籤，和難度的圓點造型分開
         type: "box",
         layout: "vertical",
         width: "4px",
@@ -762,7 +733,7 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
       },
       {
         type: "text",
-        text: displayLabel,
+        text: label,
         size: "xxs",
         weight: "bold",
         color: style.textColor,
@@ -779,7 +750,6 @@ function getSubCategoryFlexTagWidth(subCategory) {
   if (subCategory === "freeCodeCamp") return "96px";
   return "70px";
 }
-
 
 function buildDifficultyFlexTag(difficulty, options = {}) {
   const style = getDifficultyFlexStyle(difficulty);
@@ -800,7 +770,6 @@ function buildDifficultyFlexTag(difficulty, options = {}) {
     spacing: "xs",
     contents: [
       {
-        // 難度用小圓點，不用大面積色塊，避免跟子分類長太像
         type: "box",
         layout: "vertical",
         width: "6px",
@@ -912,14 +881,13 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     );
   }
 
+  // ── 只有程式學習且子分類有標籤才渲染 ──
   if (showSubCategory && isProgrammingTask) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
-
-    tagContents.push(
-      buildSubCategoryFlexTag(subCategory, {
-        width: getSubCategoryFlexTagWidth(subCategory),
-      })
-    );
+    const subTag = buildSubCategoryFlexTag(subCategory, {
+      width: getSubCategoryFlexTagWidth(subCategory),
+    });
+    if (subTag) tagContents.push(subTag);
   }
 
   const rowContents = [
@@ -931,7 +899,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
       contents: [
         {
           type: "text",
-          text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title, 14)}`,
+          text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title)}`,
           size: task.done ? "sm" : "md",
           color: task.done ? "#92867B" : FLEX_COLORS.darkGreen,
           wrap: false,
@@ -969,7 +937,6 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
   };
 }
 
-
 function buildStandardFlexRow({ standard, standardNumber }) {
   const checkbox = standard.done ? "☑" : "☐";
 
@@ -981,7 +948,7 @@ function buildStandardFlexRow({ standard, standardNumber }) {
     contents: [
       {
         type: "text",
-        text: `${standardNumber}. ${checkbox} ${getLineTaskTitle(standard.title, 16)}`,
+        text: `${standardNumber}. ${checkbox} ${getLineStandardTitle(standard.title)}`,
         size: "sm",
         color: standard.done ? "#92867B" : FLEX_COLORS.darkGreen,
         wrap: false,
@@ -991,7 +958,6 @@ function buildStandardFlexRow({ standard, standardNumber }) {
     ],
   };
 }
-
 
 function buildFlexFooterHint(lines) {
   return {
@@ -1057,7 +1023,7 @@ function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, ac
   };
 }
 
-function buildDrawOneTaskFallbackText({ selectedTask, taskNumber }) {
+function buildDrawOneTaskFallbackText({ selectedTask, taskNumber, unfinishedCount }) {
   return [
     "🎲 Tiny Progress｜今日抽到一件小案子",
     "",
@@ -1065,6 +1031,7 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber }) {
     `☐ ${selectedTask.title}`,
     "",
     `分類：${getTaskMetaText(selectedTask)}`,
+    `目前還有 ${unfinishedCount} 件未辦。`,
     "",
     "完成後可以輸入：",
     `完成任務${taskNumber}`,
@@ -1086,11 +1053,8 @@ function buildTaskTagBox(task, showDifficulty) {
 
   if (isProgrammingTask) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
-    tags.push(
-      buildSubCategoryFlexTag(subCategory, {
-        width: getSubCategoryFlexTagWidth(subCategory),
-      })
-    );
+    const subTag = buildSubCategoryFlexTag(subCategory, { width: getSubCategoryFlexTagWidth(subCategory) });
+    if (subTag) tags.push(subTag);
   }
 
   if (showDifficulty) {
@@ -1124,12 +1088,8 @@ function buildDrawTaskTagBox(task) {
 
   if (isProgrammingTask) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
-
-    tags.push(
-      buildSubCategoryFlexTag(subCategory, {
-        width: getSubCategoryFlexTagWidth(subCategory),
-      })
-    );
+    const subTag = buildSubCategoryFlexTag(subCategory, { width: getSubCategoryFlexTagWidth(subCategory) });
+    if (subTag) tags.push(subTag);
   }
 
   return {
@@ -1171,17 +1131,18 @@ function buildDrawEmptyFlexMessage() {
 
   return {
     type: "flex",
-    altText: "Tiny Progress｜目前沒有任務可以抽",
+    altText: "Tiny Progress｜目前沒有任務可以抽，本週都辦完了！",
     contents: bubble,
   };
 }
 
-function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
+function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount }) {
   const difficulty = normalizeDifficulty(selectedTask.difficulty);
 
   const bubble = buildBaseFlexBubble({
     title: "抽到一件小案子",
-    subtitle: "本局已搖出今日小籤，先辦它就好。",
+    // ── 剩餘件數帶入副標 ──
+    subtitle: `本局已搖出今日小籤，還有 ${unfinishedCount} 件等著。`,
     accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
       buildFlexInfoCard(
@@ -1220,14 +1181,12 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
                 wrap: false,
                 maxLines: 1,
               },
-              buildDifficultyFlexTag(difficulty, {
-                width: "54px",
-              }),
+              buildDifficultyFlexTag(difficulty, { width: "54px" }),
             ],
           },
           {
             type: "text",
-            text: getLineTaskTitle(selectedTask.title, 14),
+            text: getLineTaskTitle(selectedTask.title),
             size: "md",
             weight: "bold",
             color: FLEX_COLORS.darkGreen,
@@ -1259,11 +1218,11 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber }) {
 
   return {
     type: "flex",
-    altText: `Tiny Progress｜今日抽到一件小案子：${getLineTaskTitle(selectedTask.title, 20)}`,
+    // ── altText 帶入週次動態資訊 ──
+    altText: `Tiny Progress｜今日抽到：${selectedTask.title}（共 ${unfinishedCount} 件未辦）`,
     contents: bubble,
   };
 }
-
 
 async function handleDrawOneTaskCommand() {
   const board = await getTaskBoardForLine();
@@ -1282,13 +1241,13 @@ async function handleDrawOneTaskCommand() {
 
   const selectedTask = unfinishedTasks[Math.floor(Math.random() * unfinishedTasks.length)];
   const taskNumber = board.tasks.findIndex((task) => task.id === selectedTask.id) + 1;
+  const unfinishedCount = unfinishedTasks.length;
 
   return {
-    replyText: buildDrawOneTaskFallbackText({ selectedTask, taskNumber }),
-    replyMessages: [buildDrawOneTaskFlexMessage({ selectedTask, taskNumber })],
+    replyText: buildDrawOneTaskFallbackText({ selectedTask, taskNumber, unfinishedCount }),
+    replyMessages: [buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount })],
   };
 }
-
 
 function buildDifficultyTaskFooterLines(matchedTasks, difficulty) {
   const firstUnfinishedEntry = matchedTasks.find((entry) => !entry.task.done);
@@ -1381,7 +1340,8 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
 
   return {
     type: "flex",
-    altText: `Tiny Progress｜本週${difficulty}任務`,
+    // ── altText 帶入未完成件數 ──
+    altText: `Tiny Progress｜本週${difficulty}任務，未完成 ${unfinishedCount} 件`,
     contents: bubble,
   };
 }
@@ -1456,11 +1416,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
             wrap: true,
           },
         ],
-        {
-          label: "本週任務櫃",
-          emoji: "🐣",
-          backgroundColor: FLEX_COLORS.paper,
-        }
+        { label: "本週任務櫃", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
       )
     );
   } else {
@@ -1480,11 +1436,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
               ]
             : []),
         ],
-        {
-          label: "本週任務櫃",
-          emoji: "🐣",
-          backgroundColor: FLEX_COLORS.paper,
-        }
+        { label: "本週任務櫃", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
       )
     );
   }
@@ -1502,11 +1454,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
             wrap: true,
           },
         ],
-        {
-          label: "驗收小紙條",
-          emoji: "🥚",
-          backgroundColor: "#FFF8EF",
-        }
+        { label: "驗收小紙條", emoji: "🥚", backgroundColor: "#FFF8EF" }
       )
     );
   } else {
@@ -1526,11 +1474,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
               ]
             : []),
         ],
-        {
-          label: "驗收小紙條",
-          emoji: "🥚",
-          backgroundColor: "#FFF8EF",
-        }
+        { label: "驗收小紙條", emoji: "🥚", backgroundColor: "#FFF8EF" }
       )
     );
   }
@@ -1548,7 +1492,10 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
 
   return {
     type: "flex",
-    altText: "Tiny Progress｜本週案件板",
+    // ── altText 帶入週次 ──
+    altText: currentWeek
+      ? `Tiny Progress｜第 ${currentWeek.weekNumber} 週案件板｜任務 ${taskDoneCount}/${tasks.length}`
+      : "Tiny Progress｜本週案件板",
     contents: bubble,
   };
 }
