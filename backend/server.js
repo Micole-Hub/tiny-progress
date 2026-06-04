@@ -1580,21 +1580,17 @@ function getGuideText() {
     "",
     "【查看】",
     "清單：看本週任務與驗收標準",
-    "簡單任務：看簡單任務",
-    "適中任務：看適中任務",
-    "困難任務：看困難任務",
+    "簡單任務 / 適中任務 / 困難任務",
     "抽一件：從未完成任務裡抽一件",
     "",
     "【新增】",
     "新增任務 練習 CSS",
-    "新增任務 練習 CSS Flex｜程式學習｜練習｜適中",
-    "新增任務 看完 HTML 課程｜程式學習｜觀看課程影片｜簡單",
-    "新增任務 解 freeCodeCamp 表單題｜程式學習｜freeCodeCamp｜適中",
+    "新增任務 練習 CSS｜程式學習｜練習｜適中",
     "新增標準 本週能說明一個學到的觀念",
     "",
-    "分類可用：程式學習、身心穩定、興趣探索",
-    "程式學習子分類：觀看課程影片、練習、寫筆記、W3Schools、freeCodeCamp",
-    "難度可用：簡單、適中、困難",
+    "分類：程式學習、身心穩定、興趣探索",
+    "子分類：觀看課程影片、練習、寫筆記、W3Schools、freeCodeCamp",
+    "難度：簡單、適中、困難",
     "",
     "【辦理】",
     "完成任務3 / 取消任務3 / 修改任務3 / 刪除任務3",
@@ -1607,20 +1603,339 @@ function getGuideText() {
   ].join("\n");
 }
 
+// ── 攻略 Flex Message ──
+function buildGuideFlexMessage() {
+  function buildGuideRow(command, desc) {
+    return {
+      type: "box",
+      layout: "horizontal",
+      spacing: "md",
+      paddingBottom: "8px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          flex: 0,
+          width: "130px",
+          backgroundColor: FLEX_COLORS.paper,
+          cornerRadius: "8px",
+          paddingTop: "4px",
+          paddingBottom: "4px",
+          paddingStart: "8px",
+          paddingEnd: "8px",
+          contents: [
+            {
+              type: "text",
+              text: command,
+              size: "xs",
+              weight: "bold",
+              color: FLEX_COLORS.darkGreen,
+              wrap: false,
+              maxLines: 1,
+            },
+          ],
+        },
+        {
+          type: "text",
+          text: desc,
+          size: "xs",
+          color: FLEX_COLORS.mutedText,
+          flex: 1,
+          wrap: true,
+        },
+      ],
+    };
+  }
+
+  function buildSectionDivider() {
+    return { type: "separator", margin: "sm", color: FLEX_COLORS.beigeLine };
+  }
+
+  // 查看區
+  const viewCard = buildFlexInfoCard(
+    [
+      buildGuideRow("清單", "本週任務與驗收標準總覽"),
+      buildGuideRow("簡單任務", "只看簡單任務"),
+      buildGuideRow("適中任務", "只看適中任務"),
+      buildGuideRow("困難任務", "只看困難任務"),
+      buildGuideRow("抽一件", "從未完成任務隨機抽一件"),
+    ],
+    {
+      label: "查看",
+      emoji: "🔍",
+      backgroundColor: "#FFF8ED",
+      borderColor: "#E5C98F",
+      labelColor: "#9A6B2E",
+    }
+  );
+
+  // 新增區
+  const createCard = buildFlexInfoCard(
+    [
+      buildGuideRow("新增任務 xxx", "快速立案，預設程式學習"),
+      buildGuideRow("新增任務 xxx｜分類｜子分類｜難度", "完整格式立案"),
+      buildSectionDivider(),
+      buildGuideRow("新增標準 xxx", "新增本週驗收條件"),
+      {
+        type: "box",
+        layout: "vertical",
+        margin: "sm",
+        paddingAll: "10px",
+        backgroundColor: FLEX_COLORS.paper,
+        cornerRadius: "10px",
+        borderColor: FLEX_COLORS.beigeLine,
+        borderWidth: "1px",
+        contents: [
+          { type: "text", text: "分類", size: "xxs", weight: "bold", color: FLEX_COLORS.mutedText },
+          { type: "text", text: "程式學習・身心穩定・興趣探索", size: "xxs", color: FLEX_COLORS.darkGreen, wrap: true, margin: "xs" },
+          { type: "text", text: "程式學習子分類", size: "xxs", weight: "bold", color: FLEX_COLORS.mutedText, margin: "sm" },
+          { type: "text", text: "觀看課程影片・練習・寫筆記・W3Schools・freeCodeCamp", size: "xxs", color: FLEX_COLORS.darkGreen, wrap: true, margin: "xs" },
+          { type: "text", text: "難度", size: "xxs", weight: "bold", color: FLEX_COLORS.mutedText, margin: "sm" },
+          { type: "text", text: "簡單・適中・困難", size: "xxs", color: FLEX_COLORS.darkGreen, wrap: true, margin: "xs" },
+        ],
+      },
+    ],
+    {
+      label: "新增",
+      emoji: "✏️",
+      backgroundColor: FLEX_COLORS.mint,
+      borderColor: "#C2DEB8",
+      labelColor: "#3D6B38",
+    }
+  );
+
+  // 辦理區
+  const actionCard = buildFlexInfoCard(
+    [
+      buildGuideRow("完成任務3", "將第 3 個任務標為完成"),
+      buildGuideRow("取消任務3", "撤回完成狀態"),
+      buildGuideRow("修改任務3", "修改任務內容（會等待輸入）"),
+      buildGuideRow("刪除任務3", "從案件板移除"),
+      buildSectionDivider(),
+      buildGuideRow("完成標準2", "驗收標準同上，數字換掉即可"),
+      buildSectionDivider(),
+      buildGuideRow("取消修改", "放棄進行中的修改"),
+    ],
+    {
+      label: "辦理",
+      emoji: "✅",
+      backgroundColor: "#F4EBF2",
+      borderColor: "#DEC9D3",
+      labelColor: "#7A5D69",
+    }
+  );
+
+  const bubble = buildBaseFlexBubble({
+    title: "辦事攻略",
+    subtitle: "不知道怎麼辦，先看這裡。",
+    accentColor: FLEX_COLORS.gold,
+    bodyContents: [viewCard, createCard, actionCard],
+    footerContents: buildFlexFooterHint([
+      "小小前進，也算數。",
+      "想看用量請輸入：用量小抄",
+    ]),
+  });
+
+  return {
+    type: "flex",
+    altText: "Tiny Progress｜辦事攻略：查看、新增、辦理三區說明",
+    contents: bubble,
+  };
+}
+
+function handleGuideCommand() {
+  return {
+    replyText: getGuideText(),
+    replyMessages: [buildGuideFlexMessage()],
+  };
+}
+
 function getUsageText() {
   return [
     "📮 Tiny Progress｜LINE 用量小抄",
     "",
-    "你主動傳訊息，Bot 立刻回覆：",
+    "【你主動傳 → Bot 回覆】不佔額度",
+    "Bot 用 Reply API 回覆，LINE 官方不計入每月 200 則。",
     "清單、攻略、抽一件、新增、完成、修改、刪除",
     "",
-    "Bot 主動傳給你：",
+    "【Bot 主動傳給你】佔用額度",
+    "Bot 用 Push API 主動發送，每則都計入每月 200 則免費額度。",
     "每日提醒、主動補提醒、主動通知",
     "",
-    "目前建議：",
-    "每天主動提醒最多 1 則。",
-    "你主動問，本局再回。",
+    "【目前建議】",
+    "每天主動提醒最多 1 則，一個月約 30 則。",
+    "剩下 170 則留給補提醒與通知，不怕超量。",
+    "你主動問，本局再回，不吃額度。",
   ].join("\n");
+}
+
+// ── 用量小抄 Flex Message ──
+function buildUsageFlexMessage() {
+  function buildUsageRow(emoji, label, desc) {
+    return {
+      type: "box",
+      layout: "horizontal",
+      spacing: "md",
+      paddingBottom: "9px",
+      alignItems: "flex-start",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          flex: 0,
+          width: "16px",
+          contents: [
+            { type: "text", text: emoji, size: "sm", flex: 0 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          flex: 1,
+          contents: [
+            { type: "text", text: label, size: "sm", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true },
+            { type: "text", text: desc, size: "xs", color: FLEX_COLORS.mutedText, wrap: true, margin: "xs" },
+          ],
+        },
+      ],
+    };
+  }
+
+  function buildTagRow(tags) {
+    return {
+      type: "box",
+      layout: "horizontal",
+      spacing: "sm",
+      flexWrap: "wrap",
+      margin: "sm",
+      contents: tags.map((tag) => ({
+        type: "box",
+        layout: "vertical",
+        flex: 0,
+        backgroundColor: FLEX_COLORS.paper,
+        cornerRadius: "999px",
+        paddingTop: "3px",
+        paddingBottom: "3px",
+        paddingStart: "9px",
+        paddingEnd: "9px",
+        contents: [
+          { type: "text", text: tag, size: "xxs", weight: "bold", color: FLEX_COLORS.darkGreen, flex: 0 },
+        ],
+      })),
+    };
+  }
+
+  // 你問 Bot 回
+  const youAskCard = buildFlexInfoCard(
+    [
+      {
+        type: "text",
+        text: "用 Reply API 回覆，不計入每月 200 則額度",
+        size: "xs",
+        color: FLEX_COLORS.mutedText,
+        wrap: true,
+        margin: "xs",
+      },
+      buildTagRow(["清單", "攻略", "抽一件", "簡單任務", "適中任務", "困難任務"]),
+      buildTagRow(["新增任務", "新增標準", "完成", "取消", "修改", "刪除"]),
+    ],
+    {
+      label: "你主動傳 → Bot 立刻回（不佔額度）",
+      emoji: "💬",
+      backgroundColor: "#FFF8ED",
+      borderColor: "#E5C98F",
+      labelColor: "#9A6B2E",
+    }
+  );
+
+  // Bot 主動傳
+  const botPushCard = buildFlexInfoCard(
+    [
+      {
+        type: "text",
+        text: "用 Push API 主動發送，每則計入每月 200 則額度",
+        size: "xs",
+        color: "#7A5D69",
+        wrap: true,
+        margin: "xs",
+      },
+      buildUsageRow("🌅", "每日提醒", "早上固定發送，提醒你看看今天的任務。"),
+      buildUsageRow("📬", "主動補提醒", "有未完成任務時，本局會適時發一則。"),
+      buildUsageRow("📣", "主動通知", "結案或重要事件時會主動告知。"),
+    ],
+    {
+      label: "Bot 主動傳給你（佔用額度）",
+      emoji: "📮",
+      backgroundColor: "#F4EBF2",
+      borderColor: "#DEC9D3",
+      labelColor: "#7A5D69",
+    }
+  );
+
+  // 建議用法
+  const tipCard = buildFlexInfoCard(
+    [
+      {
+        type: "box",
+        layout: "horizontal",
+        spacing: "sm",
+        alignItems: "center",
+        contents: [
+          {
+            type: "box",
+            layout: "vertical",
+            flex: 0,
+            width: "4px",
+            height: "56px",
+            backgroundColor: FLEX_COLORS.gold,
+            cornerRadius: "999px",
+            contents: [],
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            flex: 1,
+            contents: [
+              { type: "text", text: "每天主動提醒最多 1 則", size: "sm", weight: "bold", color: FLEX_COLORS.darkGreen },
+              { type: "text", text: "每月約 30 則，剩下 170 則留給補提醒與通知，不怕超出 200 則免費額度。", size: "xs", color: FLEX_COLORS.mutedText, wrap: true, margin: "xs" },
+              { type: "text", text: "你主動問 Bot，不吃額度，放心問。", size: "xs", color: FLEX_COLORS.mutedText, wrap: true, margin: "xs" },
+            ],
+          },
+        ],
+      },
+    ],
+    {
+      label: "目前建議",
+      emoji: "📌",
+      backgroundColor: "#FBF5EA",
+      borderColor: "#E5C98F",
+      labelColor: "#9A6B2E",
+    }
+  );
+
+  const bubble = buildBaseFlexBubble({
+    title: "用量小抄",
+    subtitle: "什麼時候 Bot 會傳、什麼時候你來問。",
+    accentColor: FLEX_COLORS.greenFresh,
+    bodyContents: [youAskCard, botPushCard, tipCard],
+    footerContents: buildFlexFooterHint([
+      "需要操作說明請輸入：攻略",
+      "小小前進，也算數。",
+    ]),
+  });
+
+  return {
+    type: "flex",
+    altText: "Tiny Progress｜LINE 用量小抄：你問 Bot 回、Bot 主動推、使用建議",
+    contents: bubble,
+  };
+}
+
+function handleUsageCommand() {
+  return {
+    replyText: getUsageText(),
+    replyMessages: [buildUsageFlexMessage()],
+  };
 }
 
 async function handlePendingActionIfNeeded(sourceKey, userText) {
@@ -1881,8 +2196,8 @@ async function handleLineTextCommand({ sourceKey, userText }) {
   const pendingReply = await handlePendingActionIfNeeded(sourceKey, userText);
   if (pendingReply) return pendingReply;
 
-  if (["攻略", "說明", "help", "Help"].includes(userText)) return getGuideText();
-  if (["用量", "用量小抄", "訊息用量"].includes(userText)) return getUsageText();
+  if (["攻略", "說明", "help", "Help"].includes(userText)) return handleGuideCommand();
+  if (["用量", "用量小抄", "訊息用量"].includes(userText)) return handleUsageCommand();
   if (["抽一件", "抽任務", "隨機任務", "今天做什麼"].includes(userText)) return handleDrawOneTaskCommand();
 
   if (userText === "清單" || userText === "全部清單") return handleAllListFlexCommand();
