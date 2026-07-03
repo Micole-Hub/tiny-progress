@@ -216,6 +216,24 @@ async function completeCurrentWeekInGoogleSheets() {
   return data.result;
 }
 
+async function postponeCurrentWeekInGoogleSheets() {
+  const response = await fetch(GOOGLE_SHEETS_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      secret: GOOGLE_SHEETS_API_SECRET,
+      action: "postpone-current-week",
+    }),
+  });
+
+  if (!response.ok) throw new Error("呼叫 Google Apps Script 本週順延失敗，狀態碼：" + response.status);
+
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.message || "Google Apps Script 本週順延失敗");
+
+  return data.result;
+}
+
 async function createItemToGoogleSheets({
   type,
   title,
@@ -2318,6 +2336,28 @@ app.post("/weeks/complete-current", async (req, res) => {
   } catch (error) {
     console.error("POST /weeks/complete-current 發生錯誤：", error);
     res.status(500).json({ message: "本週結案失敗", error: error.message });
+  }
+});
+
+app.post("/weeks/postpone-current", async (req, res) => {
+  try {
+    const result = await postponeCurrentWeekInGoogleSheets();
+
+    res.json({
+      message: "本週順延成功",
+      currentWeekNumber: result.currentWeekNumber,
+      affectedWeeksCount: result.updatedWeeksCount,
+      affectedItemsCount: result.updatedItemsCount,
+      updatedWeeksCount: result.updatedWeeksCount,
+      updatedItemsCount: result.updatedItemsCount,
+      previousWeek: result.previousWeek,
+      currentWeek: result.currentWeek,
+      nextWeek: result.nextWeek,
+      result,
+    });
+  } catch (error) {
+    console.error("POST /weeks/postpone-current 發生錯誤：", error);
+    res.status(500).json({ message: "本週順延失敗", error: error.message });
   }
 });
 
