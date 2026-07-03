@@ -7,8 +7,8 @@
   <title>Tiny Progress</title>
 
   <link rel="icon" href="App-icon.png" />
-  <link rel="stylesheet" href="style.css?v=20260523-clear-copy-1" />
-  <script src="script.js?v=20260523-clear-copy-1" defer></script>
+  <link rel="stylesheet" href="style.css?v=20260703-postpone-1" />
+  <script src="script.js?v=20260703-postpone-1" defer></script>
   </head>
 
 <body>
@@ -95,9 +95,15 @@
         </div>
       </div>
 
-      <button id="completeWeekBtn" class="complete-week-btn" type="button">
-        本週結案，封存並進入下一週
-      </button>
+      <div class="week-action-group" aria-label="週次操作">
+        <button id="postponeWeekBtn" class="postpone-week-btn" type="button">
+          本週順延
+        </button>
+
+        <button id="completeWeekBtn" class="complete-week-btn" type="button">
+          本週結案，封存並進入下一週
+        </button>
+      </div>
     </section>
 
     <section class="progress-card">

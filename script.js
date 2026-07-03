@@ -44,7 +44,15 @@ function showAlert(message, { type = "info" } = {}) {
   });
 }
 
-function showConfirm(message, { type = "warning" } = {}) {
+function showConfirm(
+  message,
+  {
+    type = "warning",
+    confirmText = "確認撤案",
+    cancelText = "取消",
+    confirmClass = "tp-btn-danger",
+  } = {}
+) {
   return new Promise((resolve) => {
     const root = ensureModalRoot();
     const iconMap = {
@@ -60,8 +68,8 @@ function showConfirm(message, { type = "warning" } = {}) {
         <div class="tp-modal-icon tp-modal-icon--${type}">${iconMap[type] || iconMap.warning}</div>
         <p class="tp-modal-body">${message.replace(/\n/g, "<br>")}</p>
         <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" data-action="cancel">取消</button>
-          <button class="tp-btn tp-btn-danger" data-action="ok">確認撤案</button>
+          <button class="tp-btn tp-btn-ghost" data-action="cancel">${cancelText}</button>
+          <button class="tp-btn ${confirmClass}" data-action="ok">${confirmText}</button>
         </div>
       </div>`;
     root.appendChild(overlay);
@@ -171,6 +179,7 @@ function ensureLoadingToast() {
 
 function getLoadingText(method, url) {
   if (url && url.includes("/weeks/complete-current")) return "本局結案中...";
+  if (url && url.includes("/weeks/postpone-current")) return "本週順延中...";
   if (method === "POST") return "本局立案中...";
   if (method === "PATCH") return "本局修訂中...";
   if (method === "DELETE") return "本局撤案中...";
@@ -206,7 +215,10 @@ function stopApiLoading() {
 function shouldTrackApiRequest(input) {
   const url = getRequestUrl(input);
   if (!url) return false;
-  return url.includes("/items") || url.includes("/week-context") || url.includes("/weeks/complete-current");
+  return url.includes("/items") ||
+    url.includes("/week-context") ||
+    url.includes("/weeks/complete-current") ||
+    url.includes("/weeks/postpone-current");
 }
 
 const originalFetch = window.fetch.bind(window);
@@ -295,6 +307,7 @@ const selectedWeekLabel = document.querySelector("#selectedWeekLabel");
 const selectedWeekTitle = document.querySelector("#selectedWeekTitle");
 const selectedWeekAchievement = document.querySelector("#selectedWeekAchievement");
 const completeWeekBtn = document.querySelector("#completeWeekBtn");
+const postponeWeekBtn = document.querySelector("#postponeWeekBtn");
 
 function padNumber(number) { return String(number).padStart(2, "0"); }
 function formatDateForDisplay(date) { return `${date.getFullYear()}/${padNumber(date.getMonth() + 1)}/${padNumber(date.getDate())}`; }
@@ -352,6 +365,9 @@ function canAddToSelectedWeek() {
   const selectedWeek = getSelectedWeek();
   if (!selectedWeek || !selectedWeek.weekNumber) return false;
   return isCurrentWeekView();
+}
+function canPostponeCurrentWeek() {
+  return isCurrentWeekView() && !!weekContext.currentWeek;
 }
 function setWeekTabActiveState() {
   if (previousWeekTab) previousWeekTab.classList.toggle("is-active", selectedWeekView === "previous");
@@ -420,6 +436,7 @@ function renderAddFormState() {
     if (control) control.disabled = !canAdd;
   });
   if (completeWeekBtn) completeWeekBtn.disabled = !isCurrentWeekView() || !weekContext.nextWeek;
+  if (postponeWeekBtn) postponeWeekBtn.disabled = !canPostponeCurrentWeek();
   renderSubCategoryControl();
   if (taskInput) taskInput.placeholder = isPreviousWeekView() ? "已結案週次僅供查看，不能新增任務" : isCurrentWeekView() ? "輸入任務，例如：練習 CSS Flex 排版" : "下週僅供預覽；本週結案後才可新增任務";
   if (standardInput) standardInput.placeholder = isPreviousWeekView() ? "已結案週次僅供查看，不能新增驗收條件" : isCurrentWeekView() ? "輸入驗收條件，例如：能說明 flex 排版怎麼運作" : "下週僅供預覽；本週結案後才可新增驗收條件";
@@ -557,7 +574,11 @@ function createCheckItem(item, displayNumber) {
     const message = normalizedItem.type === "task"
       ? `確定要撤案這項${getSelectedWeekDisplayLabel()}任務嗎？<br>刪除後會從案件板移除。`
       : `確定要撤案這項${getSelectedWeekDisplayLabel()}驗收標準嗎？<br>刪除後會從案件板移除。`;
-    const confirmed = await showConfirm(message, { type: "danger" });
+    const confirmed = await showConfirm(message, {
+      type: "danger",
+      confirmText: "確認撤案",
+      confirmClass: "tp-btn-danger",
+    });
     if (!confirmed) return;
     await deleteItem(normalizedItem.id);
   });
@@ -762,6 +783,17 @@ function buildCompleteWeekConfirmText(currentWeek, nextWeek) {
 
   return lines.join("\n");
 }
+function buildPostponeWeekConfirmText(currentWeek) {
+  const weekNumber = currentWeek && currentWeek.weekNumber ? Number(currentWeek.weekNumber) : "目前";
+  const title = currentWeek && currentWeek.title ? `「${currentWeek.title}」` : "本週";
+
+  return [
+    "要把本週和後面的週次往後順延一週嗎？",
+    "任務、驗收標準和完成狀態都會保留。",
+    "",
+    `本次會從第 ${weekNumber} 週 ${title} 開始順延。`,
+  ].join("\n");
+}
 async function completeCurrentWeek() {
   const currentWeek = weekContext.currentWeek;
   const nextWeek = weekContext.nextWeek;
@@ -800,6 +832,60 @@ async function completeCurrentWeek() {
     await showAlert("本局暫時無法結案，週次未更動。\n請稍後再試。", { type: "danger" });
   }
 }
+async function postponeCurrentWeek() {
+  const currentWeek = weekContext.currentWeek;
+  if (!currentWeek) {
+    await showAlert("目前讀不到本週資料，暫時無法順延。", { type: "warning" });
+    return;
+  }
+  if (!isCurrentWeekView()) {
+    await showAlert("請先切回「本週」，再執行本週順延。", { type: "info" });
+    return;
+  }
+
+  const confirmed = await showConfirm(buildPostponeWeekConfirmText(currentWeek), {
+    type: "warning",
+    confirmText: "確認順延",
+    confirmClass: "tp-btn-seal",
+    cancelText: "先不要",
+  });
+
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/weeks/postpone-current`, { method: "POST" });
+    if (!response.ok) throw new Error("本週順延失敗");
+
+    let data = null;
+    try {
+      data = await response.json();
+    } catch (error) {
+      data = null;
+    }
+
+    selectedWeekView = "current";
+    await Promise.all([loadWeekContext(), loadItems()]);
+    renderAll();
+
+    const result = data && (data.result || data);
+    const affectedWeeksCount = result && result.affectedWeeksCount !== undefined ? Number(result.affectedWeeksCount) : null;
+    const affectedItemsCount = result && result.affectedItemsCount !== undefined ? Number(result.affectedItemsCount) : null;
+    const countText = Number.isFinite(affectedWeeksCount) || Number.isFinite(affectedItemsCount)
+      ? `\n\n已更新週次：${Number.isFinite(affectedWeeksCount) ? affectedWeeksCount : "-"} 筆\n已更新任務 / 驗收標準：${Number.isFinite(affectedItemsCount) ? affectedItemsCount : "-"} 筆`
+      : "";
+
+    await showAlert(
+      `本週和後面的週次已順延一週。\n任務、驗收標準和完成狀態都已保留。${countText}`,
+      { type: "success" }
+    );
+  } catch (error) {
+    console.error("本週順延失敗：", error);
+    await showAlert(
+      "本局暫時無法順延，週次未更動。\n請確認後端是否已支援 /weeks/postpone-current。",
+      { type: "danger" }
+    );
+  }
+}
 function addTask() { addItem("task", taskInput, { category: taskCategory.value, subCategory: taskSubCategory ? taskSubCategory.value : DEFAULT_SUBCATEGORY, difficulty: taskDifficulty.value }); }
 function addStandard() { addItem("standard", standardInput, { category: DEFAULT_CATEGORY, subCategory: EMPTY_SUBCATEGORY, difficulty: DEFAULT_DIFFICULTY }); }
 async function initApp() {
@@ -816,6 +902,7 @@ async function initApp() {
   if (currentWeekTab) currentWeekTab.addEventListener("click", () => switchWeekView("current"));
   if (nextWeekTab) nextWeekTab.addEventListener("click", () => switchWeekView("next"));
   if (completeWeekBtn) completeWeekBtn.addEventListener("click", completeCurrentWeek);
+  if (postponeWeekBtn) postponeWeekBtn.addEventListener("click", postponeCurrentWeek);
   taskInput.addEventListener("keydown", (event) => { if (event.key === "Enter") addTask(); });
   standardInput.addEventListener("keydown", (event) => { if (event.key === "Enter") addStandard(); });
   await Promise.all([loadWeekContext(), loadItems()]);

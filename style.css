@@ -420,6 +420,39 @@ body.is-busy button {
   background: var(--stamp);
 }
 
+.week-action-group {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.week-action-group .complete-week-btn,
+.week-action-group .postpone-week-btn {
+  margin-top: 0;
+}
+
+.postpone-week-btn {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  border: 1px solid rgba(216, 168, 95, 0.38);
+  border-radius: var(--radius-pill);
+  padding: 11px 16px;
+  background: #fff8e8;
+  color: #8a5a28;
+  font-size: 14px;
+  font-weight: 950;
+  box-shadow: 0 8px 18px rgba(216, 168, 95, 0.13);
+}
+
+.postpone-week-btn:hover {
+  background: #fff1d6;
+  border-color: rgba(184, 95, 75, 0.32);
+  color: #6d451a;
+}
+
 /* === 本週進度 === */
 
 .progress-list {
