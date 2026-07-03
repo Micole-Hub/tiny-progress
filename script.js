@@ -238,7 +238,7 @@ window.fetch = async function (input, options = {}) {
 const API_BASE_URL = "https://no-effort-time-bureau.onrender.com";
 
 const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
-const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools", "freeCodeCamp"];
+const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools", "freeCodeCamp", "Vibe Coding"];
 const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
 
 const DEFAULT_CATEGORY = "程式學習";
@@ -485,7 +485,7 @@ function replaceItem(updatedItem) { const normalizedUpdatedItem = normalizeItem(
 function replaceItemById(targetId, newItem) { const normalizedNewItem = normalizeItem(newItem); items = items.map((item) => item.id === targetId ? normalizedNewItem : item); }
 function createEmptyMessage(text) { const emptyItem = document.createElement("li"); emptyItem.className = "empty-message"; emptyItem.textContent = text; return emptyItem; }
 function getCategoryClass(category) { if (category === "程式學習") return "programming"; if (category === "身心穩定") return "wellness"; if (category === "興趣探索") return "interest"; return ""; }
-function getSubCategoryClass(subCategory) { if (subCategory === "觀看課程影片") return "video"; if (subCategory === "練習") return "practice"; if (subCategory === "寫筆記") return "note"; if (subCategory === "W3Schools") return "w3schools"; if (subCategory === "freeCodeCamp") return "freecodecamp"; return "uncategorized"; }
+function getSubCategoryClass(subCategory) { if (subCategory === "觀看課程影片") return "video"; if (subCategory === "練習") return "practice"; if (subCategory === "寫筆記") return "note"; if (subCategory === "W3Schools") return "w3schools"; if (subCategory === "freeCodeCamp") return "freecodecamp"; if (subCategory === "Vibe Coding") return "vibecoding"; return "uncategorized"; }
 function createCategoryHeading(category) {
   const heading = document.createElement("li");
   const categoryClass = getCategoryClass(category);

@@ -38,6 +38,9 @@
   --subcategory-freecodecamp-bg: #e6ddf1;
   --subcategory-freecodecamp-text: #604a78;
   --subcategory-freecodecamp-line: rgba(96, 74, 120, 0.22);
+  --subcategory-vibecoding-bg: #dff0f3;
+  --subcategory-vibecoding-text: #336b75;
+  --subcategory-vibecoding-line: rgba(51, 107, 117, 0.24);
 
   --shadow: 0 18px 42px rgba(59, 51, 45, 0.1);
   --soft-shadow: 0 10px 26px rgba(59, 51, 45, 0.075);
@@ -838,6 +841,12 @@ body.is-busy button {
   background: var(--subcategory-freecodecamp-bg);
   color: var(--subcategory-freecodecamp-text);
   border-color: var(--subcategory-freecodecamp-line);
+}
+
+.chip-subcategory.vibecoding {
+  background: var(--subcategory-vibecoding-bg);
+  color: var(--subcategory-vibecoding-text);
+  border-color: var(--subcategory-vibecoding-line);
 }
 
 .chip-subcategory.uncategorized {

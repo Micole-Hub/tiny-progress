@@ -22,7 +22,7 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
-const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools", "freeCodeCamp"];
+const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools", "freeCodeCamp", "Vibe Coding"];
 const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
 
 const DEFAULT_CATEGORY = "程式學習";
@@ -376,6 +376,7 @@ function getLineSubCategoryLabel(subCategory) {
   if (subCategory === "寫筆記") return "筆記";
   if (subCategory === "W3Schools") return "W3Schools";
   if (subCategory === "freeCodeCamp") return "freeCodeCamp";
+  if (subCategory === "Vibe Coding") return "Vibe Coding";
   if (subCategory === EMPTY_SUBCATEGORY || !subCategory) return "";
   return subCategory;
 }
@@ -589,6 +590,9 @@ function getSubCategoryFlexStyle(subCategory) {
   if (subCategory === "freeCodeCamp") {
     return { backgroundColor: FLEX_COLORS.freecodecamp, textColor: FLEX_COLORS.freecodecampText, borderColor: "#CABADD", accentColor: FLEX_COLORS.freecodecampAccent };
   }
+  if (subCategory === "Vibe Coding") {
+    return { backgroundColor: "#DFF0F3", textColor: "#336B75", borderColor: "#B9DDE3", accentColor: "#4F9CAA" };
+  }
   return { backgroundColor: FLEX_COLORS.uncategorized, textColor: FLEX_COLORS.uncategorizedText, borderColor: "#D9CCBC", accentColor: "#B6A999" };
 }
 
@@ -766,6 +770,7 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
 function getSubCategoryFlexTagWidth(subCategory) {
   if (subCategory === "W3Schools") return "86px";
   if (subCategory === "freeCodeCamp") return "96px";
+  if (subCategory === "Vibe Coding") return "96px";
   return "70px";
 }
 
