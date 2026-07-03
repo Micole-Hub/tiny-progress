@@ -440,20 +440,21 @@ body.is-busy button {
   position: relative;
   z-index: 1;
   width: 100%;
-  border: 1px solid rgba(216, 168, 95, 0.38);
+  margin-top: 10px;
+  border: 1px solid rgba(184, 95, 75, 0.42);
   border-radius: var(--radius-pill);
   padding: 11px 16px;
-  background: #fff8e8;
-  color: #8a5a28;
+  background: rgba(184, 95, 75, 0.08);
+  color: #9d4a38;
   font-size: 14px;
   font-weight: 950;
-  box-shadow: 0 8px 18px rgba(216, 168, 95, 0.13);
+  box-shadow: none;
 }
 
 .postpone-week-btn:hover {
-  background: #fff1d6;
-  border-color: rgba(184, 95, 75, 0.32);
-  color: #6d451a;
+  background: rgba(184, 95, 75, 0.14);
+  border-color: rgba(184, 95, 75, 0.58);
+  color: #7f382a;
 }
 
 /* === 本週進度 === */
