@@ -13,7 +13,6 @@ const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const pendingActions = new Map();
 const PENDING_ACTION_TTL_MS = 10 * 60 * 1000;
 
-// ── 定期清理過期的 pendingActions（每 5 分鐘掃一次）──
 setInterval(() => {
   const now = Date.now();
   for (const [key, val] of pendingActions.entries()) {
@@ -21,54 +20,35 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+// 保留做 LINE 卡片排序與預設顯示，不再當成分類白名單。
 const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
 const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools", "freeCodeCamp", "Vibe Coding"];
 const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
-
 const DEFAULT_CATEGORY = "程式學習";
 const DEFAULT_SUBCATEGORY = "觀看課程影片";
 const EMPTY_SUBCATEGORY = "未分類";
-const DEFAULT_DIFFICULTY = "簡單";
-
-// 截字長度常數
+const DEFAULT_DIFFICULTY = "適中";
 const TASK_TITLE_MAX_LENGTH = 12;
 const STANDARD_TITLE_MAX_LENGTH = 14;
 
-if (!GOOGLE_SHEETS_API_URL) {
-  throw new Error("缺少環境變數 GOOGLE_SHEETS_API_URL");
-}
-
-if (!GOOGLE_SHEETS_API_SECRET) {
-  throw new Error("缺少環境變數 GOOGLE_SHEETS_API_SECRET");
-}
+if (!GOOGLE_SHEETS_API_URL) throw new Error("缺少環境變數 GOOGLE_SHEETS_API_URL");
+if (!GOOGLE_SHEETS_API_SECRET) throw new Error("缺少環境變數 GOOGLE_SHEETS_API_SECRET");
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 function normalizeCategory(value) {
-  const category = String(value || "").trim();
-  if (!category) return DEFAULT_CATEGORY;
-  if (!CATEGORY_OPTIONS.includes(category)) {
-    throw new Error("category 只能是：" + CATEGORY_OPTIONS.join("、"));
-  }
-  return category;
+  return String(value || "").trim() || DEFAULT_CATEGORY;
 }
 
 function normalizeSubCategory(value, category = DEFAULT_CATEGORY) {
-  const normalizedCategory = normalizeCategory(category);
-  if (normalizedCategory !== "程式學習") return EMPTY_SUBCATEGORY;
-
-  const subCategory = String(value || "").trim();
-  if (!subCategory) return DEFAULT_SUBCATEGORY;
-  if (SUBCATEGORY_OPTIONS.includes(subCategory)) return subCategory;
-  if (subCategory === EMPTY_SUBCATEGORY) return EMPTY_SUBCATEGORY;
-
-  throw new Error("subCategory 只能是：" + SUBCATEGORY_OPTIONS.join("、"));
+  const sub = String(value || "").trim();
+  if (sub) return sub;
+  return normalizeCategory(category) === DEFAULT_CATEGORY ? DEFAULT_SUBCATEGORY : EMPTY_SUBCATEGORY;
 }
 
 function normalizeDifficulty(value) {
-  const difficulty = String(value || "").trim();
-  if (!difficulty) return DEFAULT_DIFFICULTY;
+  const difficulty = String(value || "").trim() || DEFAULT_DIFFICULTY;
   if (!DIFFICULTY_OPTIONS.includes(difficulty)) {
     throw new Error("difficulty 只能是：" + DIFFICULTY_OPTIONS.join("、"));
   }
@@ -81,31 +61,41 @@ function normalizeDone(value) {
 
 function getApiErrorStatus(error) {
   const message = String((error && error.message) || "");
-  if (message.includes("已結案封存")) return 409;
+  if (/必填|只能是|不存在|找不到|無效|不能|已經/.test(message)) return 400;
+  if (/已封存|已完成/.test(message)) return 409;
   return 500;
 }
 
 function normalizeItem(item) {
-  const safeItem = item || {};
-  const category = normalizeCategory(safeItem.category);
-
+  const safe = item || {};
+  const status = String(safe.status || (normalizeDone(safe.done) ? "completed" : "active"));
   return {
-    ...safeItem,
-    id: String(safeItem.id || "").trim(),
-    type: String(safeItem.type || "").trim(),
-    title: String(safeItem.title || "").trim(),
-    category,
-    subCategory: normalizeSubCategory(safeItem.subCategory, category),
-    difficulty: normalizeDifficulty(safeItem.difficulty),
-    done: normalizeDone(safeItem.done),
-    weekNumber:
-      safeItem.weekNumber === undefined || safeItem.weekNumber === ""
-        ? ""
-        : Number(safeItem.weekNumber),
-    weekStart: safeItem.weekStart || "",
-    weekEnd: safeItem.weekEnd || "",
-    createdAt: safeItem.createdAt || "",
-    updatedAt: safeItem.updatedAt || "",
+    ...safe,
+    id: String(safe.id || "").trim(),
+    type: String(safe.type || "task").trim(),
+    title: String(safe.title || "").trim(),
+    categoryId: String(safe.categoryId || "").trim(),
+    subCategoryId: String(safe.subCategoryId || "").trim(),
+    category: normalizeCategory(safe.category),
+    subCategory: normalizeSubCategory(safe.subCategory, safe.category),
+    difficulty: normalizeDifficulty(safe.difficulty),
+    status,
+    done: status === "completed" || normalizeDone(safe.done),
+    cycleNumber: Number(safe.cycleNumber || safe.scheduledCycleNumber || 1),
+    weekNumber: Number(safe.weekNumber || safe.scheduledWeekNumber || 1),
+    originalCycleNumber: Number(safe.originalCycleNumber || safe.cycleNumber || 1),
+    originalWeekNumber: Number(safe.originalWeekNumber || safe.weekNumber || 1),
+    scheduledCycleNumber: Number(safe.scheduledCycleNumber || safe.cycleNumber || 1),
+    scheduledWeekNumber: Number(safe.scheduledWeekNumber || safe.weekNumber || 1),
+    weekStart: safe.weekStart || "",
+    weekEnd: safe.weekEnd || "",
+    completedAt: safe.completedAt || "",
+    cancelledAt: safe.cancelledAt || "",
+    cancelReason: safe.cancelReason || "",
+    cancelNote: safe.cancelNote || "",
+    replannedAt: safe.replannedAt || "",
+    createdAt: safe.createdAt || "",
+    updatedAt: safe.updatedAt || "",
   };
 }
 
@@ -115,21 +105,16 @@ function getSubCategorySortIndex(subCategory) {
 }
 
 function sortTasksByCategory(tasks) {
-  return [...tasks].sort(function (a, b) {
+  return [...tasks].sort((a, b) => {
     const categoryA = normalizeCategory(a.category);
     const categoryB = normalizeCategory(b.category);
-    const categoryDiff = CATEGORY_OPTIONS.indexOf(categoryA) - CATEGORY_OPTIONS.indexOf(categoryB);
-
-    if (categoryDiff !== 0) return categoryDiff;
-
-    if (categoryA === "程式學習") {
-      return (
-        getSubCategorySortIndex(normalizeSubCategory(a.subCategory, categoryA)) -
-        getSubCategorySortIndex(normalizeSubCategory(b.subCategory, categoryB))
-      );
-    }
-
-    return 0;
+    const knownA = CATEGORY_OPTIONS.indexOf(categoryA);
+    const knownB = CATEGORY_OPTIONS.indexOf(categoryB);
+    const indexA = knownA === -1 ? CATEGORY_OPTIONS.length : knownA;
+    const indexB = knownB === -1 ? CATEGORY_OPTIONS.length : knownB;
+    if (indexA !== indexB) return indexA - indexB;
+    if (categoryA !== categoryB) return categoryA.localeCompare(categoryB, "zh-Hant");
+    return getSubCategorySortIndex(a.subCategory) - getSubCategorySortIndex(b.subCategory);
   });
 }
 
@@ -137,101 +122,67 @@ function getDisplayLabel(label) {
   return label === "完成標準" ? "本週驗收標準" : label;
 }
 
-function buildGoogleSheetsGetUrl() {
-  const url = new URL(GOOGLE_SHEETS_API_URL);
-  url.searchParams.set("secret", GOOGLE_SHEETS_API_SECRET);
-  return url.toString();
-}
-
-function buildGoogleSheetsResourceUrl(resource) {
+function buildGoogleSheetsResourceUrl(resource, params = {}) {
   const url = new URL(GOOGLE_SHEETS_API_URL);
   url.searchParams.set("secret", GOOGLE_SHEETS_API_SECRET);
   url.searchParams.set("resource", resource);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+  }
   return url.toString();
 }
 
-async function fetchWeekContextFromGoogleSheets() {
-  const response = await fetch(buildGoogleSheetsResourceUrl("week-context"));
-  if (!response.ok) {
-    throw new Error("呼叫 Google Apps Script 週次資料失敗，狀態碼：" + response.status);
-  }
-
+async function gasGet(resource, params = {}) {
+  const response = await fetch(buildGoogleSheetsResourceUrl(resource, params));
+  if (!response.ok) throw new Error(`呼叫 Google Apps Script ${resource} 失敗，狀態碼：${response.status}`);
   const data = await response.json();
-  if (!data.ok) {
-    throw new Error(data.message || "Google Apps Script 回傳週次資料失敗");
-  }
+  if (!data.ok) throw new Error(data.message || `Google Apps Script ${resource} 回傳失敗`);
+  return data;
+}
 
+async function gasPost(action, payload = {}) {
+  const response = await fetch(GOOGLE_SHEETS_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ secret: GOOGLE_SHEETS_API_SECRET, action, ...payload }),
+  });
+  if (!response.ok) throw new Error(`呼叫 Google Apps Script ${action} 失敗，狀態碼：${response.status}`);
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.message || `Google Apps Script ${action} 失敗`);
+  return data.result !== undefined ? data.result : data.item;
+}
+
+async function fetchWeekContextFromGoogleSheets() {
+  const data = await gasGet("week-context");
   return {
     previousWeek: data.previousWeek || null,
     currentWeek: data.currentWeek || null,
     nextWeek: data.nextWeek || null,
     canPlanNextWeek: data.canPlanNextWeek === true,
+    restPeriod: data.restPeriod === true,
+    nextCycle: data.nextCycle || null,
+    cycleComplete: data.cycleComplete === true,
+    completedCycleNumber: data.completedCycleNumber || null,
   };
 }
 
 async function getCurrentWeekNumberFromGoogleSheets() {
   const context = await fetchWeekContextFromGoogleSheets();
-  if (!context.currentWeek || !context.currentWeek.weekNumber) {
-    throw new Error("找不到目前週，無法處理 LINE 指令");
-  }
+  if (!context.currentWeek) throw new Error("目前沒有進行中的 Week");
   return Number(context.currentWeek.weekNumber);
 }
 
 async function fetchItemsFromGoogleSheets() {
-  const response = await fetch(buildGoogleSheetsGetUrl());
-  if (!response.ok) throw new Error("呼叫 Google Apps Script 失敗，狀態碼：" + response.status);
-
-  const data = await response.json();
-  if (!data.ok) throw new Error(data.message || "Google Apps Script 回傳失敗");
-
-  return data.items.map(normalizeItem);
+  const data = await gasGet("items");
+  return (data.items || []).map(normalizeItem);
 }
 
 async function fetchCurrentWeekItemsFromGoogleSheets() {
-  const [items, currentWeekNumber] = await Promise.all([
-    fetchItemsFromGoogleSheets(),
-    getCurrentWeekNumberFromGoogleSheets(),
-  ]);
-
-  return items.filter(function (item) {
-    return Number(item.weekNumber) === currentWeekNumber;
-  });
-}
-
-async function completeCurrentWeekInGoogleSheets() {
-  const response = await fetch(GOOGLE_SHEETS_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      secret: GOOGLE_SHEETS_API_SECRET,
-      action: "complete-current-week",
-    }),
-  });
-
-  if (!response.ok) throw new Error("呼叫 Google Apps Script 結案失敗，狀態碼：" + response.status);
-
-  const data = await response.json();
-  if (!data.ok) throw new Error(data.message || "Google Apps Script 結案失敗");
-
-  return data.result;
-}
-
-async function postponeCurrentWeekInGoogleSheets() {
-  const response = await fetch(GOOGLE_SHEETS_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      secret: GOOGLE_SHEETS_API_SECRET,
-      action: "postpone-current-week",
-    }),
-  });
-
-  if (!response.ok) throw new Error("呼叫 Google Apps Script 本週順延失敗，狀態碼：" + response.status);
-
-  const data = await response.json();
-  if (!data.ok) throw new Error(data.message || "Google Apps Script 本週順延失敗");
-
-  return data.result;
+  const [items, context] = await Promise.all([fetchItemsFromGoogleSheets(), fetchWeekContextFromGoogleSheets()]);
+  if (!context.currentWeek) return [];
+  const c = Number(context.currentWeek.cycleNumber);
+  const w = Number(context.currentWeek.weekNumber);
+  return items.filter((item) => Number(item.scheduledCycleNumber) === c && Number(item.scheduledWeekNumber) === w && !["cancelled", "replanned"].includes(item.status));
 }
 
 async function createItemToGoogleSheets({
@@ -239,97 +190,47 @@ async function createItemToGoogleSheets({
   title,
   category,
   subCategory,
+  categoryId,
+  subCategoryId,
   difficulty,
   done,
+  cycleNumber,
   weekNumber,
   weekStart,
   weekEnd,
   createdAt,
   updatedAt,
 }) {
-  const normalizedCategory = normalizeCategory(category);
-
-  const itemPayload = {
+  const item = {
     type,
     title,
-    category: normalizedCategory,
-    subCategory: normalizeSubCategory(subCategory, normalizedCategory),
+    category: normalizeCategory(category),
+    subCategory: normalizeSubCategory(subCategory, category),
+    categoryId,
+    subCategoryId,
     difficulty: normalizeDifficulty(difficulty),
     done: done === true,
+    cycleNumber,
+    weekNumber,
+    weekStart,
+    weekEnd,
+    createdAt,
+    updatedAt,
   };
-
-  if (weekNumber !== undefined && weekNumber !== null && weekNumber !== "") itemPayload.weekNumber = Number(weekNumber);
-  if (weekStart !== undefined) itemPayload.weekStart = weekStart;
-  if (weekEnd !== undefined) itemPayload.weekEnd = weekEnd;
-  if (createdAt !== undefined) itemPayload.createdAt = createdAt;
-  if (updatedAt !== undefined) itemPayload.updatedAt = updatedAt;
-
-  const response = await fetch(GOOGLE_SHEETS_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      secret: GOOGLE_SHEETS_API_SECRET,
-      action: "create",
-      item: itemPayload,
-    }),
-  });
-
-  if (!response.ok) throw new Error("呼叫 Google Apps Script 新增失敗，狀態碼：" + response.status);
-
-  const data = await response.json();
-  if (!data.ok) throw new Error(data.message || "Google Apps Script 新增資料失敗");
-
-  return normalizeItem(data.item);
+  const result = await gasPost("create", { item });
+  return normalizeItem(result);
 }
 
 async function updateItemToGoogleSheets(id, updates) {
-  const safeUpdates = { ...updates };
-
-  if (safeUpdates.category !== undefined) safeUpdates.category = normalizeCategory(safeUpdates.category);
-  if (safeUpdates.subCategory !== undefined) {
-    safeUpdates.subCategory = normalizeSubCategory(safeUpdates.subCategory, safeUpdates.category || DEFAULT_CATEGORY);
-  }
-  if (safeUpdates.difficulty !== undefined) safeUpdates.difficulty = normalizeDifficulty(safeUpdates.difficulty);
-  if (safeUpdates.weekNumber !== undefined && safeUpdates.weekNumber !== null && safeUpdates.weekNumber !== "") {
-    safeUpdates.weekNumber = Number(safeUpdates.weekNumber);
-  }
-
-  const response = await fetch(GOOGLE_SHEETS_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      secret: GOOGLE_SHEETS_API_SECRET,
-      action: "update",
-      id,
-      updates: safeUpdates,
-    }),
-  });
-
-  if (!response.ok) throw new Error("呼叫 Google Apps Script 更新失敗，狀態碼：" + response.status);
-
-  const data = await response.json();
-  if (!data.ok) throw new Error(data.message || "Google Apps Script 更新資料失敗");
-
-  return normalizeItem(data.item);
+  const safe = { ...updates };
+  if (safe.difficulty !== undefined) safe.difficulty = normalizeDifficulty(safe.difficulty);
+  const result = await gasPost("update", { id, updates: safe });
+  return normalizeItem(result);
 }
 
 async function deleteItemFromGoogleSheets(id) {
-  const response = await fetch(GOOGLE_SHEETS_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      secret: GOOGLE_SHEETS_API_SECRET,
-      action: "delete",
-      id,
-    }),
-  });
-
-  if (!response.ok) throw new Error("呼叫 Google Apps Script 刪除失敗，狀態碼：" + response.status);
-
-  const data = await response.json();
-  if (!data.ok) throw new Error(data.message || "Google Apps Script 刪除資料失敗");
-
-  return normalizeItem(data.item);
+  const result = await gasPost("delete", { id });
+  return normalizeItem(result);
 }
 
 function getLineSourceKey(event) {
@@ -2265,169 +2166,179 @@ async function handleLineTextCommand({ sourceKey, userText }) {
   return getUnknownCommandText();
 }
 
+
+// ==================== HTTP API ====================
+
 app.get("/", (req, res) => {
-  res.send("Tiny Progress API 開張中。本局小櫃台今日值班。");
+  res.send("Tiny Progress V2 API 開張中。本局小櫃台今日值班。");
 });
 
 app.post("/gas-queue", async (req, res) => {
   try {
     const { source, queueId, userId, messageText } = req.body || {};
-
     if (source !== "gas_queue") return res.status(400).json({ ok: false, message: "source 必須是 gas_queue" });
-    if (!queueId) return res.status(400).json({ ok: false, message: "缺少 queueId" });
-    if (!userId) return res.status(400).json({ ok: false, message: "缺少 userId" });
-
+    if (!queueId || !userId) return res.status(400).json({ ok: false, message: "缺少 queueId 或 userId" });
     const userText = String(messageText || "").trim();
     if (!userText) return res.status(400).json({ ok: false, message: "缺少 messageText" });
-
     const replyResult = await handleLineTextCommand({ sourceKey: String(userId).trim(), userText });
     const normalizedReply = normalizeLineReplyResult(replyResult);
-
-    return res.json({
-      ok: true,
-      queueId,
-      replyText: normalizedReply.replyText,
-      replyMessages: normalizedReply.replyMessages,
-    });
+    res.json({ ok: true, queueId, replyText: normalizedReply.replyText, replyMessages: normalizedReply.replyMessages });
   } catch (error) {
     console.error("處理 /gas-queue 發生錯誤：", error);
-    return res.status(500).json({ ok: false, message: "處理 GAS queue 訊息失敗", error: error.message });
+    res.status(500).json({ ok: false, message: "處理 GAS queue 訊息失敗", error: error.message });
   }
 });
 
 app.post("/line/webhook", async (req, res) => {
   const events = req.body.events || [];
-
   for (const event of events) {
     try {
       if (event.type !== "message" || event.message.type !== "text") continue;
-
       const sourceKey = getLineSourceKey(event);
       const userText = event.message.text.trim();
       const replyResult = await handleLineTextCommand({ sourceKey, userText });
-
       await replyToLine(event.replyToken, replyResult);
     } catch (error) {
       console.error("處理 LINE Webhook 發生錯誤：", error);
-
-      if (event.replyToken) {
-        await replyToLine(event.replyToken, "管理局小櫃台剛剛卡住了，本局未更動資料。請稍後再試一次。");
-      }
+      if (event.replyToken) await replyToLine(event.replyToken, "管理局小櫃台剛剛卡住了，本局未更動資料。請稍後再試一次。");
     }
   }
-
   res.status(200).send("OK");
 });
 
 app.get("/week-context", async (req, res) => {
-  try {
-    res.json(await fetchWeekContextFromGoogleSheets());
-  } catch (error) {
-    console.error("GET /week-context 讀取週次資料發生錯誤：", error);
-    res.status(500).json({ message: "讀取週次資料失敗", error: error.message });
-  }
+  try { res.json(await fetchWeekContextFromGoogleSheets()); }
+  catch (error) { res.status(500).json({ message: "讀取週次資料失敗", error: error.message }); }
 });
 
-app.post("/weeks/complete-current", async (req, res) => {
-  try {
-    const result = await completeCurrentWeekInGoogleSheets();
+app.get("/weeks", async (req, res) => {
+  try { res.json((await gasGet("weeks")).weeks || []); }
+  catch (error) { res.status(500).json({ message: "讀取 Weeks 失敗", error: error.message }); }
+});
 
-    res.json({
-      message: "本週結案成功",
-      completedWeek: result.completedWeek,
-      currentWeek: result.currentWeek,
-      nextWeek: result.nextWeek,
-    });
-  } catch (error) {
-    console.error("POST /weeks/complete-current 發生錯誤：", error);
-    res.status(500).json({ message: "本週結案失敗", error: error.message });
-  }
+app.get("/cycles", async (req, res) => {
+  try { res.json((await gasGet("cycles")).cycles || []); }
+  catch (error) { res.status(500).json({ message: "讀取 Cycles 失敗", error: error.message }); }
+});
+
+app.patch("/weeks/current-plan", async (req, res) => {
+  try { res.json(await gasPost("update-current-week-plan", req.body || {})); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "更新本週主題失敗", error: error.message }); }
 });
 
 app.post("/weeks/postpone-current", async (req, res) => {
-  try {
-    const result = await postponeCurrentWeekInGoogleSheets();
+  try { res.json(await gasPost("postpone-current-week", req.body || {})); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "本週順延失敗", error: error.message }); }
+});
 
-    res.json({
-      message: "本週順延成功",
-      currentWeekNumber: result.currentWeekNumber,
-      affectedWeeksCount: result.updatedWeeksCount,
-      affectedItemsCount: result.updatedItemsCount,
-      updatedWeeksCount: result.updatedWeeksCount,
-      updatedItemsCount: result.updatedItemsCount,
-      previousWeek: result.previousWeek,
-      currentWeek: result.currentWeek,
-      nextWeek: result.nextWeek,
-      result,
-    });
+// 舊前端相容入口：V2 不再手動結案。
+app.post("/weeks/complete-current", (req, res) => {
+  res.status(409).json({ message: "V2 已改為日期到時自動切換 Week，不需要手動結案。" });
+});
+
+app.post("/cycles", async (req, res) => {
+  try { res.status(201).json(await gasPost("create-cycle", req.body || {})); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "建立 Cycle 失敗", error: error.message }); }
+});
+
+app.patch("/cycles/:cycleNumber/start-date", async (req, res) => {
+  try {
+    res.json(await gasPost("change-cycle-start", { cycleNumber: Number(req.params.cycleNumber), ...(req.body || {}) }));
   } catch (error) {
-    console.error("POST /weeks/postpone-current 發生錯誤：", error);
-    res.status(500).json({ message: "本週順延失敗", error: error.message });
+    res.status(getApiErrorStatus(error)).json({ message: "修改 Cycle 開始日期失敗", error: error.message });
   }
 });
 
 app.get("/items", async (req, res) => {
-  try {
-    res.json(await fetchItemsFromGoogleSheets());
-  } catch (error) {
-    console.error("GET /items 讀取 Google Sheets 發生錯誤：", error);
-    res.status(500).json({ message: "讀取 Google Sheets 資料失敗", error: error.message });
-  }
+  try { res.json(await fetchItemsFromGoogleSheets()); }
+  catch (error) { res.status(500).json({ message: "讀取任務失敗", error: error.message }); }
 });
 
 app.post("/items", async (req, res) => {
   try {
-    const { type, title, category, subCategory, difficulty, weekNumber } = req.body;
-
-    if (!type || !title) return res.status(400).json({ message: "type 和 title 都是必填" });
-    if (type !== "task" && type !== "standard") return res.status(400).json({ message: "type 只能是 task 或 standard" });
-
-    const createdItem = await createItemToGoogleSheets({ type, title, category, subCategory, difficulty, weekNumber });
-    res.status(201).json(createdItem);
+    const body = req.body || {};
+    if (!body.title) return res.status(400).json({ message: "title 必填" });
+    const created = await createItemToGoogleSheets({ type: body.type || "task", ...body });
+    res.status(201).json(created);
   } catch (error) {
-    console.error("POST /items 新增 Google Sheets 發生錯誤：", error);
-    res.status(getApiErrorStatus(error)).json({ message: "新增資料到 Google Sheets 失敗", error: error.message });
+    res.status(getApiErrorStatus(error)).json({ message: "新增任務失敗", error: error.message });
   }
 });
 
 app.patch("/items/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { title, done, category, subCategory, difficulty, weekNumber } = req.body;
-    const updates = {};
+  try { res.json(await updateItemToGoogleSheets(req.params.id, req.body || {})); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "更新任務失敗", error: error.message }); }
+});
 
-    if (title !== undefined) updates.title = title;
-    if (done !== undefined) updates.done = done;
-    if (category !== undefined) updates.category = category;
-    if (subCategory !== undefined) updates.subCategory = subCategory;
-    if (difficulty !== undefined) updates.difficulty = difficulty;
-    if (weekNumber !== undefined) updates.weekNumber = weekNumber;
+app.post("/items/:id/complete", async (req, res) => {
+  try { res.json(normalizeItem(await gasPost("complete-task", { id: req.params.id }))); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "完成任務失敗", error: error.message }); }
+});
 
-    if (Object.keys(updates).length === 0) return res.status(400).json({ message: "沒有收到要更新的欄位" });
+app.post("/items/:id/correct-completion", async (req, res) => {
+  try { res.json(normalizeItem(await gasPost("correct-completion", { id: req.params.id }))); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "更正完成狀態失敗", error: error.message }); }
+});
 
-    res.json(await updateItemToGoogleSheets(id, updates));
-  } catch (error) {
-    console.error("PATCH /items/:id 更新 Google Sheets 發生錯誤：", error);
-    res.status(getApiErrorStatus(error)).json({ message: "更新資料到 Google Sheets 失敗", error: error.message });
-  }
+app.post("/items/:id/cancel", async (req, res) => {
+  try { res.json(normalizeItem(await gasPost("cancel-task", { id: req.params.id, ...(req.body || {}) }))); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "撤案失敗", error: error.message }); }
+});
+
+app.post("/items/:id/reschedule", async (req, res) => {
+  try { res.json(normalizeItem(await gasPost("reschedule-task", { id: req.params.id, ...(req.body || {}) }))); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "重新排程失敗", error: error.message }); }
+});
+
+app.post("/items/:id/replan", async (req, res) => {
+  try { res.json(await gasPost("replan-task", { id: req.params.id, ...(req.body || {}) })); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "重新規劃失敗", error: error.message }); }
 });
 
 app.delete("/items/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-    const deletedItem = await deleteItemFromGoogleSheets(id);
-
-    res.json({
-      message: "刪除成功",
-      id: deletedItem.id,
-      item: deletedItem,
-    });
+    const item = await deleteItemFromGoogleSheets(req.params.id);
+    res.json({ message: "已轉為 V2 撤案（Soft Delete）", id: item.id, item });
   } catch (error) {
-    console.error("DELETE /items/:id 刪除 Google Sheets 發生錯誤：", error);
-    res.status(getApiErrorStatus(error)).json({ message: "刪除 Google Sheets 資料失敗", error: error.message });
+    res.status(getApiErrorStatus(error)).json({ message: "撤案失敗", error: error.message });
   }
 });
 
+app.get("/categories", async (req, res) => {
+  try { res.json((await gasGet("categories")).categories || []); }
+  catch (error) { res.status(500).json({ message: "讀取分類失敗", error: error.message }); }
+});
+
+app.post("/categories", async (req, res) => {
+  try { res.status(201).json(await gasPost("create-category", { category: req.body || {} })); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "新增分類失敗", error: error.message }); }
+});
+
+app.patch("/categories/:id", async (req, res) => {
+  try { res.json(await gasPost("update-category", { id: req.params.id, updates: req.body || {} })); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "更新分類失敗", error: error.message }); }
+});
+
+app.get("/history", async (req, res) => {
+  try { res.json((await gasGet("history")).history || []); }
+  catch (error) { res.status(500).json({ message: "讀取 History 失敗", error: error.message }); }
+});
+
+app.get("/reviews/:cycleNumber", async (req, res) => {
+  try { res.json((await gasGet("review", { cycleNumber: Number(req.params.cycleNumber) })).review); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "讀取 12 Week Review 失敗", error: error.message }); }
+});
+
+app.get("/retrospectives", async (req, res) => {
+  try { res.json((await gasGet("retrospectives")).retrospectives || []); }
+  catch (error) { res.status(500).json({ message: "讀取復盤失敗", error: error.message }); }
+});
+
+app.post("/retrospectives", async (req, res) => {
+  try { res.json(await gasPost("save-retrospective", { retro: req.body || {} })); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "儲存復盤失敗", error: error.message }); }
+});
+
 app.listen(PORT, () => {
-  console.log(`Tiny Progress 後端啟動：http://localhost:${PORT}`);
+  console.log(`Tiny Progress V2 後端啟動：http://localhost:${PORT}`);
 });
