@@ -1,911 +1,1305 @@
-// === 自訂對話框系統（取代原生 alert / confirm / prompt）===
+const API_BASE_URL = "https://no-effort-time-bureau.onrender.com";
+const WORKLOAD_RECOMMENDED = 5;
+const DIFFICULTIES = ["簡單", "適中", "困難"];
 
-function ensureModalRoot() {
-  let root = document.getElementById("tp-modal-root");
-  if (!root) {
-    root = document.createElement("div");
-    root.id = "tp-modal-root";
-    document.body.appendChild(root);
-  }
-  return root;
-}
-
-function closeModal(overlay) {
-  overlay.classList.remove("tp-modal-open");
-  overlay.addEventListener("transitionend", () => overlay.remove(), { once: true });
-}
-
-function showAlert(message, { type = "info" } = {}) {
-  return new Promise((resolve) => {
-    const root = ensureModalRoot();
-    const iconMap = {
-      info:    "📋",
-      success: "✅",
-      warning: "⚠️",
-      danger:  "🚨",
-    };
-    const overlay = document.createElement("div");
-    overlay.className = "tp-modal-overlay";
-    overlay.innerHTML = `
-      <div class="tp-modal tp-modal-alert" role="alertdialog" aria-modal="true">
-        <div class="tp-modal-icon tp-modal-icon--${type}">${iconMap[type] || iconMap.info}</div>
-        <p class="tp-modal-body">${message.replace(/\n/g, "<br>")}</p>
-        <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-primary" data-action="ok">確認</button>
-        </div>
-      </div>`;
-    root.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add("tp-modal-open"));
-    overlay.querySelector("[data-action='ok']").addEventListener("click", () => {
-      closeModal(overlay);
-      resolve();
-    });
-    overlay.querySelector(".tp-btn-primary").focus();
-  });
-}
-
-function showConfirm(
-  message,
-  {
-    type = "warning",
-    confirmText = "確認撤案",
-    cancelText = "取消",
-    confirmClass = "tp-btn-danger",
-  } = {}
-) {
-  return new Promise((resolve) => {
-    const root = ensureModalRoot();
-    const iconMap = {
-      info:    "📋",
-      success: "✅",
-      warning: "⚠️",
-      danger:  "🚨",
-    };
-    const overlay = document.createElement("div");
-    overlay.className = "tp-modal-overlay";
-    overlay.innerHTML = `
-      <div class="tp-modal tp-modal-confirm" role="alertdialog" aria-modal="true">
-        <div class="tp-modal-icon tp-modal-icon--${type}">${iconMap[type] || iconMap.warning}</div>
-        <p class="tp-modal-body">${message.replace(/\n/g, "<br>")}</p>
-        <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" data-action="cancel">${cancelText}</button>
-          <button class="tp-btn ${confirmClass}" data-action="ok">${confirmText}</button>
-        </div>
-      </div>`;
-    root.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add("tp-modal-open"));
-    overlay.querySelector("[data-action='ok']").addEventListener("click", () => {
-      closeModal(overlay);
-      resolve(true);
-    });
-    overlay.querySelector("[data-action='cancel']").addEventListener("click", () => {
-      closeModal(overlay);
-      resolve(false);
-    });
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) { closeModal(overlay); resolve(false); }
-    });
-    overlay.querySelector("[data-action='cancel']").focus();
-  });
-}
-
-function showPrompt(message, defaultValue = "") {
-  return new Promise((resolve) => {
-    const root = ensureModalRoot();
-    const overlay = document.createElement("div");
-    overlay.className = "tp-modal-overlay";
-    overlay.innerHTML = `
-      <div class="tp-modal tp-modal-prompt" role="dialog" aria-modal="true">
-        <div class="tp-modal-icon tp-modal-icon--info">📝</div>
-        <p class="tp-modal-body">${message.replace(/\n/g, "<br>")}</p>
-        <input class="tp-modal-input" type="text" value="${defaultValue}" />
-        <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" data-action="cancel">取消</button>
-          <button class="tp-btn tp-btn-primary" data-action="ok">確認</button>
-        </div>
-      </div>`;
-    root.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add("tp-modal-open"));
-    const input = overlay.querySelector(".tp-modal-input");
-    const ok = overlay.querySelector("[data-action='ok']");
-    const cancel = overlay.querySelector("[data-action='cancel']");
-    const submit = () => { closeModal(overlay); resolve(input.value); };
-    const dismiss = () => { closeModal(overlay); resolve(null); };
-    ok.addEventListener("click", submit);
-    cancel.addEventListener("click", dismiss);
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") submit();
-      if (e.key === "Escape") dismiss();
-    });
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
-    input.focus();
-    input.select();
-  });
-}
-
-// 專門用於結案確認的 prompt（含多行說明 + 輸入框）
-function showCompleteWeekPrompt(message) {
-  return new Promise((resolve) => {
-    const root = ensureModalRoot();
-    const overlay = document.createElement("div");
-    overlay.className = "tp-modal-overlay";
-    overlay.innerHTML = `
-      <div class="tp-modal tp-modal-complete" role="dialog" aria-modal="true">
-        <div class="tp-modal-icon tp-modal-icon--warning">📦</div>
-        <div class="tp-modal-body tp-modal-preformatted">${message.replace(/\n/g, "<br>")}</div>
-        <input class="tp-modal-input" type="text" placeholder="請輸入：結案" />
-        <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" data-action="cancel">再考慮一下</button>
-          <button class="tp-btn tp-btn-seal" data-action="ok">🔏 蓋章封存</button>
-        </div>
-      </div>`;
-    root.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add("tp-modal-open"));
-    const input = overlay.querySelector(".tp-modal-input");
-    const ok = overlay.querySelector("[data-action='ok']");
-    const cancel = overlay.querySelector("[data-action='cancel']");
-    const submit = () => { closeModal(overlay); resolve(input.value); };
-    const dismiss = () => { closeModal(overlay); resolve(null); };
-    ok.addEventListener("click", submit);
-    cancel.addEventListener("click", dismiss);
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") submit();
-      if (e.key === "Escape") dismiss();
-    });
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
-    input.focus();
-  });
-}
-
-// === 全域 API 等待狀態 ===
-let activeApiRequestCount = 0;
-let disabledButtonsBeforeBusy = [];
-
-function getRequestUrl(input) {
-  return typeof input === "string" ? input : input && input.url;
-}
-
-function ensureLoadingToast() {
-  let toast = document.querySelector(".loading-toast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.className = "loading-toast";
-    toast.setAttribute("aria-live", "polite");
-    toast.textContent = "處理中...";
-    document.body.appendChild(toast);
-  }
-  return toast;
-}
-
-function getLoadingText(method, url) {
-  if (url && url.includes("/weeks/complete-current")) return "本局結案中...";
-  if (url && url.includes("/weeks/postpone-current")) return "本週順延中...";
-  if (method === "POST") return "本局立案中...";
-  if (method === "PATCH") return "本局修訂中...";
-  if (method === "DELETE") return "本局撤案中...";
-  return "本局讀取資料中...";
-}
-
-function startApiLoading(message) {
-  const isFirstRequest = activeApiRequestCount === 0;
-  activeApiRequestCount += 1;
-  const toast = ensureLoadingToast();
-  toast.textContent = message;
-  document.body.classList.add("is-busy");
-  toast.classList.add("is-show");
-  if (isFirstRequest) {
-    disabledButtonsBeforeBusy = Array.from(document.querySelectorAll("button:disabled"));
-    document.querySelectorAll("button").forEach((button) => { button.disabled = true; });
-  }
-}
-
-function stopApiLoading() {
-  activeApiRequestCount -= 1;
-  if (activeApiRequestCount > 0) return;
-  activeApiRequestCount = 0;
-  const toast = ensureLoadingToast();
-  document.body.classList.remove("is-busy");
-  toast.classList.remove("is-show");
-  document.querySelectorAll("button").forEach((button) => {
-    if (!disabledButtonsBeforeBusy.includes(button)) button.disabled = false;
-  });
-  disabledButtonsBeforeBusy = [];
-}
-
-function shouldTrackApiRequest(input) {
-  const url = getRequestUrl(input);
-  if (!url) return false;
-  return url.includes("/items") ||
-    url.includes("/week-context") ||
-    url.includes("/weeks/complete-current") ||
-    url.includes("/weeks/postpone-current");
-}
-
-const originalFetch = window.fetch.bind(window);
-window.fetch = async function (input, options = {}) {
-  const shouldTrack = shouldTrackApiRequest(input);
-  const method = (options.method || "GET").toUpperCase();
-  const url = getRequestUrl(input);
-  if (!shouldTrack) return originalFetch(input, options);
-  startApiLoading(getLoadingText(method, url));
-  try {
-    return await originalFetch(input, options);
-  } finally {
-    stopApiLoading();
-  }
+const state = {
+  context: null,
+  items: [],
+  weeks: [],
+  cycles: [],
+  categories: [],
+  history: null,
+  historyFocusTaskId: null,
+  showAllOverdue: false,
+  showAllRescheduled: false,
+  showInactiveCategories: false,
+  currentPage: "home",
+  activeTaskForSheet: null,
+  tourIndex: 0,
 };
 
-const API_BASE_URL = "https://no-effort-time-bureau.onrender.com";
-
-const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
-const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools", "freeCodeCamp", "Vibe Coding"];
-const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
-
-const DEFAULT_CATEGORY = "程式學習";
-const DEFAULT_SUBCATEGORY = "觀看課程影片";
-const EMPTY_SUBCATEGORY = "未分類";
-const DEFAULT_DIFFICULTY = "簡單";
-
 const DAILY_QUOTES = [
-  "本局提醒：今日有學，即可立案；步子再小，也能靠岸。",
-  "今日有光，心就不慌；學得再慢，也在路上。",
+  "本局提醒：時間會往前，未完成的事情不會偷偷消失。",
   "一點進度，一點溫度；慢慢累積，也會有路。",
-  "本日案件不求滿分，有願意開始，就是啟程。",
-  "學習不急著成篇，今天一點，也算向前。",
-  "本局備註：不必逞強，穩穩前行，也會發光。",
-  "今日有開張，心就有方向；一點點學，也值得收藏。",
-  "不把自己送去審判，先把努力放進檔案。",
-  "一小步也能立案，一小時也能靠岸。",
-  "本局認定：願意練習，就是有效前進。",
-  "今天不必追趕誰，照顧自己，也是在準備。",
-  "學習不是急件，慢慢養成，也會成篇。",
-  "今日有做，心就有火；今日有學，路就有光。",
-  "不用十天走完十年，今日一點，也能向前。",
-  "本局小章：你有學習，值得記上一筆。",
-  "慢慢寫，慢慢懂，慢慢把自己接回手中。",
-  "今日進度不問長短，有打開心門，就算靠岸。",
-  "不急著變強，先不再受傷；穩穩學習，也會發光。",
-  "本局收件：今天有學，就是好案件。",
-  "一點點也有重量，慢慢來也有方向。",
+  "今天不必追趕誰，留下真實進度就很好。",
+  "計畫可以調整，但不用把昨天改寫成滿分。",
+  "本局備註：未完成不是失敗，它只是下一次判斷的資料。",
 ];
 
-let items = [];
-let weekContext = { previousWeek: null, currentWeek: null, nextWeek: null, canPlanNextWeek: false };
-let selectedWeekView = "current";
+const RESCHEDULE_REASONS = [
+  "低估工作量",
+  "任務太大",
+  "技術卡住",
+  "優先順序改變",
+  "個人狀態",
+  "原計畫需要調整",
+  "其他",
+];
 
-const taskList = document.querySelector("#taskList");
-const standardList = document.querySelector("#standardList");
-const progressTitle = document.querySelector("#progressTitle");
-const progressNote = document.querySelector("#progressNote");
-const taskProgressLabel = document.querySelector("#taskProgressLabel");
-const standardProgressLabel = document.querySelector("#standardProgressLabel");
-const taskProgress = document.querySelector("#taskProgress");
-const standardProgress = document.querySelector("#standardProgress");
-const taskProgressFill = document.querySelector("#taskProgressFill");
-const standardProgressFill = document.querySelector("#standardProgressFill");
-const taskSectionTitle = document.querySelector("#taskSectionTitle");
-const taskSectionNote = document.querySelector("#taskSectionNote");
-const standardSectionTitle = document.querySelector("#standardSectionTitle");
-const standardSectionNote = document.querySelector("#standardSectionNote");
-const taskInput = document.querySelector("#taskInput");
-const taskCategory = document.querySelector("#taskCategory");
-const taskSubCategory = document.querySelector("#taskSubCategory");
-const taskDifficulty = document.querySelector("#taskDifficulty");
-const addTaskBtn = document.querySelector("#addTaskBtn");
-const standardInput = document.querySelector("#standardInput");
-const addStandardBtn = document.querySelector("#addStandardBtn");
-const refreshBtn = document.getElementById("refreshBtn");
-const weekStartText = document.querySelector("#weekStartText");
-const weekEndText = document.querySelector("#weekEndText");
-const dailyQuote = document.querySelector("#dailyQuote");
-const currentWeekNumber = document.querySelector("#currentWeekNumber");
-const planStatusText = document.querySelector("#planStatusText");
-const previousWeekTab = document.querySelector("#previousWeekTab");
-const currentWeekTab = document.querySelector("#currentWeekTab");
-const nextWeekTab = document.querySelector("#nextWeekTab");
-const selectedWeekLabel = document.querySelector("#selectedWeekLabel");
-const selectedWeekTitle = document.querySelector("#selectedWeekTitle");
-const selectedWeekAchievement = document.querySelector("#selectedWeekAchievement");
-const completeWeekBtn = document.querySelector("#completeWeekBtn");
-const postponeWeekBtn = document.querySelector("#postponeWeekBtn");
+const CANCEL_REASONS = [
+  "任務已不需要",
+  "任務內容重複",
+  "當初規劃錯誤",
+  "已整合到其他任務",
+  "優先順序改變",
+  "其他",
+];
 
-function padNumber(number) { return String(number).padStart(2, "0"); }
-function formatDateForDisplay(date) { return `${date.getFullYear()}/${padNumber(date.getMonth() + 1)}/${padNumber(date.getDate())}`; }
-function formatDateForDatetime(date) { return `${date.getFullYear()}-${padNumber(date.getMonth() + 1)}-${padNumber(date.getDate())}`; }
-function getCurrentWeekRange(baseDate = new Date()) {
-  const date = new Date(baseDate);
-  const day = date.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  const monday = new Date(date);
-  monday.setDate(date.getDate() + diffToMonday);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  return { weekStart: monday, weekEnd: sunday };
+const POSTPONE_REASONS = [
+  "個人狀況",
+  "臨時重大事項",
+  "原排程估算錯誤",
+  "外部因素導致無法進行",
+  "計畫需要重新調整",
+  "其他",
+];
+
+const CYCLE_DATE_REASONS = [
+  "個人行程調整",
+  "需要延長休息時間",
+  "前一個 Cycle 收尾尚未完成",
+  "學習／工作計畫改變",
+  "外部因素影響",
+  "其他",
+];
+
+const els = {};
+
+function cacheElements() {
+  [
+    "homePage", "historyPage", "settingsPage", "heroTitle", "dailyQuote", "cycleWeekBadge",
+    "weekStatusBadge", "weekRangeWrap", "weekStartText", "weekEndText", "activeWeekPanel",
+    "weekThemeText", "weekGoalText", "workloadCount", "workloadFill", "workloadNote", "postponeWeekBtn",
+    "weekSetupPanel", "weekSetupForm", "weekSetupTheme", "weekSetupGoal", "restPanel", "restMessage",
+    "changeCycleStartBtn", "cycleCompletePanel", "cycleCompleteTitle", "openReviewBtn", "workArea",
+    "currentTaskList", "currentTaskCount", "overdueCount", "overdueList", "showAllOverdueBtn",
+    "rescheduledList", "showAllRescheduledBtn", "addTaskForm", "taskInput", "taskCategory",
+    "taskSubCategory", "taskDifficulty", "addTaskBtn", "historyList", "refreshHistoryBtn",
+    "categorySettingsList", "addCategoryBtn", "toggleInactiveBtn", "replayTourBtn", "loadingToast",
+    "bottomSheet", "sheetTitle", "sheetActions", "closeSheetBtn", "cycleCelebration", "celebrationTitle",
+    "skipCelebrationBtn", "tourPopover", "tourStepLabel", "tourTitle", "tourText", "tourSkipBtn",
+    "tourNextBtn", "editWeekPlanBtn"
+  ].forEach((id) => { els[id] = document.getElementById(id); });
+  els.modalRoot = document.getElementById("tp-modal-root");
+  els.taskMenuRoot = document.getElementById("taskMenuRoot");
+  els.navButtons = [...document.querySelectorAll(".v2-nav-btn")];
+  els.pages = [...document.querySelectorAll("[data-page-panel]")];
 }
-function renderWeekRange() {
-  if (!weekStartText || !weekEndText) return;
-  const selectedWeek = getSelectedWeek();
-  const displayWeek = selectedWeek || weekContext.currentWeek;
-  if (displayWeek && displayWeek.weekStart && displayWeek.weekEnd) {
-    weekStartText.textContent = displayWeek.weekStart.replaceAll("-", "/");
-    weekStartText.setAttribute("datetime", displayWeek.weekStart);
-    weekEndText.textContent = displayWeek.weekEnd.replaceAll("-", "/");
-    weekEndText.setAttribute("datetime", displayWeek.weekEnd);
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function safeId(value) {
+  return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  return String(value).slice(0, 10).replaceAll("-", "/");
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  }).format(date);
+}
+
+function todayYmd() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function isMobile() {
+  return window.matchMedia("(max-width: 680px)").matches;
+}
+
+function showLoading(text = "處理中…") {
+  els.loadingToast.textContent = text;
+  els.loadingToast.classList.add("is-show");
+  document.body.classList.add("is-busy");
+}
+
+function hideLoading() {
+  els.loadingToast.classList.remove("is-show");
+  document.body.classList.remove("is-busy");
+}
+
+async function api(path, options = {}) {
+  const config = {
+    method: options.method || "GET",
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  };
+  if (options.body !== undefined) config.body = JSON.stringify(options.body);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, config);
+  let data = null;
+  try { data = await response.json(); }
+  catch { data = null; }
+  if (!response.ok) {
+    throw new Error((data && (data.error || data.message)) || `API ${response.status}`);
+  }
+  return data;
+}
+
+async function loadCore({ quiet = false } = {}) {
+  if (!quiet) showLoading("同步 Tiny Progress…");
+  try {
+    const [context, items, weeks, cycles, categories] = await Promise.all([
+      api("/week-context"), api("/items"), api("/weeks"), api("/cycles"), api("/categories"),
+    ]);
+    state.context = context;
+    state.items = Array.isArray(items) ? items : [];
+    state.weeks = Array.isArray(weeks) ? weeks : [];
+    state.cycles = Array.isArray(cycles) ? cycles : [];
+    state.categories = Array.isArray(categories) ? categories : [];
+    renderAll();
+    maybeShowCycleCelebration();
+  } catch (error) {
+    console.error(error);
+    showAlert("讀取資料失敗", error.message, "⚠️");
+  } finally {
+    hideLoading();
+  }
+}
+
+function getActiveCategories() {
+  return state.categories.filter((c) => c.type === "category" && c.active === true);
+}
+
+function getSubcategories(categoryId, includeInactive = false) {
+  return state.categories.filter((c) =>
+    c.type === "subcategory" && c.parentId === categoryId && (includeInactive || c.active === true)
+  );
+}
+
+function getCategoryName(id, fallback = "未分類") {
+  return state.categories.find((c) => c.id === id)?.name || fallback;
+}
+
+function statusIcon(item) {
+  if (item.status === "completed") return "✅";
+  if (item.status === "overdue") return "🕒";
+  if (item.status === "replanned") return "♻️";
+  if (item.status === "cancelled") return "🗑";
+  return "☐";
+}
+
+function difficultyClass(value) {
+  if (value === "困難") return "hard";
+  if (value === "適中") return "medium";
+  return "easy";
+}
+
+function currentWeek() {
+  return state.context?.currentWeek || null;
+}
+
+function isSameWeek(item, week) {
+  if (!week) return false;
+  return Number(item.scheduledCycleNumber) === Number(week.cycleNumber) &&
+    Number(item.scheduledWeekNumber) === Number(week.weekNumber);
+}
+
+function isRescheduled(item) {
+  return Number(item.originalCycleNumber) !== Number(item.scheduledCycleNumber) ||
+    Number(item.originalWeekNumber) !== Number(item.scheduledWeekNumber);
+}
+
+function activeWorkloadItems() {
+  return state.items.filter((item) =>
+    item.type === "task" && ["active", "overdue"].includes(item.status)
+  );
+}
+
+function renderAll() {
+  renderQuote();
+  renderHome();
+  renderCategorySelects();
+  renderSettings();
+  if (state.currentPage === "history" && state.history) renderHistory();
+}
+
+function renderQuote() {
+  const index = Math.floor((Date.now() / 86400000)) % DAILY_QUOTES.length;
+  els.dailyQuote.textContent = DAILY_QUOTES[index];
+}
+
+function renderHome() {
+  const context = state.context || {};
+  const week = context.currentWeek;
+
+  els.activeWeekPanel.hidden = !week;
+  els.workArea.hidden = !week;
+  els.weekSetupPanel.hidden = true;
+  els.restPanel.hidden = true;
+  els.cycleCompletePanel.hidden = true;
+
+  if (week) {
+    els.heroTitle.textContent = "慢慢做，也要留下真的進度。";
+    els.cycleWeekBadge.textContent = `Cycle ${week.cycleNumber} · Week ${week.weekNumber}`;
+    els.weekStatusBadge.textContent = "進行中";
+    els.weekStartText.textContent = formatDate(week.weekStart);
+    els.weekEndText.textContent = formatDate(week.weekEnd);
+    els.weekRangeWrap.hidden = false;
+    els.weekThemeText.textContent = week.title || "尚未設定";
+    els.weekGoalText.textContent = week.achievement || "尚未設定";
+    els.postponeWeekBtn.disabled = week.postponed === true;
+    els.postponeWeekBtn.textContent = week.postponed ? `本週已順延 ${week.postponeDays || 7} 天` : "特殊狀況：本週順延";
+
+    const needsSetup = !String(week.title || "").trim() || !String(week.achievement || "").trim();
+    els.weekSetupPanel.hidden = !needsSetup;
+    els.workArea.hidden = needsSetup;
+    if (needsSetup) {
+      els.weekSetupTheme.value = week.title || "";
+      els.weekSetupGoal.value = week.achievement || "";
+    }
+
+    renderWorkload();
+    renderCurrentTasks();
+    renderOverdue();
+    renderRescheduled();
     return;
   }
-  const range = getCurrentWeekRange();
-  weekStartText.textContent = formatDateForDisplay(range.weekStart);
-  weekStartText.setAttribute("datetime", formatDateForDatetime(range.weekStart));
-  weekEndText.textContent = formatDateForDisplay(range.weekEnd);
-  weekEndText.setAttribute("datetime", formatDateForDatetime(range.weekEnd));
-}
-function getDayOfYear(date = new Date()) {
-  const start = new Date(date.getFullYear(), 0, 0);
-  return Math.floor((date - start) / (1000 * 60 * 60 * 24));
-}
-function renderDailyQuote() {
-  if (!dailyQuote) return;
-  dailyQuote.textContent = `本日金句：${DAILY_QUOTES[getDayOfYear() % DAILY_QUOTES.length]}`;
-}
-function isSundayNoonOrLater(date = new Date()) { return date.getDay() === 0 && date.getHours() >= 12; }
-function getSelectedWeek() {
-  if (selectedWeekView === "previous") return weekContext.previousWeek;
-  if (selectedWeekView === "next") return weekContext.nextWeek;
-  return weekContext.currentWeek;
-}
-function getSelectedWeekNumber() { const selectedWeek = getSelectedWeek(); return selectedWeek && selectedWeek.weekNumber ? Number(selectedWeek.weekNumber) : null; }
-function getSelectedWeekDisplayLabel() { if (selectedWeekView === "previous") return "已結案"; return selectedWeekView === "next" ? "下週" : "本週"; }
-function getSelectedWeekLabelText() { if (selectedWeekView === "previous") return "已結案主題"; return selectedWeekView === "next" ? "下週主題" : "本週主題"; }
-function getAchievementLabelText() { if (selectedWeekView === "previous") return "結案達成"; return selectedWeekView === "next" ? "下週達成" : "本週達成"; }
-function isPreviousWeekView() { return selectedWeekView === "previous"; }
-function isCurrentWeekView() { return selectedWeekView === "current"; }
-function isNextWeekView() { return selectedWeekView === "next"; }
-function canEditSelectedWeek() { return isCurrentWeekView() && !!getSelectedWeekNumber(); }
-function canAddToSelectedWeek() {
-  const selectedWeek = getSelectedWeek();
-  if (!selectedWeek || !selectedWeek.weekNumber) return false;
-  return isCurrentWeekView();
-}
-function canPostponeCurrentWeek() {
-  return isCurrentWeekView() && !!weekContext.currentWeek;
-}
-function setWeekTabActiveState() {
-  if (previousWeekTab) previousWeekTab.classList.toggle("is-active", selectedWeekView === "previous");
-  if (currentWeekTab) currentWeekTab.classList.toggle("is-active", selectedWeekView === "current");
-  if (nextWeekTab) nextWeekTab.classList.toggle("is-active", selectedWeekView === "next");
-}
-function renderPlanCard() {
-  if (!currentWeekNumber || !planStatusText || !selectedWeekLabel || !selectedWeekTitle || !selectedWeekAchievement) return;
-  const currentWeek = weekContext.currentWeek;
-  const previousWeek = weekContext.previousWeek;
-  const nextWeek = weekContext.nextWeek;
-  const selectedWeek = getSelectedWeek();
-  setWeekTabActiveState();
-  if (!currentWeek) {
-    currentWeekNumber.textContent = "-";
-    planStatusText.textContent = "目前讀不到週次資料。";
-    selectedWeekLabel.textContent = "週次主題";
-    selectedWeekTitle.textContent = "尚無資料";
-    selectedWeekAchievement.textContent = "請確認後端 /week-context 是否正常，以及 weeks 工作表是否有 status = current。";
+
+  els.weekRangeWrap.hidden = true;
+  els.cycleWeekBadge.textContent = context.restPeriod ? "Cycle 間休息" : "12 Week Cycle";
+  els.weekStatusBadge.textContent = context.restPeriod ? "休息中" : "已結案";
+
+  if (context.restPeriod && context.nextCycle) {
+    els.heroTitle.textContent = "休息也是 Cycle 的一部分。";
+    els.restPanel.hidden = false;
+    els.restMessage.textContent = `下一個 Cycle ${context.nextCycle.cycleNumber} 將於 ${formatDate(context.nextCycle.startDate)} 開始。`;
     return;
   }
-  currentWeekNumber.textContent = selectedWeek && selectedWeek.weekNumber ? String(selectedWeek.weekNumber) : String(currentWeek.weekNumber || "-");
-  if (isPreviousWeekView()) {
-    planStatusText.textContent = previousWeek ? `正在查看第 ${previousWeek.weekNumber} 週已結案紀錄；目前進行第 ${currentWeek.weekNumber} 週。` : "目前沒有已結案紀錄。完成一次結案後，這裡會顯示上一週檔案。";
-  } else {
-    planStatusText.textContent = nextWeek ? `目前第 ${currentWeek.weekNumber} 週，下週預告第 ${nextWeek.weekNumber} 週。` : `目前第 ${currentWeek.weekNumber} 週，尚未設定下週。`;
+
+  if (context.cycleComplete && context.completedCycleNumber) {
+    els.heroTitle.textContent = "這一輪，已經走完 12 週。";
+    els.cycleCompletePanel.hidden = false;
+    els.cycleCompleteTitle.textContent = `Cycle ${context.completedCycleNumber} 完成`;
   }
-  if (!selectedWeek) {
-    selectedWeekLabel.textContent = getSelectedWeekLabelText();
-    selectedWeekTitle.textContent = isPreviousWeekView() ? "尚無已結案紀錄" : "尚未設定下週";
-    selectedWeekAchievement.textContent = isPreviousWeekView() ? "完成第一次結案後，這裡會保留上一週檔案。" : "請先在 weeks 工作表補上 status = next 的週次。";
-    return;
-  }
-  selectedWeekLabel.textContent = getSelectedWeekLabelText();
-  selectedWeekTitle.textContent = selectedWeek.title || "尚未填寫主題";
-  const achievementBoxLabel = document.querySelector(".achievement-box span");
-  if (achievementBoxLabel) achievementBoxLabel.textContent = getAchievementLabelText();
-  selectedWeekAchievement.textContent = selectedWeek.achievement || "尚未填寫本週達成說明。";
 }
-function renderBoardLabels() {
-  const label = getSelectedWeekDisplayLabel();
-  if (progressTitle) progressTitle.textContent = `${label}進度`;
-  if (taskProgressLabel) taskProgressLabel.textContent = `${label}任務`;
-  if (standardProgressLabel) standardProgressLabel.textContent = `${label}驗收標準`;
-  if (taskSectionTitle) taskSectionTitle.textContent = `${label}任務`;
-  if (standardSectionTitle) standardSectionTitle.textContent = `${label}驗收標準`;
-  if (isPreviousWeekView()) {
-    if (progressNote) progressNote.textContent = "已結案週次只供查閱；任務與驗收標準都已封存。";
-    if (taskSectionNote) taskSectionNote.textContent = "這是結案檔案櫃：可查看，不能新增、勾選、修訂或撤案。";
-    if (standardSectionNote) standardSectionNote.textContent = "驗收標準已封存；如需調整，請回到目前本週重新立案。";
-    return;
-  }
-  if (isNextWeekView()) {
-    if (progressNote) progressNote.textContent = "下週目前只供預覽；本週結案後，才會正式開張。";
-    if (taskSectionNote) taskSectionNote.textContent = "預覽下週任務內容；要新增請先完成本週結案。";
-    if (standardSectionNote) standardSectionNote.textContent = "預覽下週驗收條件；結案後才能新增或修訂。";
-    return;
-  }
-  if (progressNote) progressNote.textContent = "本局統計本週完成狀態；完成就打勾，結案後會封存。";
-  if (taskSectionNote) taskSectionNote.textContent = "新增任務時，請寫清楚要做什麼，並選好分類與難度。";
-  if (standardSectionNote) standardSectionNote.textContent = "驗收條件用來判斷任務是否完成，請寫成可檢查的一句話。";
+
+function renderWorkload() {
+  const count = activeWorkloadItems().length;
+  els.workloadCount.textContent = `${count} / ${WORKLOAD_RECOMMENDED}`;
+  els.workloadFill.style.width = `${Math.min(100, (count / WORKLOAD_RECOMMENDED) * 100)}%`;
+  const box = els.workloadCount.closest(".v2-load-box");
+  box.classList.toggle("is-over", count > WORKLOAD_RECOMMENDED);
+  els.workloadNote.textContent = count > WORKLOAD_RECOMMENDED
+    ? `目前有 ${count} 件尚未結案。仍可新增，但先確認一下是不是排太滿。`
+    : "本週、逾期與已排未來但未完成的任務都會算進來。";
 }
-function renderAddFormState() {
-  const canAdd = canAddToSelectedWeek();
-  [taskInput, taskCategory, taskSubCategory, taskDifficulty, addTaskBtn, standardInput, addStandardBtn].forEach((control) => {
-    if (control) control.disabled = !canAdd;
+
+function renderCurrentTasks() {
+  const week = currentWeek();
+  if (!week) return;
+  const items = state.items
+    .filter((item) => item.type === "task" && isSameWeek(item, week) && !["cancelled", "replanned"].includes(item.status))
+    .sort((a, b) => Number(a.done) - Number(b.done) || String(a.createdAt).localeCompare(String(b.createdAt)));
+  els.currentTaskCount.textContent = `${items.length} 件`;
+  els.currentTaskList.innerHTML = items.length
+    ? items.map((item) => `<li>${renderTaskCard(item, { list: "current" })}</li>`).join("")
+    : `<li class="v2-empty">本週還沒有任務。先立一件小小的案，就能開始。</li>`;
+  bindTaskCardEvents(els.currentTaskList);
+}
+
+function renderOverdue() {
+  const all = state.items.filter((item) => item.type === "task" && item.status === "overdue");
+  els.overdueCount.textContent = String(all.length);
+  const visible = state.showAllOverdue ? all : all.slice(0, 3);
+  els.overdueList.innerHTML = visible.length
+    ? visible.map((item) => renderTaskCard(item, { compact: true, list: "overdue" })).join("")
+    : `<div class="v2-empty">目前沒有尚未結案的舊任務。📎</div>`;
+  els.showAllOverdueBtn.hidden = all.length <= 3;
+  els.showAllOverdueBtn.textContent = state.showAllOverdue ? "收合" : `查看全部 ${all.length} 件`;
+  bindTaskCardEvents(els.overdueList);
+}
+
+function renderRescheduled() {
+  const week = currentWeek();
+  const all = state.items.filter((item) =>
+    item.type === "task" && item.status === "active" && isRescheduled(item) && !isSameWeek(item, week)
+  );
+  const visible = state.showAllRescheduled ? all : all.slice(0, 3);
+  els.rescheduledList.innerHTML = visible.length
+    ? visible.map((item) => renderTaskCard(item, { compact: true, list: "rescheduled" })).join("")
+    : `<div class="v2-empty">目前沒有排到未來的舊任務。</div>`;
+  els.showAllRescheduledBtn.hidden = all.length <= 3;
+  els.showAllRescheduledBtn.textContent = state.showAllRescheduled ? "收合" : `查看全部 ${all.length} 件`;
+  bindTaskCardEvents(els.rescheduledList);
+}
+
+function renderTaskCard(item, options = {}) {
+  const compact = options.compact === true;
+  const classes = ["v2-task-card"];
+  if (item.status === "completed") classes.push("is-done");
+  if (item.status === "overdue") classes.push("is-overdue");
+  if (isRescheduled(item) && item.status !== "completed") classes.push("is-rescheduled");
+
+  let route = "";
+  if (options.list === "overdue") {
+    route = `原定：Cycle ${item.originalCycleNumber} · Week ${item.originalWeekNumber}`;
+  } else if (options.list === "rescheduled") {
+    route = `原定：C${item.originalCycleNumber} W${item.originalWeekNumber} → 現在：C${item.scheduledCycleNumber} W${item.scheduledWeekNumber}`;
+  }
+
+  const meta = compact ? "" : `
+    <div class="v2-task-meta">
+      <span class="chip chip-category">${escapeHtml(item.category || "未分類")}</span>
+      ${item.subCategory && item.subCategory !== "未分類" ? `<span class="chip chip-subcategory uncategorized">${escapeHtml(item.subCategory)}</span>` : ""}
+      <span class="chip chip-difficulty ${difficultyClass(item.difficulty)}">${escapeHtml(item.difficulty)}</span>
+    </div>`;
+
+  const checkbox = item.status === "completed"
+    ? `<input type="checkbox" checked disabled aria-label="已完成：${escapeHtml(item.title)}" />`
+    : `<input type="checkbox" data-complete-id="${escapeHtml(item.id)}" aria-label="完成：${escapeHtml(item.title)}" />`;
+
+  const primaryAction = options.list === "overdue"
+    ? `<button class="v2-soft-btn" type="button" data-reschedule-id="${escapeHtml(item.id)}">重新排程</button>`
+    : `<button class="v2-more-btn" type="button" data-more-id="${escapeHtml(item.id)}">更多</button>`;
+
+  return `
+    <article class="${classes.join(" ")}" data-task-id="${escapeHtml(item.id)}">
+      ${checkbox}
+      <div class="v2-task-main">
+        <p class="v2-task-title">${escapeHtml(item.title)}</p>
+        ${route ? `<p class="v2-task-route">${escapeHtml(route)}</p>` : ""}
+        ${meta}
+      </div>
+      ${primaryAction}
+    </article>`;
+}
+
+function bindTaskCardEvents(root) {
+  root.querySelectorAll("[data-complete-id]").forEach((box) => {
+    box.addEventListener("change", async () => {
+      if (!box.checked) return;
+      box.checked = false;
+      const item = state.items.find((x) => x.id === box.dataset.completeId);
+      if (item) await confirmComplete(item);
+    });
   });
-  if (completeWeekBtn) completeWeekBtn.disabled = !isCurrentWeekView() || !weekContext.nextWeek;
-  if (postponeWeekBtn) postponeWeekBtn.disabled = !canPostponeCurrentWeek();
-  renderSubCategoryControl();
-  if (taskInput) taskInput.placeholder = isPreviousWeekView() ? "已結案週次僅供查看，不能新增任務" : isCurrentWeekView() ? "輸入任務，例如：練習 CSS Flex 排版" : "下週僅供預覽；本週結案後才可新增任務";
-  if (standardInput) standardInput.placeholder = isPreviousWeekView() ? "已結案週次僅供查看，不能新增驗收條件" : isCurrentWeekView() ? "輸入驗收條件，例如：能說明 flex 排版怎麼運作" : "下週僅供預覽；本週結案後才可新增驗收條件";
+  root.querySelectorAll("[data-more-id]").forEach((button) => {
+    button.addEventListener("click", (event) => openTaskActions(button.dataset.moreId, event.currentTarget));
+  });
+  root.querySelectorAll("[data-reschedule-id]").forEach((button) => {
+    button.addEventListener("click", () => startRescheduleFlow(button.dataset.rescheduleId));
+  });
 }
-function switchWeekView(view) { if (view !== "previous" && view !== "current" && view !== "next") return; selectedWeekView = view; renderAll(); }
-function normalizeCategory(value) { const category = String(value || "").trim(); return CATEGORY_OPTIONS.includes(category) ? category : DEFAULT_CATEGORY; }
-function normalizeSubCategory(value, category = DEFAULT_CATEGORY) {
-  const normalizedCategory = normalizeCategory(category);
-  if (normalizedCategory !== "程式學習") return EMPTY_SUBCATEGORY;
-  const subCategory = String(value || "").trim();
-  if (SUBCATEGORY_OPTIONS.includes(subCategory)) return subCategory;
-  if (subCategory === EMPTY_SUBCATEGORY) return EMPTY_SUBCATEGORY;
-  return EMPTY_SUBCATEGORY;
+
+function renderCategorySelects() {
+  const active = getActiveCategories();
+  if (!active.length) {
+    els.taskCategory.innerHTML = `<option value="">請先到設定新增分類</option>`;
+    els.taskSubCategory.hidden = true;
+    return;
+  }
+  const previous = els.taskCategory.value;
+  els.taskCategory.innerHTML = active.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join("");
+  if (active.some((c) => c.id === previous)) els.taskCategory.value = previous;
+  updateSubcategorySelect(els.taskSubCategory, els.taskCategory.value);
 }
-function normalizeDifficulty(value) { const difficulty = String(value || "").trim(); return DIFFICULTY_OPTIONS.includes(difficulty) ? difficulty : DEFAULT_DIFFICULTY; }
-function normalizeDone(value) { return value === true || String(value).toUpperCase() === "TRUE"; }
-function normalizeItem(item) {
-  const category = normalizeCategory(item.category);
+
+function updateSubcategorySelect(select, categoryId, selectedId = "") {
+  const subs = getSubcategories(categoryId);
+  if (!subs.length) {
+    select.innerHTML = "";
+    select.hidden = true;
+    select.disabled = true;
+    return;
+  }
+  select.hidden = false;
+  select.disabled = false;
+  select.innerHTML = subs.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join("");
+  if (selectedId && subs.some((s) => s.id === selectedId)) select.value = selectedId;
+}
+
+function getTaskPayloadFromForm() {
   return {
-    ...item,
-    category,
-    subCategory: normalizeSubCategory(item.subCategory, category),
-    difficulty: normalizeDifficulty(item.difficulty),
-    done: normalizeDone(item.done),
-    weekNumber: item.weekNumber === undefined || item.weekNumber === "" ? "" : Number(item.weekNumber),
+    type: "task",
+    title: els.taskInput.value.trim(),
+    categoryId: els.taskCategory.value,
+    subCategoryId: els.taskSubCategory.hidden ? "" : els.taskSubCategory.value,
+    difficulty: els.taskDifficulty.value,
   };
 }
-function getVisibleItems() { const selectedWeekNumber = getSelectedWeekNumber(); return selectedWeekNumber ? items.filter((item) => Number(item.weekNumber) === selectedWeekNumber) : []; }
-function getVisibleItemsByType(type) { return getVisibleItems().filter((item) => item.type === type); }
-function getSubCategorySortIndex(subCategory) {
-  const index = SUBCATEGORY_OPTIONS.indexOf(subCategory);
-  return index === -1 ? SUBCATEGORY_OPTIONS.length : index;
-}
-function getTasksSortedByCategory() {
-  return [...getVisibleItemsByType("task")].sort((a, b) => {
-    const categoryA = normalizeCategory(a.category);
-    const categoryB = normalizeCategory(b.category);
-    const categoryDiff = CATEGORY_OPTIONS.indexOf(categoryA) - CATEGORY_OPTIONS.indexOf(categoryB);
-    if (categoryDiff !== 0) return categoryDiff;
-    if (categoryA === "程式學習") return getSubCategorySortIndex(normalizeSubCategory(a.subCategory, categoryA)) - getSubCategorySortIndex(normalizeSubCategory(b.subCategory, categoryB));
-    return 0;
-  });
-}
-function findItemById(id) { return items.find((item) => item.id === id); }
-function replaceItem(updatedItem) { const normalizedUpdatedItem = normalizeItem(updatedItem); items = items.map((item) => item.id === normalizedUpdatedItem.id ? normalizedUpdatedItem : item); }
-function replaceItemById(targetId, newItem) { const normalizedNewItem = normalizeItem(newItem); items = items.map((item) => item.id === targetId ? normalizedNewItem : item); }
-function createEmptyMessage(text) { const emptyItem = document.createElement("li"); emptyItem.className = "empty-message"; emptyItem.textContent = text; return emptyItem; }
-function getCategoryClass(category) { if (category === "程式學習") return "programming"; if (category === "身心穩定") return "wellness"; if (category === "興趣探索") return "interest"; return ""; }
-function getSubCategoryClass(subCategory) { if (subCategory === "觀看課程影片") return "video"; if (subCategory === "練習") return "practice"; if (subCategory === "寫筆記") return "note"; if (subCategory === "W3Schools") return "w3schools"; if (subCategory === "freeCodeCamp") return "freecodecamp"; if (subCategory === "Vibe Coding") return "vibecoding"; return "uncategorized"; }
-function createCategoryHeading(category) {
-  const heading = document.createElement("li");
-  const categoryClass = getCategoryClass(category);
-  heading.className = categoryClass ? `category-heading ${categoryClass}` : "category-heading";
-  heading.textContent = `【${category}】`;
-  return heading;
-}
-function createSubCategoryHeading(subCategory) {
-  const heading = document.createElement("li");
-  heading.className = `subcategory-heading ${getSubCategoryClass(subCategory)}`;
-  heading.textContent = `－ ${subCategory}`;
-  return heading;
-}
-function getDifficultyClass(difficulty) { if (difficulty === "簡單") return "easy"; if (difficulty === "適中") return "medium"; if (difficulty === "困難") return "hard"; return ""; }
-function getTaskEmptyMessage() {
-  if (!getSelectedWeek()) return isPreviousWeekView() ? "目前沒有已結案任務檔案。" : "目前還沒有可顯示的週次資料。";
-  if (isPreviousWeekView()) return "這週已結案，當時沒有任務紀錄。";
-  return isNextWeekView() ? "下週目前沒有任務；結案後可在新的本週新增。" : "本週尚未立案。請先新增一個小任務。";
-}
-function getStandardEmptyMessage() {
-  if (!getSelectedWeek()) return isPreviousWeekView() ? "目前沒有已結案驗收標準檔案。" : "目前還沒有可顯示的週次資料。";
-  if (isPreviousWeekView()) return "這週已結案，當時沒有驗收標準紀錄。";
-  return isNextWeekView() ? "下週目前沒有驗收條件；結案後可在新的本週新增。" : "本週尚未新增驗收條件。請寫下怎樣算完成。";
-}
-function createChip(text, className) { const chip = document.createElement("span"); chip.className = className; chip.textContent = text; return chip; }
-function createCheckItem(item, displayNumber) {
-  const normalizedItem = normalizeItem(item);
-  const itemElement = document.createElement("li");
-  itemElement.className = normalizedItem.done ? "task-item is-done" : "task-item";
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
-  checkbox.checked = normalizedItem.done;
-  checkbox.disabled = !canEditSelectedWeek();
-  const content = document.createElement("div");
-  content.className = "item-content";
-  const topLine = document.createElement("div");
-  topLine.className = "item-topline";
-  const number = document.createElement("span");
-  number.className = "item-number";
-  number.textContent = displayNumber ? String(displayNumber) : "";
-  const title = document.createElement("span");
-  title.className = "item-title";
-  title.textContent = normalizedItem.title;
-  const meta = document.createElement("div");
-  meta.className = "item-meta";
-  if (normalizedItem.type === "task") {
-    const categoryClass = getCategoryClass(normalizedItem.category);
-    meta.appendChild(createChip(normalizedItem.category, categoryClass ? `chip chip-category ${categoryClass}` : "chip chip-category"));
-    if (normalizedItem.category === "程式學習") {
-      meta.appendChild(createChip(normalizedItem.subCategory, `chip chip-subcategory ${getSubCategoryClass(normalizedItem.subCategory)}`));
-    }
-    meta.appendChild(createChip(normalizedItem.difficulty, "chip chip-difficulty " + getDifficultyClass(normalizedItem.difficulty)));
-  }
-  topLine.appendChild(number);
-  if (normalizedItem.type === "task") topLine.appendChild(meta);
-  content.appendChild(topLine);
-  content.appendChild(title);
-  const actions = document.createElement("div");
-  actions.className = "item-actions";
-  const editBtn = document.createElement("button");
-  editBtn.className = "text-btn";
-  editBtn.type = "button";
-  editBtn.textContent = "修訂";
-  const deleteBtn = document.createElement("button");
-  deleteBtn.className = "text-btn danger";
-  deleteBtn.type = "button";
-  deleteBtn.textContent = "撤案";
-  editBtn.disabled = !canEditSelectedWeek();
-  deleteBtn.disabled = !canEditSelectedWeek();
-  checkbox.addEventListener("change", async () => updateItem(normalizedItem.id, { done: checkbox.checked }));
 
-  // ── 修訂（原 prompt）──
-  editBtn.addEventListener("click", async () => {
-    const newTitle = await showPrompt("請輸入修訂後內容", normalizedItem.title);
-    if (newTitle === null) return;
-    const trimmedTitle = newTitle.trim();
-    if (trimmedTitle === "") {
-      await showAlert("內容不可空白，本局未更動資料。", { type: "warning" });
-      return;
-    }
-    await updateItem(normalizedItem.id, { title: trimmedTitle });
-  });
+async function addTask(event) {
+  event.preventDefault();
+  const payload = getTaskPayloadFromForm();
+  if (!payload.title) return;
+  if (!payload.categoryId) return showAlert("還缺一個分類", "請先到設定建立至少一個分類。", "📎");
 
-  // ── 撤案（原 confirm）──
-  deleteBtn.addEventListener("click", async () => {
-    const message = normalizedItem.type === "task"
-      ? `確定要撤案這項${getSelectedWeekDisplayLabel()}任務嗎？<br>刪除後會從案件板移除。`
-      : `確定要撤案這項${getSelectedWeekDisplayLabel()}驗收標準嗎？<br>刪除後會從案件板移除。`;
-    const confirmed = await showConfirm(message, {
-      type: "danger",
-      confirmText: "確認撤案",
-      confirmClass: "tp-btn-danger",
+  const workload = activeWorkloadItems().length;
+  if (workload >= WORKLOAD_RECOMMENDED) {
+    const ok = await showConfirm({
+      icon: "📚",
+      title: "目前待處理負荷比較高",
+      text: `現在已有 ${workload} 件尚未結案。仍然可以新增，只是建議先確認一下工作量。`,
+      confirmText: "仍要新增",
     });
-    if (!confirmed) return;
-    await deleteItem(normalizedItem.id);
+    if (!ok) return;
+  }
+
+  showLoading("立案中…");
+  try {
+    await api("/items", { method: "POST", body: payload });
+    els.taskInput.value = "";
+    els.taskDifficulty.value = "適中";
+    await loadCore({ quiet: true });
+  } catch (error) {
+    showAlert("新增失敗", error.message, "⚠️");
+  } finally { hideLoading(); }
+}
+
+async function confirmComplete(item) {
+  const ok = await showConfirm({
+    icon: "✅",
+    title: "確定完成這項任務？",
+    text: `「${item.title}」\n\n完成後一般編輯會鎖定；如果真的是手滑，仍可用「誤操作更正」。`,
+    confirmText: "確認完成",
   });
+  if (!ok) return;
+  showLoading("蓋完成章…");
+  try {
+    await api(`/items/${encodeURIComponent(item.id)}/complete`, { method: "POST", body: {} });
+    await loadCore({ quiet: true });
+  } catch (error) { showAlert("完成失敗", error.message, "⚠️"); }
+  finally { hideLoading(); }
+}
 
-  actions.appendChild(editBtn);
-  actions.appendChild(deleteBtn);
-  itemElement.appendChild(checkbox);
-  itemElement.appendChild(content);
-  itemElement.appendChild(actions);
-  return itemElement;
-}
-function renderTasks() {
-  const tasks = getTasksSortedByCategory();
-  taskList.innerHTML = "";
-  if (tasks.length === 0) { taskList.appendChild(createEmptyMessage(getTaskEmptyMessage())); return; }
-  let displayNumber = 1;
-  CATEGORY_OPTIONS.forEach((category) => {
-    const categoryTasks = tasks.filter((task) => normalizeCategory(task.category) === category);
-    if (categoryTasks.length === 0) return;
-    taskList.appendChild(createCategoryHeading(category));
-    if (category === "程式學習") {
-      const orderedSubCategories = [...SUBCATEGORY_OPTIONS, EMPTY_SUBCATEGORY];
-      orderedSubCategories.forEach((subCategory) => {
-        const groupTasks = categoryTasks.filter((task) => normalizeSubCategory(task.subCategory, category) === subCategory);
-        if (groupTasks.length === 0) return;
-        taskList.appendChild(createSubCategoryHeading(subCategory));
-        groupTasks.forEach((task) => { taskList.appendChild(createCheckItem(task, displayNumber)); displayNumber += 1; });
-      });
-      return;
-    }
-    categoryTasks.forEach((task) => { taskList.appendChild(createCheckItem(task, displayNumber)); displayNumber += 1; });
-  });
-}
-function renderStandards() {
-  const standards = getVisibleItemsByType("standard");
-  standardList.innerHTML = "";
-  if (standards.length === 0) { standardList.appendChild(createEmptyMessage(getStandardEmptyMessage())); return; }
-  standards.forEach((standard, index) => standardList.appendChild(createCheckItem(standard, index + 1)));
-}
-function getProgressPercent(doneCount, totalCount) { return totalCount ? Math.round((doneCount / totalCount) * 100) : 0; }
-function updateProgressFill(fillElement, percent) { if (!fillElement) return; fillElement.style.width = `${percent}%`; fillElement.setAttribute("aria-valuenow", String(percent)); }
-function renderProgress() {
-  const tasks = getVisibleItemsByType("task");
-  const standards = getVisibleItemsByType("standard");
-  const doneTasks = tasks.filter((task) => task.done);
-  const doneStandards = standards.filter((standard) => standard.done);
-  if (taskProgress) taskProgress.textContent = `${doneTasks.length} / ${tasks.length}`;
-  if (standardProgress) standardProgress.textContent = `${doneStandards.length} / ${standards.length}`;
-  updateProgressFill(taskProgressFill, getProgressPercent(doneTasks.length, tasks.length));
-  updateProgressFill(standardProgressFill, getProgressPercent(doneStandards.length, standards.length));
-}
-function renderSubCategoryControl() {
-  if (!taskCategory || !taskSubCategory) return;
-  const shouldShow = taskCategory.value === "程式學習";
-  taskSubCategory.hidden = !shouldShow;
-  taskSubCategory.disabled = !canAddToSelectedWeek() || !shouldShow;
-}
-function renderAll() { renderPlanCard(); renderBoardLabels(); renderAddFormState(); renderWeekRange(); renderTasks(); renderStandards(); renderProgress(); }
-async function loadWeekContext() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/week-context`);
-    if (!response.ok) throw new Error("後端週次資料回應失敗");
-    const data = await response.json();
-    weekContext = {
-      previousWeek: data.previousWeek || null,
-      currentWeek: data.currentWeek || null,
-      nextWeek: data.nextWeek || null,
-      canPlanNextWeek: data.canPlanNextWeek === true,
-    };
-  } catch (error) {
-    console.error("讀取週次資料失敗：", error);
-    weekContext = { previousWeek: null, currentWeek: null, nextWeek: null, canPlanNextWeek: false };
+function getTaskActions(item) {
+  if (item.status === "completed") {
+    return [
+      { key: "correct", label: "↩️ 誤操作更正" },
+      { key: "history", label: "📚 查看紀錄" },
+    ];
   }
-}
-async function loadItems() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/items`);
-    if (!response.ok) throw new Error("後端回應失敗");
-    const data = await response.json();
-    items = data.map(normalizeItem);
-  } catch (error) {
-    console.error("讀取任務資料失敗：", error);
-    // ── 原 alert ──
-    await showAlert("本局暫時讀不到案件板，資料未更動。\n請稍後再重新整理。", { type: "warning" });
-    items = [];
+  if (["cancelled", "replanned"].includes(item.status)) {
+    return [{ key: "history", label: "📚 查看紀錄" }];
   }
-}
-async function refreshItems() {
-  if (!refreshBtn) { await Promise.all([loadWeekContext(), loadItems()]); renderAll(); return; }
-  try {
-    refreshBtn.disabled = true;
-    refreshBtn.textContent = "案件板整理中...";
-    await Promise.all([loadWeekContext(), loadItems()]);
-    renderAll();
-    refreshBtn.textContent = "重新整理案件板";
-  } catch (error) {
-    console.error("重新整理資料失敗：", error);
-    // ── 原 alert ──
-    await showAlert("重新整理資料失敗，請稍後再試。", { type: "danger" });
-    refreshBtn.textContent = "重新整理案件板";
-  } finally {
-    refreshBtn.disabled = false;
-  }
-}
-async function addItem(type, inputElement, options = {}) {
-  if (!canAddToSelectedWeek()) {
-    // ── 原 alert ──
-    await showAlert(
-      isNextWeekView()
-        ? "下週目前只供預覽；\n按本週結案後，才會成為新的本週。"
-        : "目前沒有可新增的週次資料。",
-      { type: "info" }
-    );
-    return;
-  }
-  const title = inputElement.value.trim();
-  if (title === "") return;
-  const now = new Date().toISOString();
-  const category = normalizeCategory(options.category);
-  const subCategory = normalizeSubCategory(options.subCategory, category);
-  const difficulty = normalizeDifficulty(options.difficulty);
-  const targetWeekNumber = getSelectedWeekNumber();
-  const tempItem = { id: "temp-" + Date.now(), type, title, category, subCategory, difficulty, done: false, weekNumber: targetWeekNumber, weekStart: "", weekEnd: "", createdAt: now, updatedAt: now };
-  items.push(tempItem);
-  inputElement.value = "";
-  renderAll();
-  try {
-    const response = await fetch(`${API_BASE_URL}/items`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, title, category, subCategory, difficulty, weekNumber: targetWeekNumber }),
-    });
-    if (!response.ok) throw new Error("新增失敗");
-    const newItem = await response.json();
-    replaceItemById(tempItem.id, newItem);
-    renderAll();
-  } catch (error) {
-    console.error("新增資料失敗：", error);
-    items = items.filter((item) => item.id !== tempItem.id);
-    inputElement.value = title;
-    renderAll();
-    // ── 原 alert ──
-    await showAlert("新增失敗，畫面已恢復；請確認後端是否正常。", { type: "danger" });
-  }
-}
-async function updateItem(id, updates) {
-  const previousItem = findItemById(id);
-  if (!previousItem) return;
-  const optimisticItem = normalizeItem({ ...previousItem, ...updates, updatedAt: new Date().toISOString() });
-  replaceItem(optimisticItem);
-  renderAll();
-  try {
-    const response = await fetch(`${API_BASE_URL}/items/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
-    if (!response.ok) throw new Error("更新失敗");
-    const updatedItem = await response.json();
-    replaceItem(updatedItem);
-    renderAll();
-  } catch (error) {
-    console.error("更新資料失敗：", error);
-    replaceItem(previousItem);
-    renderAll();
-    // ── 原 alert ──
-    await showAlert("本局暫時無法修訂，畫面已恢復，資料未更動。\n請稍後再試。", { type: "danger" });
-  }
-}
-async function deleteItem(id) {
-  const previousItems = [...items];
-  if (!findItemById(id)) return;
-  items = items.filter((item) => item.id !== id);
-  renderAll();
-  try {
-    const response = await fetch(`${API_BASE_URL}/items/${id}`, { method: "DELETE" });
-    if (!response.ok) throw new Error("刪除失敗");
-  } catch (error) {
-    console.error("刪除資料失敗：", error);
-    items = previousItems;
-    renderAll();
-    // ── 原 alert ──
-    await showAlert("本局暫時無法撤案，案件已放回原位，資料未更動。\n請稍後再試。", { type: "danger" });
-  }
-}
-function buildCompleteWeekConfirmText(currentWeek, nextWeek) {
-  const currentWeekNumberValue = Number(currentWeek.weekNumber);
-  const nextWeekNumberValue = Number(nextWeek.weekNumber);
-  const upcomingWeekNumber = nextWeekNumberValue + 1;
-
-  const lines = [
-    "📦 本週結案確認",
-    "",
-    `第 ${currentWeekNumberValue} 週　→　封存為「已結案」`,
-    `第 ${nextWeekNumberValue} 週　→　接手為「新的本週」`,
-    upcomingWeekNumber <= 12
-      ? `第 ${upcomingWeekNumber} 週　→　成為「新的下週預告」`
-      : "目前已接近最後一週，可能沒有新的下週預告。",
-    "",
-    "結案後：",
-    "• 已結案週次只能查看，不能新增或修改。",
-    "• 新的本週可以立刻新增任務與驗收條件。",
-    "",
-    "若確認要蓋章封存，請在下方輸入：結案",
-  ];
-
-  return lines.join("\n");
-}
-function buildPostponeWeekConfirmText(currentWeek) {
-  const weekNumber = currentWeek && currentWeek.weekNumber ? Number(currentWeek.weekNumber) : "目前";
-  const title = currentWeek && currentWeek.title ? `「${currentWeek.title}」` : "本週";
-
   return [
-    "要把本週和後面的週次往後順延一週嗎？",
-    "任務、驗收標準和完成狀態都會保留。",
-    "",
-    `本次會從第 ${weekNumber} 週 ${title} 開始順延。`,
-  ].join("\n");
+    { key: "edit", label: "✏️ 編輯" },
+    { key: "reschedule", label: "♻️ 重新排程" },
+    { key: "history", label: "📚 查看紀錄" },
+    { key: "cancel", label: "🗑 撤案", danger: true },
+  ];
 }
-async function completeCurrentWeek() {
-  const currentWeek = weekContext.currentWeek;
-  const nextWeek = weekContext.nextWeek;
-  if (!currentWeek) {
-    await showAlert("目前讀不到本週資料，暫時無法結案。", { type: "warning" });
-    return;
-  }
-  if (!nextWeek) {
-    await showAlert("目前尚未設定下週，暫時無法進入下一週。", { type: "warning" });
+
+function openTaskActions(itemId, anchor) {
+  const item = state.items.find((x) => x.id === itemId);
+  if (!item) return;
+  const actions = getTaskActions(item);
+  if (isMobile()) {
+    state.activeTaskForSheet = item;
+    els.sheetTitle.textContent = item.title;
+    els.sheetActions.innerHTML = actions.map((a) =>
+      `<button class="v2-sheet-action ${a.danger ? "danger" : ""}" type="button" data-sheet-action="${a.key}">${a.label}</button>`
+    ).join("");
+    els.sheetActions.querySelectorAll("[data-sheet-action]").forEach((button) => {
+      button.addEventListener("click", () => {
+        closeBottomSheet();
+        handleTaskAction(item, button.dataset.sheetAction);
+      });
+    });
+    els.bottomSheet.classList.add("is-open");
+    els.bottomSheet.setAttribute("aria-hidden", "false");
     return;
   }
 
-  // ── 原 prompt（結案專用）──
-  const confirmationText = await showCompleteWeekPrompt(buildCompleteWeekConfirmText(currentWeek, nextWeek));
-
-  if (confirmationText === null) return;
-
-  if (confirmationText.trim() !== "結案") {
-    await showAlert("未輸入「結案」，本局未更動週次。", { type: "info" });
-    return;
-  }
-  try {
-    const response = await fetch(`${API_BASE_URL}/weeks/complete-current`, { method: "POST" });
-    if (!response.ok) throw new Error("本週結案失敗");
-    const data = await response.json();
-    selectedWeekView = "previous";
-    await Promise.all([loadWeekContext(), loadItems()]);
-    renderAll();
-    // ── 原 alert（結案成功）──
-    await showAlert(
-      `第 ${data.completedWeek.weekNumber} 週已結案並封存。\n現在第 ${data.currentWeek.weekNumber} 週已開張。\n\n畫面已切到「已結案」，你可以切回「本週」新增資料。`,
-      { type: "success" }
-    );
-  } catch (error) {
-    console.error("本週結案失敗：", error);
-    await showAlert("本局暫時無法結案，週次未更動。\n請稍後再試。", { type: "danger" });
-  }
-}
-async function postponeCurrentWeek() {
-  const currentWeek = weekContext.currentWeek;
-  if (!currentWeek) {
-    await showAlert("目前讀不到本週資料，暫時無法順延。", { type: "warning" });
-    return;
-  }
-  if (!isCurrentWeekView()) {
-    await showAlert("請先切回「本週」，再執行本週順延。", { type: "info" });
-    return;
-  }
-
-  const confirmed = await showConfirm(buildPostponeWeekConfirmText(currentWeek), {
-    type: "warning",
-    confirmText: "確認順延",
-    confirmClass: "tp-btn-seal",
-    cancelText: "先不要",
+  closeTaskMenu();
+  const rect = anchor.getBoundingClientRect();
+  const menu = document.createElement("div");
+  menu.className = "v2-task-menu";
+  menu.style.left = `${Math.min(window.innerWidth - 210, Math.max(12, rect.right - 190))}px`;
+  menu.style.top = `${rect.bottom + 6}px`;
+  menu.innerHTML = actions.map((a) =>
+    `<button class="${a.danger ? "danger" : ""}" type="button" data-menu-action="${a.key}">${a.label}</button>`
+  ).join("");
+  els.taskMenuRoot.appendChild(menu);
+  menu.querySelectorAll("[data-menu-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      closeTaskMenu();
+      handleTaskAction(item, button.dataset.menuAction);
+    });
   });
+}
 
-  if (!confirmed) return;
+function closeTaskMenu() { els.taskMenuRoot.innerHTML = ""; }
+function closeBottomSheet() {
+  els.bottomSheet.classList.remove("is-open");
+  els.bottomSheet.setAttribute("aria-hidden", "true");
+  state.activeTaskForSheet = null;
+}
 
+async function handleTaskAction(item, action) {
+  if (action === "edit") return openEditTask(item);
+  if (action === "reschedule") return startRescheduleFlow(item.id);
+  if (action === "history") return goToTaskHistory(item.id);
+  if (action === "cancel") return openCancelTask(item);
+  if (action === "correct") return correctCompletion(item);
+}
+
+function categoryOptionsHtml(selectedId = "") {
+  return getActiveCategories().map((c) => `<option value="${escapeHtml(c.id)}" ${c.id === selectedId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("");
+}
+
+function subcategoryOptionsHtml(categoryId, selectedId = "") {
+  return getSubcategories(categoryId).map((s) => `<option value="${escapeHtml(s.id)}" ${s.id === selectedId ? "selected" : ""}>${escapeHtml(s.name)}</option>`).join("");
+}
+
+function difficultyOptionsHtml(selected = "適中") {
+  return DIFFICULTIES.map((d) => `<option value="${d}" ${d === selected ? "selected" : ""}>${d}</option>`).join("");
+}
+
+function openEditTask(item) {
+  openFormModal({
+    icon: "✏️", title: "編輯任務", confirmText: "儲存",
+    body: `
+      <label class="v2-form-field">任務名稱<input id="editTitle" value="${escapeHtml(item.title)}" maxlength="120" /></label>
+      <div class="v2-modal-grid">
+        <label class="v2-form-field">分類<select id="editCategory">${categoryOptionsHtml(item.categoryId)}</select></label>
+        <label class="v2-form-field" id="editSubWrap">子分類<select id="editSubCategory"></select></label>
+      </div>
+      <label class="v2-form-field">難度<select id="editDifficulty">${difficultyOptionsHtml(item.difficulty)}</select></label>`,
+    onReady: () => {
+      const cat = document.getElementById("editCategory");
+      const sub = document.getElementById("editSubCategory");
+      const wrap = document.getElementById("editSubWrap");
+      const refresh = (selected = "") => {
+        const subs = getSubcategories(cat.value);
+        wrap.hidden = !subs.length;
+        sub.innerHTML = subcategoryOptionsHtml(cat.value, selected);
+      };
+      refresh(item.subCategoryId);
+      cat.addEventListener("change", () => refresh(""));
+    },
+    onConfirm: async () => {
+      const title = document.getElementById("editTitle").value.trim();
+      if (!title) throw new Error("任務名稱不可空白");
+      const cat = document.getElementById("editCategory");
+      const subWrap = document.getElementById("editSubWrap");
+      await api(`/items/${encodeURIComponent(item.id)}`, {
+        method: "PATCH",
+        body: {
+          title,
+          categoryId: cat.value,
+          subCategoryId: subWrap.hidden ? "" : document.getElementById("editSubCategory").value,
+          difficulty: document.getElementById("editDifficulty").value,
+        },
+      });
+      await loadCore({ quiet: true });
+    },
+  });
+}
+
+function startRescheduleFlow(itemId) {
+  const item = state.items.find((x) => x.id === itemId);
+  if (!item) return;
+  els.modalRoot.innerHTML = `
+    <div class="tp-modal-overlay tp-modal-open">
+      <div class="tp-modal tp-modal-wide" role="dialog" aria-modal="true">
+        <div class="tp-modal-icon">♻️</div>
+        <p class="tp-modal-body"><strong style="display:block;font-size:18px;margin-bottom:8px;">重新排程前先看一下</strong>
+        這項任務沒有在原定時間完成。要先把它拆小重新規劃，還是直接往後排？</p>
+        <div class="tp-modal-preformatted">${escapeHtml(item.title)}</div>
+        <div class="tp-modal-actions">
+          <button class="tp-btn tp-btn-ghost" id="rsCancel" type="button">取消</button>
+          <button class="tp-btn tp-btn-seal" id="rsReplan" type="button">重新規劃</button>
+          <button class="tp-btn tp-btn-primary" id="rsDirect" type="button">直接重新排程</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById("rsCancel").onclick = closeModal;
+  document.getElementById("rsReplan").onclick = () => { closeModal(); openReplanTask(item); };
+  document.getElementById("rsDirect").onclick = () => { closeModal(); openDirectReschedule(item); };
+}
+
+function openDirectReschedule(item) {
+  const availableWeeks = state.weeks.filter((week) => week.weekEnd && week.weekEnd >= todayYmd());
+  if (!availableWeeks.length) return showAlert("還沒有可排的未來 Week", "如果要跨到下一個 Cycle，請先建立下一個 Cycle。", "📅");
+  const weekOptions = availableWeeks.map((week) =>
+    `<option value="${week.cycleNumber}|${week.weekNumber}">Cycle ${week.cycleNumber} · Week ${week.weekNumber}（${formatDate(week.weekStart)}～${formatDate(week.weekEnd)}）</option>`
+  ).join("");
+  openFormModal({
+    icon: "📅", title: "直接重新排程", confirmText: "確認重新排程",
+    body: `
+      <label class="v2-form-field">重新排到<select id="rescheduleTarget">${weekOptions}</select></label>
+      <label class="v2-form-field">原因<select id="rescheduleReason">${RESCHEDULE_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
+      <label class="v2-form-field">補充說明（選填）<textarea id="rescheduleNote" rows="3"></textarea></label>`,
+    onConfirm: async () => {
+      const [cycleNumber, weekNumber] = document.getElementById("rescheduleTarget").value.split("|").map(Number);
+      await api(`/items/${encodeURIComponent(item.id)}/reschedule`, {
+        method: "POST",
+        body: {
+          target: { cycleNumber, weekNumber },
+          reason: document.getElementById("rescheduleReason").value,
+          note: document.getElementById("rescheduleNote").value.trim(),
+        },
+      });
+      await loadCore({ quiet: true });
+    },
+  });
+}
+
+function openReplanTask(item) {
+  const activeCats = getActiveCategories();
+  if (!activeCats.length) return showAlert("還沒有分類", "先到設定建立分類，再拆分任務。", "📎");
+  let rowCount = 0;
+  openFormModal({
+    icon: "🧩", title: "重新規劃任務", confirmText: "完成重新規劃", wide: true,
+    body: `
+      <div class="tp-modal-preformatted">原任務：${escapeHtml(item.title)}\n拆出的新任務會先放在目前 Week。</div>
+      <div id="replanRows" class="v2-replan-rows"></div>
+      <button class="v2-soft-btn" id="addReplanRowBtn" type="button">＋ 新增拆分任務</button>`,
+    onReady: () => {
+      const container = document.getElementById("replanRows");
+      const addRow = () => {
+        const index = rowCount++;
+        const firstCat = activeCats[0];
+        const wrapper = document.createElement("div");
+        wrapper.className = "v2-replan-row";
+        wrapper.dataset.index = index;
+        wrapper.innerHTML = `
+          <div class="v2-replan-row-head"><strong>新任務 ${index + 1}</strong>${index > 0 ? `<button type="button" class="text-btn danger" data-remove-row>移除</button>` : ""}</div>
+          <label class="v2-form-field">任務名稱<input data-r-title maxlength="120" placeholder="把任務切小一點…" /></label>
+          <div class="v2-modal-grid">
+            <label class="v2-form-field">分類<select data-r-cat>${categoryOptionsHtml(firstCat.id)}</select></label>
+            <label class="v2-form-field" data-r-sub-wrap>子分類<select data-r-sub></select></label>
+          </div>
+          <label class="v2-form-field">難度<select data-r-diff>${difficultyOptionsHtml("適中")}</select></label>`;
+        container.appendChild(wrapper);
+        setupReplanRow(wrapper);
+        wrapper.querySelector("[data-remove-row]")?.addEventListener("click", () => wrapper.remove());
+      };
+      document.getElementById("addReplanRowBtn").onclick = addRow;
+      addRow();
+      addRow();
+    },
+    onConfirm: async () => {
+      const rows = [...document.querySelectorAll(".v2-replan-row")];
+      const tasks = rows.map((row) => ({
+        title: row.querySelector("[data-r-title]").value.trim(),
+        categoryId: row.querySelector("[data-r-cat]").value,
+        subCategoryId: row.querySelector("[data-r-sub-wrap]").hidden ? "" : row.querySelector("[data-r-sub]").value,
+        difficulty: row.querySelector("[data-r-diff]").value,
+      })).filter((task) => task.title);
+      if (!tasks.length) throw new Error("至少要填一個拆分後的新任務");
+      await api(`/items/${encodeURIComponent(item.id)}/replan`, { method: "POST", body: { tasks } });
+      await loadCore({ quiet: true });
+    },
+  });
+}
+
+function setupReplanRow(row) {
+  const cat = row.querySelector("[data-r-cat]");
+  const sub = row.querySelector("[data-r-sub]");
+  const wrap = row.querySelector("[data-r-sub-wrap]");
+  const refresh = () => {
+    const subs = getSubcategories(cat.value);
+    wrap.hidden = !subs.length;
+    sub.innerHTML = subs.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join("");
+  };
+  cat.addEventListener("change", refresh);
+  refresh();
+}
+
+function openCancelTask(item) {
+  openFormModal({
+    icon: "🗑", title: "撤案這項任務？", confirmText: "確認撤案", danger: true,
+    body: `
+      <div class="tp-modal-preformatted">${escapeHtml(item.title)}</div>
+      <label class="v2-form-field">原因<select id="cancelReason">${CANCEL_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
+      <label class="v2-form-field">補充說明（選填）<textarea id="cancelNote" rows="3"></textarea></label>`,
+    onConfirm: async () => {
+      await api(`/items/${encodeURIComponent(item.id)}/cancel`, {
+        method: "POST",
+        body: { reason: document.getElementById("cancelReason").value, note: document.getElementById("cancelNote").value.trim() },
+      });
+      await loadCore({ quiet: true });
+    },
+  });
+}
+
+async function correctCompletion(item) {
+  const ok = await showConfirm({
+    icon: "↩️", title: "這項任務其實尚未完成？",
+    text: "系統會恢復成未完成，並在 History 留下一筆「誤操作更正」。",
+    confirmText: "恢復未完成",
+  });
+  if (!ok) return;
+  showLoading("更正中…");
   try {
-    const response = await fetch(`${API_BASE_URL}/weeks/postpone-current`, { method: "POST" });
-    if (!response.ok) throw new Error("本週順延失敗");
+    await api(`/items/${encodeURIComponent(item.id)}/correct-completion`, { method: "POST", body: {} });
+    await loadCore({ quiet: true });
+  } catch (error) { showAlert("更正失敗", error.message, "⚠️"); }
+  finally { hideLoading(); }
+}
 
-    let data = null;
-    try {
-      data = await response.json();
-    } catch (error) {
-      data = null;
+function openWeekPlanEditor() {
+  const week = currentWeek();
+  if (!week) return;
+  openFormModal({
+    icon: "🎯", title: "調整本週方向", confirmText: "儲存",
+    body: `
+      <label class="v2-form-field">本週主題<input id="planTheme" value="${escapeHtml(week.title || "")}" maxlength="80" /></label>
+      <label class="v2-form-field">本週目標<textarea id="planGoal" rows="4" maxlength="240">${escapeHtml(week.achievement || "")}</textarea></label>`,
+    onConfirm: async () => {
+      const title = document.getElementById("planTheme").value.trim();
+      const achievement = document.getElementById("planGoal").value.trim();
+      if (!title || !achievement) throw new Error("主題與目標都必填");
+      await api("/weeks/current-plan", { method: "PATCH", body: { title, achievement } });
+      await loadCore({ quiet: true });
+    },
+  });
+}
+
+async function saveWeekSetup(event) {
+  event.preventDefault();
+  const title = els.weekSetupTheme.value.trim();
+  const achievement = els.weekSetupGoal.value.trim();
+  if (!title || !achievement) return;
+  showLoading("本週立案中…");
+  try {
+    await api("/weeks/current-plan", { method: "PATCH", body: { title, achievement } });
+    await loadCore({ quiet: true });
+  } catch (error) { showAlert("立案失敗", error.message, "⚠️"); }
+  finally { hideLoading(); }
+}
+
+function openPostponeWeek() {
+  const week = currentWeek();
+  if (!week || week.postponed) return;
+  openFormModal({
+    icon: "📅", title: "特殊狀況：本週順延", confirmText: "確認順延",
+    body: `
+      <div class="tp-modal-preformatted">Cycle ${week.cycleNumber} · Week ${week.weekNumber}\n原定：${formatDate(week.weekStart)} ～ ${formatDate(week.weekEnd)}\n每週最多順延一次，最多 7 天。</div>
+      <label class="v2-form-field">順延天數<select id="postponeDays">${[1,2,3,4,5,6,7].map((d) => `<option value="${d}" ${d === 7 ? "selected" : ""}>${d} 天</option>`).join("")}</select></label>
+      <label class="v2-form-field">原因<select id="postponeReason">${POSTPONE_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
+      <label class="v2-form-field">補充說明（選填）<textarea id="postponeNote" rows="3"></textarea></label>`,
+    onConfirm: async () => {
+      await api("/weeks/postpone-current", {
+        method: "POST",
+        body: {
+          days: Number(document.getElementById("postponeDays").value),
+          reason: document.getElementById("postponeReason").value,
+          note: document.getElementById("postponeNote").value.trim(),
+        },
+      });
+      await loadCore({ quiet: true });
+    },
+  });
+}
+
+async function switchPage(page) {
+  state.currentPage = page;
+  els.pages.forEach((panel) => { panel.hidden = panel.dataset.pagePanel !== page; });
+  els.navButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.page === page));
+  closeTaskMenu();
+  closeBottomSheet();
+  if (page === "history") await loadHistory();
+  if (page === "settings") renderSettings();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function loadHistory() {
+  showLoading("翻閱 History…");
+  try {
+    state.history = await api("/history");
+    renderHistory();
+    if (state.historyFocusTaskId) {
+      requestAnimationFrame(() => focusHistoryTask(state.historyFocusTaskId));
     }
+  } catch (error) { showAlert("History 讀取失敗", error.message, "⚠️"); }
+  finally { hideLoading(); }
+}
 
-    selectedWeekView = "current";
-    await Promise.all([loadWeekContext(), loadItems()]);
-    renderAll();
-
-    const result = data && (data.result || data);
-    const affectedWeeksCount = result && result.affectedWeeksCount !== undefined ? Number(result.affectedWeeksCount) : null;
-    const affectedItemsCount = result && result.affectedItemsCount !== undefined ? Number(result.affectedItemsCount) : null;
-    const countText = Number.isFinite(affectedWeeksCount) || Number.isFinite(affectedItemsCount)
-      ? `\n\n已更新週次：${Number.isFinite(affectedWeeksCount) ? affectedWeeksCount : "-"} 筆\n已更新任務 / 驗收標準：${Number.isFinite(affectedItemsCount) ? affectedItemsCount : "-"} 筆`
-      : "";
-
-    await showAlert(
-      `本週和後面的週次已順延一週。\n任務、驗收標準和完成狀態都已保留。${countText}`,
-      { type: "success" }
-    );
-  } catch (error) {
-    console.error("本週順延失敗：", error);
-    await showAlert(
-      "本局暫時無法順延，週次未更動。\n請確認後端是否已支援 /weeks/postpone-current。",
-      { type: "danger" }
-    );
+function renderHistory() {
+  const history = Array.isArray(state.history) ? state.history : [];
+  if (!history.length) {
+    els.historyList.innerHTML = `<div class="v2-empty">目前還沒有可顯示的 History。</div>`;
+    return;
   }
+  els.historyList.innerHTML = history.map((entry) => {
+    const cycle = entry.cycle;
+    const summary = entry.summary || {};
+    const weeks = entry.weeks || [];
+    return `
+      <details class="v2-history-cycle" ${cycle.status === "active" ? "open" : ""}>
+        <summary><strong>Cycle ${cycle.cycleNumber}</strong><span style="display:block;margin-top:5px;color:var(--muted);font-size:13px;">${escapeHtml(cycle.status || "")}</span></summary>
+        <div class="v2-history-summary-grid">
+          ${historyStat(summary.onTimeCompleted, "按期完成")}
+          ${historyStat(summary.lateCompleted, "逾期後完成")}
+          ${historyStat(summary.incomplete, "尚未結案")}
+          ${historyStat(summary.replanned, "重新規劃")}
+          ${historyStat(summary.cancelled, "撤案")}
+        </div>
+        <div class="v2-history-weeks">
+          ${weeks.map((w) => renderHistoryWeek(w)).join("")}
+        </div>
+        ${cycle.status === "completed" ? `<div style="padding:0 19px 19px;"><button class="v2-soft-btn" type="button" data-review-cycle="${cycle.cycleNumber}">查看 12 Week Review</button></div>` : ""}
+      </details>`;
+  }).join("");
+
+  els.historyList.querySelectorAll("[data-review-cycle]").forEach((button) => {
+    button.addEventListener("click", () => openReview(Number(button.dataset.reviewCycle), false));
+  });
+  els.historyList.querySelectorAll("[data-retro-cycle]").forEach((button) => {
+    button.addEventListener("click", () => openRetrospective(Number(button.dataset.retroCycle), Number(button.dataset.retroWeek)));
+  });
 }
-function addTask() { addItem("task", taskInput, { category: taskCategory.value, subCategory: taskSubCategory ? taskSubCategory.value : DEFAULT_SUBCATEGORY, difficulty: taskDifficulty.value }); }
-function addStandard() { addItem("standard", standardInput, { category: DEFAULT_CATEGORY, subCategory: EMPTY_SUBCATEGORY, difficulty: DEFAULT_DIFFICULTY }); }
-async function initApp() {
-  renderWeekRange();
-  renderDailyQuote();
-  renderPlanCard();
-  renderBoardLabels();
-  renderAddFormState();
-  addTaskBtn.addEventListener("click", addTask);
-  addStandardBtn.addEventListener("click", addStandard);
-  if (taskCategory) taskCategory.addEventListener("change", renderSubCategoryControl);
-  if (refreshBtn) refreshBtn.addEventListener("click", refreshItems);
-  if (previousWeekTab) previousWeekTab.addEventListener("click", () => switchWeekView("previous"));
-  if (currentWeekTab) currentWeekTab.addEventListener("click", () => switchWeekView("current"));
-  if (nextWeekTab) nextWeekTab.addEventListener("click", () => switchWeekView("next"));
-  if (completeWeekBtn) completeWeekBtn.addEventListener("click", completeCurrentWeek);
-  if (postponeWeekBtn) postponeWeekBtn.addEventListener("click", postponeCurrentWeek);
-  taskInput.addEventListener("keydown", (event) => { if (event.key === "Enter") addTask(); });
-  standardInput.addEventListener("keydown", (event) => { if (event.key === "Enter") addStandard(); });
-  await Promise.all([loadWeekContext(), loadItems()]);
-  renderAll();
+
+function historyStat(value, label) {
+  return `<div class="v2-history-stat"><strong>${Number(value || 0)}</strong><span>${label}</span></div>`;
 }
-initApp();
+
+function renderHistoryWeek(wrapper) {
+  const week = wrapper.week;
+  const retro = wrapper.retrospective;
+  const tasks = wrapper.tasks || [];
+  const retroLabel = retro ? "已完成" : "未完成";
+  return `
+    <details class="v2-history-week">
+      <summary>Week ${week.weekNumber} · ${escapeHtml(week.title || "尚未設定主題")}</summary>
+      <div class="v2-history-week-body">
+        <div class="v2-history-week-meta">
+          <span>📅 ${formatDate(week.weekStart)} ～ ${formatDate(week.weekEnd)}</span>
+          <span>🎯 ${escapeHtml(week.achievement || "尚未設定目標")}</span>
+          <span>💭 週復盤：<button class="v2-retro-button" type="button" data-retro-cycle="${week.cycleNumber}" data-retro-week="${week.weekNumber}">${retroLabel}</button></span>
+        </div>
+        ${tasks.length ? tasks.map((taskWrap) => renderHistoryTask(taskWrap)).join("") : `<div class="v2-empty">這週沒有任務。</div>`}
+      </div>
+    </details>`;
+}
+
+function renderHistoryTask(wrapper) {
+  const item = wrapper.item;
+  const events = wrapper.events || [];
+  return `
+    <details class="v2-history-task" id="history-task-${safeId(item.id)}">
+      <summary><span>${statusIcon(item)} ${escapeHtml(item.title)}</span><span class="v2-mini-badge">${statusLabel(item.status)}</span></summary>
+      <div class="v2-history-task-detail">
+        <div class="v2-history-week-meta">
+          <span>原定：Cycle ${item.originalCycleNumber} · Week ${item.originalWeekNumber}</span>
+          ${isRescheduled(item) ? `<span>目前排程：Cycle ${item.scheduledCycleNumber} · Week ${item.scheduledWeekNumber}</span>` : ""}
+        </div>
+        <ul class="v2-event-list">
+          ${events.length ? events.map((event) => `
+            <li class="v2-event-item">
+              <strong>${escapeHtml(event.summary || event.eventType)}</strong>
+              <span>${formatDateTime(event.occurredAt)}${event.reason ? ` · 原因：${escapeHtml(event.reason)}` : ""}${event.note ? `<br>${escapeHtml(event.note)}` : ""}</span>
+            </li>`).join("") : `<li class="v2-empty">目前沒有額外事件紀錄。</li>`}
+        </ul>
+      </div>
+    </details>`;
+}
+
+function statusLabel(status) {
+  return ({ active: "進行中", overdue: "尚未結案", completed: "已完成", replanned: "已重新規劃", cancelled: "已撤案" })[status] || status;
+}
+
+async function goToTaskHistory(itemId) {
+  state.historyFocusTaskId = itemId;
+  await switchPage("history");
+}
+
+function focusHistoryTask(itemId) {
+  const target = document.getElementById(`history-task-${safeId(itemId)}`);
+  if (!target) return;
+  let parent = target.parentElement;
+  while (parent) {
+    if (parent.tagName === "DETAILS") parent.open = true;
+    parent = parent.parentElement;
+  }
+  target.open = true;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.classList.add("v2-tour-highlight");
+  setTimeout(() => target.classList.remove("v2-tour-highlight"), 1600);
+  state.historyFocusTaskId = null;
+}
+
+function openRetrospective(cycleNumber, weekNumber) {
+  const historyCycle = (state.history || []).find((c) => c.cycle?.cycleNumber === cycleNumber);
+  const wrapper = historyCycle?.weeks?.find((w) => w.week?.weekNumber === weekNumber);
+  const retro = wrapper?.retrospective || {};
+  openFormModal({
+    icon: "💭", title: `Cycle ${cycleNumber} · Week ${weekNumber} 週復盤`, confirmText: "儲存復盤", wide: true,
+    body: `
+      ${retro.createdAt ? `<p class="section-note">已儲存，可直接修改後再次儲存。</p>` : ""}
+      <label class="v2-form-field">1. 這週做得最好的地方是什麼？<textarea id="retroQ1" rows="3">${escapeHtml(retro.q1 || "")}</textarea></label>
+      <label class="v2-form-field">2. 這週最大的卡點是什麼？<textarea id="retroQ2" rows="3">${escapeHtml(retro.q2 || "")}</textarea></label>
+      <label class="v2-form-field">3. 有沒有低估工作量，或排得太大的任務？<textarea id="retroQ3" rows="3">${escapeHtml(retro.q3 || "")}</textarea></label>
+      <label class="v2-form-field">4. 下週最需要調整什麼？<textarea id="retroQ4" rows="3">${escapeHtml(retro.q4 || "")}</textarea></label>`,
+    onConfirm: async () => {
+      await api("/retrospectives", {
+        method: "POST",
+        body: {
+          cycleNumber, weekNumber,
+          q1: document.getElementById("retroQ1").value.trim(),
+          q2: document.getElementById("retroQ2").value.trim(),
+          q3: document.getElementById("retroQ3").value.trim(),
+          q4: document.getElementById("retroQ4").value.trim(),
+        },
+      });
+      await loadHistory();
+    },
+  });
+}
+
+async function openReview(cycleNumber, fromCompletion = false) {
+  showLoading("整理 12 Week Review…");
+  try {
+    const review = await api(`/reviews/${cycleNumber}`);
+    closeModal();
+    const stat = (value, label) => `<div class="v2-review-stat"><strong>${value}</strong><span>${label}</span></div>`;
+    const bars = (review.trend || []).map((point) => {
+      const empty = point.rate === null;
+      const height = empty ? 3 : Math.max(5, point.rate);
+      return `<div class="v2-review-bar-col"><div class="v2-review-bar-wrap"><div class="v2-review-bar ${empty ? "is-empty" : ""}" style="height:${height}%"></div></div><b>${empty ? "—" : `${point.rate}%`}</b><small>W${point.weekNumber}</small></div>`;
+    }).join("");
+
+    els.modalRoot.innerHTML = `
+      <div class="tp-modal-overlay tp-modal-open">
+        <div class="tp-modal tp-modal-review" role="dialog" aria-modal="true">
+          <div class="tp-modal-icon">📊</div>
+          <p class="tp-modal-body"><strong style="display:block;font-size:20px;">Cycle ${cycleNumber} · 12 Week Review</strong></p>
+          <div class="v2-review-grid">
+            ${stat(review.totalTasks, "安排任務")}
+            ${stat(review.onTimeCompleted, "按期完成")}
+            ${stat(review.lateCompleted, "逾期後完成")}
+            ${stat(review.incomplete, "尚未結案")}
+            ${stat(review.replanned, "重新規劃")}
+            ${stat(review.cancelled, "撤案")}
+            ${stat(`${review.onTimeRate}%`, "按期完成率")}
+            ${stat(review.postponedWeeks, "Week 順延")}
+            ${stat(`${review.retrospectiveCount}/12`, "完成週復盤")}
+          </div>
+          <div class="v2-chart"><p class="v2-chart-title">Week 1～12 · 按期完成率</p><div class="v2-review-chart">${bars}</div></div>
+          <div class="tp-modal-actions">
+            <button class="tp-btn tp-btn-ghost" id="reviewCloseBtn" type="button">關閉</button>
+            ${fromCompletion ? `<button class="tp-btn tp-btn-primary" id="reviewNextCycleBtn" type="button">建立下一個 Cycle</button>` : ""}
+          </div>
+        </div>
+      </div>`;
+    document.getElementById("reviewCloseBtn").onclick = closeModal;
+    if (fromCompletion) document.getElementById("reviewNextCycleBtn").onclick = () => { closeModal(); openCreateCycle(); };
+  } catch (error) { showAlert("Review 讀取失敗", error.message, "⚠️"); }
+  finally { hideLoading(); }
+}
+
+function maybeShowCycleCelebration() {
+  const context = state.context;
+  if (!context?.cycleComplete || !context.completedCycleNumber) return;
+  const key = `tp-v2-cycle-celebration-${context.completedCycleNumber}`;
+  if (localStorage.getItem(key)) return;
+  localStorage.setItem(key, "1");
+  els.celebrationTitle.textContent = `Cycle ${context.completedCycleNumber} 完成！`;
+  els.cycleCelebration.hidden = false;
+}
+
+function closeCelebrationAndReview() {
+  els.cycleCelebration.hidden = true;
+  if (state.context?.completedCycleNumber) openReview(Number(state.context.completedCycleNumber), true);
+}
+
+function openCreateCycle() {
+  const latest = state.cycles.length ? Math.max(...state.cycles.map((c) => Number(c.cycleNumber))) : 0;
+  openFormModal({
+    icon: "🌱", title: `建立 Cycle ${latest + 1}`, confirmText: "建立新 Cycle", wide: true,
+    body: `
+      <label class="v2-form-field">開始日期<input id="newCycleStart" type="date" min="${todayYmd()}" /></label>
+      <label class="v2-form-field">Week 1 主題<input id="newCycleTheme" maxlength="80" /></label>
+      <label class="v2-form-field">Week 1 目標<textarea id="newCycleGoal" rows="3" maxlength="240"></textarea></label>`,
+    onConfirm: async () => {
+      const startDate = document.getElementById("newCycleStart").value;
+      const title = document.getElementById("newCycleTheme").value.trim();
+      const achievement = document.getElementById("newCycleGoal").value.trim();
+      if (!startDate || !title || !achievement) throw new Error("開始日期、主題與目標都必填");
+      await api("/cycles", { method: "POST", body: { startDate, title, achievement } });
+      await loadCore({ quiet: true });
+    },
+  });
+}
+
+function openChangeCycleStart() {
+  const cycle = state.context?.nextCycle;
+  if (!cycle) return;
+  openFormModal({
+    icon: "📅", title: `修改 Cycle ${cycle.cycleNumber} 開始日期`, confirmText: "確認修改",
+    body: `
+      <label class="v2-form-field">開始日期<input id="cycleStartDate" type="date" value="${escapeHtml(cycle.startDate || "")}" min="${todayYmd()}" /></label>
+      <label class="v2-form-field">原因<select id="cycleStartReason">${CYCLE_DATE_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
+      <label class="v2-form-field">補充說明（選填）<textarea id="cycleStartNote" rows="3"></textarea></label>`,
+    onConfirm: async () => {
+      await api(`/cycles/${cycle.cycleNumber}/start-date`, {
+        method: "PATCH",
+        body: {
+          startDate: document.getElementById("cycleStartDate").value,
+          reason: document.getElementById("cycleStartReason").value,
+          note: document.getElementById("cycleStartNote").value.trim(),
+        },
+      });
+      await loadCore({ quiet: true });
+    },
+  });
+}
+
+function renderSettings() {
+  const categories = state.categories.filter((c) => c.type === "category");
+  const active = categories.filter((c) => c.active);
+  const inactive = categories.filter((c) => !c.active);
+  const renderRow = (cat) => {
+    const subs = getSubcategories(cat.id, true);
+    const activeSubs = subs.filter((s) => s.active);
+    const inactiveSubs = subs.filter((s) => !s.active);
+    return `
+      <article class="v2-setting-row">
+        <div class="v2-setting-row-top">
+          <div><strong>${escapeHtml(cat.name)}</strong>${!cat.active ? ` <span class="v2-category-state">已停用</span>` : ""}</div>
+          <div class="v2-setting-actions">
+            <button class="text-btn" type="button" data-rename-category="${cat.id}">改名</button>
+            <button class="text-btn ${cat.active ? "danger" : ""}" type="button" data-toggle-category="${cat.id}">${cat.active ? "停用" : "重新啟用"}</button>
+          </div>
+        </div>
+        <div class="v2-subcategory-list">
+          ${activeSubs.map((sub) => `<span class="chip chip-subcategory uncategorized">${escapeHtml(sub.name)} <button class="v2-chip-btn" type="button" data-sub-menu="${sub.id}">⋯</button></span>`).join("")}
+          ${cat.active ? `<button class="v2-link-btn" type="button" data-add-sub="${cat.id}">＋ 新增子分類</button>` : ""}
+        </div>
+        ${state.showInactiveCategories && inactiveSubs.length ? `<div class="v2-inactive-wrap">${inactiveSubs.map((sub) => `<button class="v2-soft-btn" type="button" data-reactivate-sub="${sub.id}">${escapeHtml(sub.name)} · 重新啟用</button>`).join(" ")}</div>` : ""}
+      </article>`;
+  };
+
+  els.categorySettingsList.innerHTML = [
+    ...active.map(renderRow),
+    ...(state.showInactiveCategories ? inactive.map(renderRow) : []),
+  ].join("") || `<div class="v2-empty">尚未建立分類。</div>`;
+  els.toggleInactiveBtn.textContent = state.showInactiveCategories ? "隱藏已停用" : `顯示已停用${inactive.length ? ` ${inactive.length} 項` : ""}`;
+
+  els.categorySettingsList.querySelectorAll("[data-add-sub]").forEach((b) => b.onclick = () => openAddCategory("subcategory", b.dataset.addSub));
+  els.categorySettingsList.querySelectorAll("[data-rename-category]").forEach((b) => b.onclick = () => openRenameCategory(b.dataset.renameCategory));
+  els.categorySettingsList.querySelectorAll("[data-toggle-category]").forEach((b) => b.onclick = () => toggleCategory(b.dataset.toggleCategory));
+  els.categorySettingsList.querySelectorAll("[data-sub-menu]").forEach((b) => b.onclick = () => openSubcategoryActions(b.dataset.subMenu));
+  els.categorySettingsList.querySelectorAll("[data-reactivate-sub]").forEach((b) => b.onclick = () => setCategoryActive(b.dataset.reactivateSub, true));
+}
+
+function openAddCategory(type = "category", parentId = "") {
+  const label = type === "category" ? "分類" : "子分類";
+  openFormModal({
+    icon: "🗂️", title: `新增${label}`, confirmText: "新增",
+    body: `<label class="v2-form-field">${label}名稱<input id="newCategoryName" maxlength="50" /></label>`,
+    onConfirm: async () => {
+      const name = document.getElementById("newCategoryName").value.trim();
+      if (!name) throw new Error("名稱不可空白");
+      await api("/categories", { method: "POST", body: { name, type, parentId } });
+      await reloadCategories();
+    },
+  });
+}
+
+function openRenameCategory(id) {
+  const cat = state.categories.find((c) => c.id === id);
+  if (!cat) return;
+  openFormModal({
+    icon: "✏️", title: `改名：${cat.name}`, confirmText: "儲存",
+    body: `<label class="v2-form-field">新名稱<input id="renameCategoryInput" value="${escapeHtml(cat.name)}" maxlength="50" /></label>`,
+    onConfirm: async () => {
+      const name = document.getElementById("renameCategoryInput").value.trim();
+      if (!name) throw new Error("名稱不可空白");
+      await api(`/categories/${encodeURIComponent(id)}`, { method: "PATCH", body: { name } });
+      await reloadCategories();
+    },
+  });
+}
+
+async function toggleCategory(id) {
+  const cat = state.categories.find((c) => c.id === id);
+  if (!cat) return;
+  const action = cat.active ? "停用" : "重新啟用";
+  const ok = await showConfirm({ icon: "🗂️", title: `${action}「${cat.name}」？`, text: cat.active ? "停用後不會出現在新任務表單，但舊任務與 History 仍保留。" : "重新啟用後會再次出現在新任務表單。", confirmText: action });
+  if (!ok) return;
+  await setCategoryActive(id, !cat.active);
+}
+
+async function setCategoryActive(id, active) {
+  showLoading(active ? "重新啟用中…" : "停用中…");
+  try {
+    await api(`/categories/${encodeURIComponent(id)}`, { method: "PATCH", body: { active } });
+    await reloadCategories();
+  } catch (error) { showAlert("分類更新失敗", error.message, "⚠️"); }
+  finally { hideLoading(); }
+}
+
+function openSubcategoryActions(id) {
+  const sub = state.categories.find((c) => c.id === id);
+  if (!sub) return;
+  els.modalRoot.innerHTML = `
+    <div class="tp-modal-overlay tp-modal-open"><div class="tp-modal" role="dialog" aria-modal="true">
+      <div class="tp-modal-icon">📎</div><p class="tp-modal-body"><strong>${escapeHtml(sub.name)}</strong></p>
+      <div class="tp-modal-actions">
+        <button class="tp-btn tp-btn-ghost" id="subCancel" type="button">取消</button>
+        <button class="tp-btn tp-btn-primary" id="subRename" type="button">改名</button>
+        <button class="tp-btn tp-btn-danger" id="subToggle" type="button">${sub.active ? "停用" : "重新啟用"}</button>
+      </div></div></div>`;
+  document.getElementById("subCancel").onclick = closeModal;
+  document.getElementById("subRename").onclick = () => { closeModal(); openRenameCategory(id); };
+  document.getElementById("subToggle").onclick = async () => { closeModal(); await setCategoryActive(id, !sub.active); };
+}
+
+async function reloadCategories() {
+  state.categories = await api("/categories");
+  renderCategorySelects();
+  renderSettings();
+  closeModal();
+}
+
+function showAlert(title, text, icon = "📎") {
+  els.modalRoot.innerHTML = `
+    <div class="tp-modal-overlay tp-modal-open"><div class="tp-modal" role="dialog" aria-modal="true">
+      <div class="tp-modal-icon">${icon}</div>
+      <p class="tp-modal-body"><strong style="display:block;font-size:18px;margin-bottom:8px;">${escapeHtml(title)}</strong>${escapeHtml(text).replaceAll("\n", "<br>")}</p>
+      <div class="tp-modal-actions"><button class="tp-btn tp-btn-primary" id="alertOk" type="button">知道了</button></div>
+    </div></div>`;
+  document.getElementById("alertOk").onclick = closeModal;
+}
+
+function showConfirm({ icon = "📎", title, text, confirmText = "確認", danger = false }) {
+  return new Promise((resolve) => {
+    els.modalRoot.innerHTML = `
+      <div class="tp-modal-overlay tp-modal-open"><div class="tp-modal" role="dialog" aria-modal="true">
+        <div class="tp-modal-icon">${icon}</div>
+        <p class="tp-modal-body"><strong style="display:block;font-size:18px;margin-bottom:8px;">${escapeHtml(title)}</strong>${escapeHtml(text).replaceAll("\n", "<br>")}</p>
+        <div class="tp-modal-actions">
+          <button class="tp-btn tp-btn-ghost" id="confirmCancel" type="button">取消</button>
+          <button class="tp-btn ${danger ? "tp-btn-danger" : "tp-btn-primary"}" id="confirmOk" type="button">${escapeHtml(confirmText)}</button>
+        </div>
+      </div></div>`;
+    document.getElementById("confirmCancel").onclick = () => { closeModal(); resolve(false); };
+    document.getElementById("confirmOk").onclick = () => { closeModal(); resolve(true); };
+  });
+}
+
+function openFormModal({ icon = "📎", title, body, confirmText = "確認", danger = false, wide = false, onReady, onConfirm }) {
+  els.modalRoot.innerHTML = `
+    <div class="tp-modal-overlay tp-modal-open">
+      <div class="tp-modal ${wide ? "tp-modal-wide" : ""}" role="dialog" aria-modal="true">
+        <div class="tp-modal-icon">${icon}</div>
+        <p class="tp-modal-body"><strong style="font-size:18px;">${escapeHtml(title)}</strong></p>
+        <div class="v2-modal-form">${body}</div>
+        <p class="v2-modal-error" id="formModalError" hidden></p>
+        <div class="tp-modal-actions">
+          <button class="tp-btn tp-btn-ghost" id="formCancel" type="button">取消</button>
+          <button class="tp-btn ${danger ? "tp-btn-danger" : "tp-btn-primary"}" id="formConfirm" type="button">${escapeHtml(confirmText)}</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById("formCancel").onclick = closeModal;
+  const confirm = document.getElementById("formConfirm");
+  confirm.onclick = async () => {
+    const errorBox = document.getElementById("formModalError");
+    errorBox.hidden = true;
+    confirm.disabled = true;
+    try {
+      await onConfirm();
+      closeModal();
+    } catch (error) {
+      errorBox.textContent = error.message || "操作失敗";
+      errorBox.hidden = false;
+      confirm.disabled = false;
+    }
+  };
+  if (onReady) onReady();
+}
+
+function closeModal() { els.modalRoot.innerHTML = ""; }
+
+const TOUR_STEPS = [
+  { page: "home", selector: "#tourCycle", title: "Cycle / Week", text: "每 12 週是一個 Cycle。日期到了會自動進下一週，未完成任務會留下來。" },
+  { page: "home", selector: "#tourPlan", title: "本週主題與目標", text: "新 Week 先立案：寫下這週要往哪裡走。" },
+  { page: "home", selector: "#tourTasks", title: "任務與逾期", text: "平常只要新增任務、完成打勾。沒完成會保留，不會偷偷搬走。" },
+  { page: "history", selector: "#tourHistory", title: "History", text: "完成、逾期、重新排程、重新規劃、撤案等重要事件都放在這裡。" },
+  { page: "settings", selector: "#tourSettings", title: "設定", text: "這裡只管理分類與重新觀看導覽，保持簡單。" },
+];
+
+async function startTour(force = false) {
+  if (!force && localStorage.getItem("tp-v2-tour-seen")) return;
+  state.tourIndex = 0;
+  els.tourPopover.hidden = false;
+  await renderTourStep();
+}
+
+async function renderTourStep() {
+  document.querySelectorAll(".v2-tour-highlight").forEach((x) => x.classList.remove("v2-tour-highlight"));
+  const step = TOUR_STEPS[state.tourIndex];
+  if (!step) return finishTour();
+  if (state.currentPage !== step.page) await switchPage(step.page);
+  const target = document.querySelector(step.selector);
+  target?.classList.add("v2-tour-highlight");
+  target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  els.tourStepLabel.textContent = `${state.tourIndex + 1} / ${TOUR_STEPS.length}`;
+  els.tourTitle.textContent = step.title;
+  els.tourText.textContent = step.text;
+  els.tourNextBtn.textContent = state.tourIndex === TOUR_STEPS.length - 1 ? "開始使用" : "下一步";
+}
+
+function finishTour() {
+  document.querySelectorAll(".v2-tour-highlight").forEach((x) => x.classList.remove("v2-tour-highlight"));
+  els.tourPopover.hidden = true;
+  localStorage.setItem("tp-v2-tour-seen", "1");
+  switchPage("home");
+}
+
+function bindGlobalEvents() {
+  els.navButtons.forEach((button) => button.addEventListener("click", () => switchPage(button.dataset.page)));
+  els.taskCategory.addEventListener("change", () => updateSubcategorySelect(els.taskSubCategory, els.taskCategory.value));
+  els.addTaskForm.addEventListener("submit", addTask);
+  els.weekSetupForm.addEventListener("submit", saveWeekSetup);
+  els.editWeekPlanBtn.addEventListener("click", openWeekPlanEditor);
+  els.postponeWeekBtn.addEventListener("click", openPostponeWeek);
+  els.showAllOverdueBtn.addEventListener("click", () => { state.showAllOverdue = !state.showAllOverdue; renderOverdue(); });
+  els.showAllRescheduledBtn.addEventListener("click", () => { state.showAllRescheduled = !state.showAllRescheduled; renderRescheduled(); });
+  els.refreshHistoryBtn.addEventListener("click", loadHistory);
+  els.addCategoryBtn.addEventListener("click", () => openAddCategory("category", ""));
+  els.toggleInactiveBtn.addEventListener("click", () => { state.showInactiveCategories = !state.showInactiveCategories; renderSettings(); });
+  els.replayTourBtn.addEventListener("click", () => startTour(true));
+  els.changeCycleStartBtn.addEventListener("click", openChangeCycleStart);
+  els.openReviewBtn.addEventListener("click", () => openReview(Number(state.context.completedCycleNumber), true));
+  els.skipCelebrationBtn.addEventListener("click", closeCelebrationAndReview);
+  els.closeSheetBtn.addEventListener("click", closeBottomSheet);
+  els.bottomSheet.addEventListener("click", (event) => { if (event.target === els.bottomSheet) closeBottomSheet(); });
+  els.tourSkipBtn.addEventListener("click", finishTour);
+  els.tourNextBtn.addEventListener("click", () => {
+    if (state.tourIndex >= TOUR_STEPS.length - 1) return finishTour();
+    state.tourIndex += 1;
+    renderTourStep();
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".v2-task-menu") && !event.target.closest("[data-more-id]")) closeTaskMenu();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeTaskMenu(); closeBottomSheet(); closeModal();
+      if (!els.tourPopover.hidden) finishTour();
+    }
+  });
+}
+
+async function init() {
+  cacheElements();
+  bindGlobalEvents();
+  await loadCore();
+  if (!localStorage.getItem("tp-v2-tour-seen")) setTimeout(() => startTour(false), 350);
+}
+
+init();
