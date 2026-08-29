@@ -118,6 +118,18 @@ function todayYmd() {
   return `${y}-${m}-${d}`;
 }
 
+function addDaysYmd(value, days) {
+  const raw = String(value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+  const date = new Date(`${raw}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setDate(date.getDate() + Number(days || 0));
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function isMobile() {
   return window.matchMedia("(max-width: 680px)").matches;
 }
@@ -312,7 +324,9 @@ function renderHome() {
     els.weekGoalText.textContent = week.achievement || "尚未設定";
     els.postponeWeekBtn.disabled = week.postponed === true;
     els.postponeWeekBtn.textContent = week.postponed ? `本週已順延 ${week.postponeDays || 7} 天` : "本週需要順延";
-    els.nextWeekPlanBtn.hidden = !context.canPlanNextWeek;
+    const canOpenPlanner = context.canPlanNextWeek || context.canPlanNextCycle;
+    els.nextWeekPlanBtn.hidden = !canOpenPlanner;
+    els.nextWeekPlanBtn.textContent = context.canPlanNextCycle ? "下一輪安排 ✦" : "下週安排 ✦";
 
     const needsSetup = !String(week.title || "").trim() || !String(week.achievement || "").trim();
     els.weekSetupPanel.hidden = !needsSetup;
@@ -337,15 +351,21 @@ function renderHome() {
   els.cycleWeekBadge.textContent = context.restPeriod && context.nextCycle ? `Cycle ${context.nextCycle.cycleNumber}` : "Cycle";
   els.weekStatusBadge.textContent = context.restPeriod ? "休息" : "12 Weeks";
 
+  const completedCycleKey = context.completedCycleNumber
+    ? `tp-star-cycle-archived-${context.completedCycleNumber}`
+    : "";
+  const completionArchived = completedCycleKey ? localStorage.getItem(completedCycleKey) === "1" : false;
+
+  if (context.cycleComplete && context.completedCycleNumber && !completionArchived) {
+    els.cycleCompletePanel.hidden = false;
+    els.cycleCompleteTitle.textContent = `Cycle ${context.completedCycleNumber}`;
+    return;
+  }
+
   if (context.restPeriod && context.nextCycle) {
     els.restPanel.hidden = false;
     els.restMessage.textContent = `下一個 Cycle 會在 ${formatDate(context.nextCycle.startDate)} 開始。`;
     return;
-  }
-
-  if (context.cycleComplete && context.completedCycleNumber) {
-    els.cycleCompletePanel.hidden = false;
-    els.cycleCompleteTitle.textContent = `Cycle ${context.completedCycleNumber}`;
   }
 }
 
@@ -1188,8 +1208,13 @@ async function openReview(cycleNumber, fromCompletion = false) {
     document.getElementById("reviewCloseBtn").onclick = closeModal;
     if (fromCompletion) {
       document.getElementById("reviewNextCycleBtn").onclick = () => {
+        localStorage.setItem(`tp-star-cycle-archived-${cycleNumber}`, "1");
         closeModal();
-        openCreateCycle();
+        if (state.context?.nextCycle) {
+          renderHome();
+        } else {
+          openCreateCycle();
+        }
       };
     }
   } catch (error) {
@@ -1547,6 +1572,218 @@ function openCycleThemeEditor() {
   });
 }
 
+function openPlanningEntry() {
+  if (state.context?.canPlanNextCycle) return openNextCyclePlanner();
+  return openNextWeekPlanner();
+}
+
+function openNextCyclePlanner(draft = null) {
+  const context = state.context || {};
+  const current = context.currentWeek;
+  if (!current || Number(current.weekNumber) !== 12 || !context.canPlanNextCycle) return;
+
+  const existingCycle = context.nextCycle || null;
+  const cycleNumber = existingCycle?.cycleNumber || ((state.cycles.length ? Math.max(...state.cycles.map((c) => Number(c.cycleNumber))) : 0) + 1);
+  const weekOne = existingCycle
+    ? state.weeks.find((week) => Number(week.cycleNumber) === Number(existingCycle.cycleNumber) && Number(week.weekNumber) === 1) || null
+    : null;
+  const existingTasks = existingCycle ? state.items.filter((item) =>
+    item.type === "task" &&
+    Number(item.scheduledCycleNumber || item.cycleNumber) === Number(existingCycle.cycleNumber) &&
+    Number(item.scheduledWeekNumber || item.weekNumber) === 1 &&
+    !["cancelled", "replanned"].includes(item.status)
+  ) : [];
+  const pendingTasks = Array.isArray(draft?.pendingTasks) ? draft.pendingTasks : [];
+
+  const minStart = addDaysYmd(current.weekEnd, 1);
+  const startDate = draft?.startDate ?? existingCycle?.startDate ?? minStart;
+  const cycleTheme = draft?.cycleTheme ?? existingCycle?.theme ?? "";
+  const title = draft?.title ?? weekOne?.title ?? "";
+  const achievement = draft?.achievement ?? weekOne?.achievement ?? "";
+  const activeCategories = getActiveCategories();
+  const firstCat = activeCategories[0] || null;
+
+  const existingRows = existingTasks.length ? existingTasks.map((item) => `
+    <div class="next-task-row">
+      <span>${escapeHtml(item.title)}</span>
+      <button class="text-btn" type="button" data-next-cycle-task-edit="${escapeHtml(item.id)}">編輯</button>
+    </div>`).join("") : "";
+  const pendingRows = pendingTasks.length ? pendingTasks.map((item, index) => `
+    <div class="next-task-row">
+      <span>${escapeHtml(item.title)}</span>
+      <button class="text-btn" type="button" data-next-cycle-draft-remove="${index}">移除</button>
+    </div>`).join("") : "";
+
+  els.modalRoot.innerHTML = `
+    <div class="tp-modal-overlay tp-modal-open">
+      <div class="tp-modal tp-modal-wide" role="dialog" aria-modal="true">
+        <div class="tp-modal-icon">★</div>
+        <p class="tp-modal-body"><strong>Cycle ${cycleNumber}</strong><br>
+          <span style="color:var(--muted);font-size:12px;">先準備下一輪，不會提前結束現在的 Cycle。</span>
+        </p>
+
+        <div class="v2-modal-form">
+          <label class="v2-form-field">開始日期<input id="nextCycleStart" type="date" min="${escapeHtml(minStart)}" value="${escapeHtml(startDate)}" /></label>
+          <label class="v2-form-field">本輪主題<input id="nextCycleTheme" maxlength="80" value="${escapeHtml(cycleTheme)}" placeholder="例如：JavaScript" /></label>
+          <label class="v2-form-field">Week 1 主題<input id="nextCycleWeekTheme" maxlength="80" value="${escapeHtml(title)}" /></label>
+          <label class="v2-form-field">Week 1 目標<textarea id="nextCycleWeekGoal" rows="3" maxlength="240">${escapeHtml(achievement)}</textarea></label>
+
+          <div class="next-task-list" id="nextCycleTaskList">
+            ${existingRows}${pendingRows || (!existingRows ? `<div class="tp-modal-preformatted">Week 1 還沒有先放進去的事情。</div>` : "")}
+          </div>
+
+          ${firstCat ? `
+          <div class="v2-modal-grid">
+            <label class="v2-form-field">想先加入的事情<input id="nextCycleTaskTitle" maxlength="120" placeholder="可以先留白" /></label>
+            <label class="v2-form-field">難度<select id="nextCycleTaskDifficulty">${difficultyOptionsHtml("適中")}</select></label>
+          </div>
+          <div class="v2-modal-grid">
+            <label class="v2-form-field">分類<select id="nextCycleTaskCategory">${categoryOptionsHtml(firstCat.id)}</select></label>
+            <label class="v2-form-field" id="nextCycleTaskSubWrap">子分類<select id="nextCycleTaskSubCategory"></select></label>
+          </div>
+          <button class="v2-soft-btn" id="nextCycleTaskAddBtn" type="button">加入</button>` : `
+          <div class="tp-modal-preformatted">如果要先加 Week 1 任務，可以先到 Settings 建立分類。</div>`}
+          <p class="v2-modal-error" id="nextCyclePlannerError" hidden></p>
+        </div>
+
+        <div class="tp-modal-actions">
+          <button class="tp-btn tp-btn-ghost" id="nextCyclePlannerCancel" type="button">先等等</button>
+          <button class="tp-btn tp-btn-primary" id="nextCyclePlannerSave" type="button">儲存下一輪</button>
+        </div>
+      </div>
+    </div>`;
+
+  const collectDraft = () => ({
+    startDate: document.getElementById("nextCycleStart")?.value || startDate,
+    cycleTheme: document.getElementById("nextCycleTheme")?.value.trim() || "",
+    title: document.getElementById("nextCycleWeekTheme")?.value.trim() || "",
+    achievement: document.getElementById("nextCycleWeekGoal")?.value.trim() || "",
+    pendingTasks: pendingTasks.slice(),
+  });
+
+  document.getElementById("nextCyclePlannerCancel").onclick = closeModal;
+
+  els.modalRoot.querySelectorAll("[data-next-cycle-task-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = state.items.find((x) => x.id === button.dataset.nextCycleTaskEdit);
+      if (!item) return;
+      closeModal();
+      openEditTask(item);
+    });
+  });
+
+  els.modalRoot.querySelectorAll("[data-next-cycle-draft-remove]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextDraft = collectDraft();
+      nextDraft.pendingTasks.splice(Number(button.dataset.nextCycleDraftRemove), 1);
+      openNextCyclePlanner(nextDraft);
+    });
+  });
+
+  if (firstCat) {
+    const cat = document.getElementById("nextCycleTaskCategory");
+    const sub = document.getElementById("nextCycleTaskSubCategory");
+    const subWrap = document.getElementById("nextCycleTaskSubWrap");
+    const refreshSubs = () => {
+      const subs = getSubcategories(cat.value);
+      subWrap.hidden = !subs.length;
+      sub.innerHTML = subs.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
+    };
+    cat.addEventListener("change", refreshSubs);
+    refreshSubs();
+
+    document.getElementById("nextCycleTaskAddBtn").onclick = () => {
+      const taskTitle = document.getElementById("nextCycleTaskTitle").value.trim();
+      if (!taskTitle) return;
+      const nextDraft = collectDraft();
+      nextDraft.pendingTasks.push({
+        title: taskTitle,
+        categoryId: cat.value,
+        subCategoryId: subWrap.hidden ? "" : sub.value,
+        difficulty: document.getElementById("nextCycleTaskDifficulty").value,
+      });
+      openNextCyclePlanner(nextDraft);
+    };
+  }
+
+  document.getElementById("nextCyclePlannerSave").onclick = async () => {
+    const error = document.getElementById("nextCyclePlannerError");
+    error.hidden = true;
+    const finalDraft = collectDraft();
+    if (!finalDraft.startDate || !finalDraft.cycleTheme || !finalDraft.title || !finalDraft.achievement) {
+      error.textContent = "開始日期、本輪主題、Week 1 主題與目標都要填";
+      error.hidden = false;
+      return;
+    }
+    if (finalDraft.startDate < minStart) {
+      error.textContent = `開始日期要在目前 Cycle 結束後，也就是 ${formatDate(minStart)} 之後。`;
+      error.hidden = false;
+      return;
+    }
+
+    try {
+      showLoading("儲存下一輪…");
+      let targetCycleNumber = Number(existingCycle?.cycleNumber || 0);
+
+      if (!existingCycle) {
+        const created = await api("/cycles", {
+          method: "POST",
+          body: {
+            startDate: finalDraft.startDate,
+            theme: finalDraft.cycleTheme,
+            title: finalDraft.title,
+            achievement: finalDraft.achievement,
+          },
+        });
+        targetCycleNumber = Number(created?.cycleNumber || cycleNumber);
+      } else {
+        if (finalDraft.startDate !== String(existingCycle.startDate || "").slice(0, 10)) {
+          await api(`/cycles/${existingCycle.cycleNumber}/start-date`, {
+            method: "PATCH",
+            body: { startDate: finalDraft.startDate, reason: "下一輪安排", note: "正式開始前調整" },
+          });
+        }
+        if (finalDraft.cycleTheme !== String(existingCycle.theme || "").trim()) {
+          await api(`/cycles/${existingCycle.cycleNumber}/theme`, {
+            method: "PATCH",
+            body: { theme: finalDraft.cycleTheme },
+          });
+        }
+        if (!weekOne || finalDraft.title !== String(weekOne.title || "").trim() || finalDraft.achievement !== String(weekOne.achievement || "").trim()) {
+          await api(`/weeks/${existingCycle.cycleNumber}/1/plan`, {
+            method: "PATCH",
+            body: { title: finalDraft.title, achievement: finalDraft.achievement },
+          });
+        }
+      }
+
+      for (const task of finalDraft.pendingTasks) {
+        await api("/items", {
+          method: "POST",
+          body: {
+            type: "task",
+            title: task.title,
+            categoryId: task.categoryId,
+            subCategoryId: task.subCategoryId,
+            difficulty: task.difficulty,
+            scheduledCycleNumber: targetCycleNumber,
+            scheduledWeekNumber: 1,
+          },
+        });
+      }
+
+      closeModal();
+      await loadCore({ quiet: true });
+      showAlert("下一輪已準備好", `Cycle ${targetCycleNumber} 會在 ${formatDate(finalDraft.startDate)} 開始。`, "★");
+    } catch (e) {
+      error.textContent = e.message || "儲存下一輪失敗";
+      error.hidden = false;
+    } finally {
+      hideLoading();
+    }
+  };
+}
+
 function openNextWeekPlanner(draft = null) {
   const next = state.context?.nextWeek;
   if (!next || !state.context?.canPlanNextWeek) return;
@@ -1789,7 +2026,7 @@ function bindGlobalEvents() {
   els.editWeekPlanBtn.addEventListener("click", openWeekPlanEditor);
   els.editCycleThemeBtn.addEventListener("click", openCycleThemeEditor);
   els.postponeWeekBtn.addEventListener("click", openPostponeWeek);
-  els.nextWeekPlanBtn.addEventListener("click", openNextWeekPlanner);
+  els.nextWeekPlanBtn.addEventListener("click", openPlanningEntry);
   els.weeklyReviewBtn.addEventListener("click", () => {
     const week = currentWeek();
     if (week) openWeeklyReview(week.cycleNumber, week.weekNumber);

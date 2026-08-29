@@ -46,7 +46,7 @@ body {
 button, input, select, textarea { font: inherit; }
 button { color: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline: 3px solid rgba(169, 139, 208, .26);
+  outline: 3px solid rgba(143, 155, 121, .28);
   outline-offset: 2px;
 }
 
@@ -70,7 +70,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   width: fit-content;
   margin: 0 auto 20px;
   padding: 6px;
-  border: 1px solid rgba(223, 207, 247, .8);
+  border: 1px solid rgba(210, 217, 198, .86);
   border-radius: 999px;
   background: rgba(255, 253, 249, .9);
   box-shadow: var(--shadow-soft);
@@ -104,10 +104,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   overflow: hidden;
   min-height: 250px;
   padding: 34px 38px;
-  border: 1px solid rgba(223, 207, 247, .8);
+  border: 1px solid rgba(210, 217, 198, .86);
   border-radius: var(--radius-xl);
   background:
-    linear-gradient(135deg, rgba(255,253,249,.98), rgba(247,242,255,.94)),
+    linear-gradient(135deg, rgba(255,253,249,.98), rgba(246,249,241,.96)),
     var(--paper);
   box-shadow: var(--shadow);
 }
@@ -572,7 +572,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border: 1px solid var(--lavender-200);
   border-radius: 999px;
   padding: 10px 15px;
-  color: var(--lavender-700, #624c78);
+  color: var(--lavender-600, #71805f);
   background: var(--lavender-50);
   font-weight: 700;
   cursor: pointer;
@@ -1662,4 +1662,176 @@ body.is-busy { cursor: progress; }
   .compact-cycle-theme { margin-top: 15px; }
   #cycleThemeText { font-size: 16px; }
   .weekly-card { padding: 21px 18px; }
+}
+
+
+/* =========================================================
+   Sage Live v2 — lighter, less dashboard-like
+   ========================================================= */
+
+body {
+  background:
+    radial-gradient(circle at 8% 0%, rgba(255,255,255,.92), transparent 28rem),
+    radial-gradient(circle at 92% 12%, rgba(229,239,229,.30), transparent 24rem),
+    linear-gradient(180deg, #fcfaf5 0%, #f8f4ea 100%);
+}
+
+.app {
+  width: min(calc(100% - 40px), 1180px);
+  padding-top: 22px;
+}
+
+.v2-nav {
+  border-color: rgba(210,217,198,.8);
+  background: rgba(255,250,241,.92);
+  box-shadow: 0 8px 22px rgba(72,82,67,.045);
+}
+
+.v2-nav-btn.is-active {
+  background: #e4eadc;
+  color: #56614d;
+}
+
+/* Hero should feel like a light personal header, not a giant dashboard card */
+.star-hero {
+  min-height: 0;
+  padding: 28px 34px 26px;
+  border-color: rgba(224,219,208,.88);
+  background:
+    linear-gradient(135deg, rgba(255,250,241,.98), rgba(247,250,243,.97));
+  box-shadow: 0 10px 30px rgba(72,82,67,.055);
+}
+
+.star-hero h1,
+.simple-page-head h1 {
+  font-size: clamp(34px, 4vw, 46px);
+  font-weight: 700;
+  letter-spacing: -.03em;
+}
+
+.star-dust-a { font-size: 34px; opacity: .78; }
+.star-dust-b { font-size: 21px; opacity: .28; }
+.star-dust-c { color: #a4b08f; opacity: .32; }
+
+.v2-cycle-line {
+  margin-top: 18px;
+}
+
+.week-range {
+  margin-top: 10px !important;
+  color: #858c80;
+}
+
+.compact-cycle-theme {
+  margin-top: 14px !important;
+  padding-top: 13px;
+  border-top: 1px solid rgba(232,225,213,.85);
+}
+
+.compact-cycle-theme #cycleThemeText {
+  font-size: 18px !important;
+  font-weight: 650;
+}
+
+.compact-cycle-theme .soft-label {
+  font-size: 13px;
+}
+
+.v2-cycle-badge,
+.v2-status-badge {
+  box-shadow: none !important;
+  border: 1px solid rgba(218,216,203,.76);
+}
+
+/* Weekly card should be lighter and visually distinct from "本輪" */
+.weekly-card {
+  margin-top: 18px !important;
+  padding: 24px 28px !important;
+  border-color: rgba(229,223,213,.9) !important;
+  background: rgba(255,250,241,.96) !important;
+  box-shadow: 0 8px 24px rgba(72,82,67,.045) !important;
+}
+
+.weekly-field h2 {
+  font-size: clamp(24px, 2.8vw, 31px) !important;
+  font-weight: 700 !important;
+}
+
+.weekly-goal {
+  font-size: clamp(18px, 2vw, 22px) !important;
+  font-weight: 560 !important;
+  line-height: 1.55 !important;
+}
+
+/* Star progress: gold stays special */
+.star-progress-wrap {
+  background: #fbf8ef !important;
+  border-color: rgba(232,225,213,.9) !important;
+}
+
+.star-progress .star.is-filled,
+.star-progress .star.filled,
+.star-progress .is-filled {
+  color: #c9a35f !important;
+}
+
+/* Cards */
+.task-item,
+.join-card,
+.soft-state-card,
+.reminder-card,
+.history-cycle-card,
+.settings-card,
+.weekly-review-card {
+  border-color: rgba(229,223,213,.9) !important;
+  box-shadow: 0 7px 22px rgba(72,82,67,.04) !important;
+}
+
+/* Keep pink/green as tiny accents, never large blocks */
+.dot-pink { background: #e7a6b7 !important; }
+.spark-green { color: #8eae90 !important; }
+
+.primary-pill,
+.join-toggle {
+  background: #8f9b79 !important;
+  color: #fffdf7 !important;
+}
+
+.primary-pill:hover,
+.join-toggle:hover {
+  background: #7f8c6d !important;
+}
+
+.soft-link,
+.quiet-edit {
+  color: #71805f !important;
+}
+
+/* Remove any remaining purple feel from focus/selected surfaces */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-color: rgba(143,155,121,.28);
+}
+
+/* Mobile remains airy */
+@media (max-width: 680px) {
+  .app {
+    width: min(calc(100% - 24px), 1180px);
+    padding-top: 12px;
+  }
+
+  .star-hero {
+    padding: 24px 22px 22px;
+    border-radius: 24px;
+  }
+
+  .star-hero h1 {
+    font-size: 36px;
+  }
+
+  .weekly-card {
+    padding: 20px !important;
+  }
 }

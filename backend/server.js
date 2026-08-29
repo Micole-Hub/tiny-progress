@@ -159,6 +159,7 @@ async function fetchWeekContextFromGoogleSheets() {
     currentWeek: data.currentWeek || null,
     nextWeek: data.nextWeek || null,
     canPlanNextWeek: data.canPlanNextWeek === true,
+    canPlanNextCycle: data.canPlanNextCycle === true,
     restPeriod: data.restPeriod === true,
     nextCycle: data.nextCycle || null,
     cycleComplete: data.cycleComplete === true,
