@@ -196,6 +196,8 @@ async function createItemToGoogleSheets({
   done,
   cycleNumber,
   weekNumber,
+  scheduledCycleNumber,
+  scheduledWeekNumber,
   weekStart,
   weekEnd,
   createdAt,
@@ -212,6 +214,8 @@ async function createItemToGoogleSheets({
     done: done === true,
     cycleNumber,
     weekNumber,
+    scheduledCycleNumber,
+    scheduledWeekNumber,
     weekStart,
     weekEnd,
     createdAt,
@@ -295,7 +299,7 @@ function getLineStandardTitle(title) {
 }
 
 function formatTaskSectionByCategory(tasks) {
-  if (tasks.length === 0) return ["【本週任務】", "本週尚未立案。放一個小任務，就是好的開始。"].join("\n");
+  if (tasks.length === 0) return ["【本週任務】", "本週還沒有任務。加入一件想做的事就好。"].join("\n");
 
   const lines = ["【本週任務】"];
   let taskNumber = 1;
@@ -345,7 +349,7 @@ function formatLineSection(title, items, emptyText) {
 }
 
 function formatTaskBoardForLine({ currentWeek, tasks, standards }) {
-  const weekTitle = currentWeek ? `第 ${currentWeek.weekNumber} 週｜${currentWeek.title}` : "本週案件板";
+  const weekTitle = currentWeek ? `第 ${currentWeek.weekNumber} 週｜${currentWeek.title}` : "本週清單";
 
   return [
     "📋 Tiny Progress",
@@ -383,7 +387,7 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
   });
 
   const firstUnfinishedEntry = matchedTasks.find((entry) => !entry.task.done);
-  const commandHint = firstUnfinishedEntry ? `可直接輸入：完成任務${firstUnfinishedEntry.originalNumber}` : "本區案件已辦理完畢";
+  const commandHint = firstUnfinishedEntry ? `可直接輸入：完成任務${firstUnfinishedEntry.originalNumber}` : "這一區都完成了";
 
   return [
     `📌 本週${difficulty}任務`,
@@ -521,8 +525,8 @@ function getDifficultyAccentColor(difficulty) {
 function getDifficultyFooterCopy(difficulty, isCompleted) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
 
-  if (normalizedDifficulty === "簡單") return isCompleted ? "熱身完成，今天已經有動起來。" : "先熱身一下，本局不催跑。";
-  if (normalizedDifficulty === "適中") return isCompleted ? "穩穩辦完，本局予以記錄。" : "穩穩推進，不用開倍速。";
+  if (normalizedDifficulty === "簡單") return isCompleted ? "熱身完成，今天已經有動起來。" : "先從簡單的開始就好。";
+  if (normalizedDifficulty === "適中") return isCompleted ? "穩穩完成，已經留下紀錄了。" : "穩穩推進，不用開倍速。";
   return isCompleted ? "大案收妥，今天可以蓋一枚章。" : "大案也能小辦，不必硬闖。";
 }
 
@@ -762,7 +766,7 @@ function buildFlexInfoCard(contents, options = {}) {
   const cardContents = [];
 
   if (options.label || options.emoji) {
-    cardContents.push(buildCuteSectionLabel(options.emoji || "📎", options.label || "小櫃台", options.labelColor || FLEX_COLORS.mutedText));
+    cardContents.push(buildCuteSectionLabel(options.emoji || "📎", options.label || "Tiny Progress", options.labelColor || FLEX_COLORS.mutedText));
   }
 
   return {
@@ -960,7 +964,7 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber, unfinishedCoun
     "完成後可以輸入：",
     `完成任務${taskNumber}`,
     "",
-    "先辦這件就好，其他公文先排隊。",
+    "先做這件就好，其他事情慢慢來。",
   ].join("\n");
 }
 
@@ -1043,7 +1047,7 @@ function buildDrawEmptyFlexMessage() {
           },
         ],
         {
-          label: "抽籤小櫃台",
+          label: "今天抽一件",
           emoji: "🐣",
           borderColor: "#E5C98F",
           backgroundColor: "#FFF6E3",
@@ -1066,7 +1070,7 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
   const bubble = buildBaseFlexBubble({
     title: "抽到一件小案子",
     // ── 剩餘件數帶入副標 ──
-    subtitle: `本局已搖出今日小籤，還有 ${unfinishedCount} 件等著。`,
+    subtitle: `今天幫你抽到一件，還有 ${unfinishedCount} 件等著。`,
     accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
       buildFlexInfoCard(
@@ -1121,7 +1125,7 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
           buildDrawTaskTagBox(selectedTask),
           {
             type: "text",
-            text: "先辦這件就好，其他公文先排隊。",
+            text: "先做這件就好，其他事情慢慢來。",
             size: "xs",
             color: FLEX_COLORS.mutedText,
             wrap: true,
@@ -1155,7 +1159,7 @@ async function handleDrawOneTaskCommand() {
   if (unfinishedTasks.length === 0) {
     return {
       replyText: [
-        "🎲 Tiny Progress｜抽籤小櫃台",
+        "🎲 Tiny Progress｜今天抽一件",
         "",
         "目前沒有任務可以抽。",
       ].join("\n"),
@@ -1175,7 +1179,7 @@ async function handleDrawOneTaskCommand() {
 
 function buildDifficultyTaskFooterLines(matchedTasks, difficulty) {
   const firstUnfinishedEntry = matchedTasks.find((entry) => !entry.task.done);
-  if (!firstUnfinishedEntry) return ["本區案件已辦理完畢", getDifficultyFooterCopy(difficulty, true)];
+  if (!firstUnfinishedEntry) return ["這一區都完成了", getDifficultyFooterCopy(difficulty, true)];
   return [`可直接輸入：完成任務${firstUnfinishedEntry.originalNumber}`, getDifficultyFooterCopy(difficulty, false)];
 }
 
@@ -1252,7 +1256,7 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
 
   const bubble = buildBaseFlexBubble({
     title: `本週${difficulty}任務`,
-    subtitle: "同一個案件板，打開比較剛好的小抽屜。",
+    subtitle: "同一個清單，打開比較剛好的小抽屜。",
     accentColor: getDifficultyAccentColor(difficulty),
     bodyContents,
     footerContents: buildFlexFooterHint(
@@ -1284,7 +1288,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   const standardDoneCount = standards.filter((standard) => standard.done).length;
   const weekTitle = currentWeek
     ? `第${currentWeek.weekNumber}週｜${currentWeek.title}`
-    : "本週案件板";
+    : "本週清單";
 
   const taskRows = tasks.slice(0, 8).map((task, index) =>
     buildTaskFlexRow({
@@ -1333,7 +1337,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
         [
           {
             type: "text",
-            text: "本週任務尚未立案。",
+            text: "本週還沒有任務。",
             size: "md",
             color: FLEX_COLORS.darkGreen,
             weight: "bold",
@@ -1404,8 +1408,8 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   }
 
   const bubble = buildBaseFlexBubble({
-    title: "本週案件板",
-    subtitle: "案件都在這裡，今天先辦一小件。",
+    title: "本週清單",
+    subtitle: "事情都在這裡，今天先做一小件。",
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
     footerContents: buildFlexFooterHint([
@@ -1418,8 +1422,8 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     type: "flex",
     // ── altText 帶入週次 ──
     altText: currentWeek
-      ? `Tiny Progress｜第 ${currentWeek.weekNumber} 週案件板｜任務 ${taskDoneCount}/${tasks.length}`
-      : "Tiny Progress｜本週案件板",
+      ? `Tiny Progress｜第 ${currentWeek.weekNumber} 週清單｜任務 ${taskDoneCount}/${tasks.length}`
+      : "Tiny Progress｜本週清單",
     contents: bubble,
   };
 }
@@ -1436,7 +1440,7 @@ async function handleAllListFlexCommand() {
 function buildLineTextMessage(text) {
   return {
     type: "text",
-    text: String(text || "本局目前沒有可回覆的內容。"),
+    text: String(text || "目前沒有可回覆的內容。"),
   };
 }
 
@@ -1500,7 +1504,7 @@ async function replyToLine(replyToken, replyResult) {
 
 function getGuideText() {
   return [
-    "📋 Tiny Progress｜辦事攻略",
+    "📋 Tiny Progress｜使用方式",
     "",
     "【查看】",
     "清單：看本週任務與驗收標準",
@@ -1516,11 +1520,11 @@ function getGuideText() {
     "子分類：觀看課程影片、練習、寫筆記、W3Schools、freeCodeCamp",
     "難度：簡單、適中、困難",
     "",
-    "【辦理】",
+    "【完成】",
     "完成任務3 / 取消任務3 / 修改任務3 / 刪除任務3",
     "完成標準2 / 取消標準2 / 修改標準2 / 刪除標準2",
     "",
-    "【修訂中止】",
+    "【修改中止】",
     "取消修改",
     "",
     "小小前進，也算數。",
@@ -1596,8 +1600,8 @@ function buildGuideFlexMessage() {
   // 新增區
   const createCard = buildFlexInfoCard(
     [
-      buildGuideRow("新增任務 xxx", "快速立案，預設程式學習"),
-      buildGuideRow("新增任務 xxx｜分類｜子分類｜難度", "完整格式立案"),
+      buildGuideRow("新增任務 xxx", "快速加入，預設程式學習"),
+      buildGuideRow("新增任務 xxx｜分類｜子分類｜難度", "完整格式加入"),
       buildSectionDivider(),
       buildGuideRow("新增標準 xxx", "新增本週驗收條件"),
       {
@@ -1628,20 +1632,20 @@ function buildGuideFlexMessage() {
     }
   );
 
-  // 辦理區
+  // 完成區
   const actionCard = buildFlexInfoCard(
     [
       buildGuideRow("完成任務3", "將第 3 個任務標為完成"),
       buildGuideRow("取消任務3", "撤回完成狀態"),
       buildGuideRow("修改任務3", "修改任務內容（會等待輸入）"),
-      buildGuideRow("刪除任務3", "從案件板移除"),
+      buildGuideRow("刪除任務3", "從清單移除"),
       buildSectionDivider(),
       buildGuideRow("完成標準2", "驗收標準同上，數字換掉即可"),
       buildSectionDivider(),
       buildGuideRow("取消修改", "放棄進行中的修改"),
     ],
     {
-      label: "辦理",
+      label: "完成",
       emoji: "✅",
       backgroundColor: "#F4EBF2",
       borderColor: "#DEC9D3",
@@ -1650,7 +1654,7 @@ function buildGuideFlexMessage() {
   );
 
   const bubble = buildBaseFlexBubble({
-    title: "辦事攻略",
+    title: "使用方式",
     subtitle: "不知道怎麼辦，先看這裡。",
     accentColor: FLEX_COLORS.gold,
     bodyContents: [viewCard, createCard, actionCard],
@@ -1662,7 +1666,7 @@ function buildGuideFlexMessage() {
 
   return {
     type: "flex",
-    altText: "Tiny Progress｜辦事攻略：查看、新增、辦理三區說明",
+    altText: "Tiny Progress｜使用方式：查看、加入、完成三區說明",
     contents: bubble,
   };
 }
@@ -1689,7 +1693,7 @@ function getUsageText() {
     "【目前建議】",
     "每天主動提醒最多 1 則，一個月約 30 則。",
     "剩下 170 則留給補提醒與通知，不怕超量。",
-    "你主動問，本局再回，不吃額度。",
+    "你主動問，我再回，不會多打擾。",
   ].join("\n");
 }
 
@@ -1784,8 +1788,8 @@ function buildUsageFlexMessage() {
         margin: "xs",
       },
       buildUsageRow("🌅", "每日提醒", "早上固定發送，提醒你看看今天的任務。"),
-      buildUsageRow("📬", "主動補提醒", "有未完成任務時，本局會適時發一則。"),
-      buildUsageRow("📣", "主動通知", "結案或重要事件時會主動告知。"),
+      buildUsageRow("📬", "主動補提醒", "有需要時會適度提醒。"),
+      buildUsageRow("📣", "主動通知", "完成或有重要變化時會主動告知。"),
     ],
     {
       label: "Bot 主動傳給你（佔用額度）",
@@ -1870,12 +1874,12 @@ async function handlePendingActionIfNeeded(sourceKey, userText) {
 
   if (userText === "取消修改") {
     pendingActions.delete(sourceKey);
-    return "已取消這次修訂。本局把待辦公文收回抽屜了。";
+    return "已取消這次修改，原本內容保持不變。";
   }
 
   if (Date.now() - pending.createdAt > PENDING_ACTION_TTL_MS) {
     pendingActions.delete(sourceKey);
-    return ["這次修訂已經逾時，本局未更動資料。", "", `可以重新輸入：修改${pending.label} 數字`].join("\n");
+    return ["這次修改已經逾時，資料沒有變動。", "", `可以重新輸入：修改${pending.label} 數字`].join("\n");
   }
 
   const newTitle = userText.trim();
@@ -1884,7 +1888,7 @@ async function handlePendingActionIfNeeded(sourceKey, userText) {
   const updatedItem = await updateItemToGoogleSheets(pending.itemId, { title: newTitle });
   pendingActions.delete(sourceKey);
 
-  return [`已修訂第 ${pending.itemNumber} 個${displayLabel}：`, updatedItem.title || newTitle, "", "本局已更新公文內容。"].join("\n");
+  return [`已修改第 ${pending.itemNumber} 個${displayLabel}：`, updatedItem.title || newTitle, "", "已更新內容。"].join("\n");
 }
 
 function parseCreateText({ userText, command }) {
@@ -1930,7 +1934,7 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
   const displayLabel = getDisplayLabel(label);
 
   if (!parsed.title) {
-    return [`這份立案公文還缺少${displayLabel}內容，本局未更動資料。`, "", `例：${command} ${example}`].join("\n");
+    return [`這次加入還缺少${displayLabel}內容，資料沒有變動。`, "", `例：${command} ${example}`].join("\n");
   }
 
   let category;
@@ -1942,7 +1946,7 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
     subCategory = normalizeSubCategory(parsed.subCategory, category);
     difficulty = normalizeDifficulty(parsed.difficulty);
   } catch (error) {
-    return ["分類、子分類或難度需要補正，本局未更動資料。", "", error.message, "", "例：新增任務 練習 CSS｜程式學習｜練習｜適中"].join("\n");
+    return ["分類、子分類或難度需要再確認，資料沒有變動。", "", error.message, "", "例：新增任務 練習 CSS｜程式學習｜練習｜適中"].join("\n");
   }
 
   const currentWeekNumber = await getCurrentWeekNumberFromGoogleSheets();
@@ -1957,18 +1961,18 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
 
   if (type === "task") {
     return [
-      "Tiny Progress 已立案：",
+      "Tiny Progress 已加入：",
       `☐ ${createdItem.title || parsed.title}`,
       `分類：${getTaskMetaText(createdItem)}`,
       "",
       "若要新增驗收標準，可輸入：",
       "新增標準 本週能說明一個學到的觀念",
       "",
-      "可以輸入「清單」查看目前案件板。",
+      "可以輸入「清單」查看目前清單。",
     ].join("\n");
   }
 
-  return ["Tiny Progress 已新增本週驗收標準：", `☐ ${createdItem.title || parsed.title}`, "", "可以輸入「清單」查看目前案件板。"].join("\n");
+  return ["Tiny Progress 已新增本週驗收標準：", `☐ ${createdItem.title || parsed.title}`, "", "可以輸入「清單」查看目前清單。"].join("\n");
 }
 
 async function findItemByNumber({ type, numberText, label }) {
@@ -1977,7 +1981,7 @@ async function findItemByNumber({ type, numberText, label }) {
 
   if (!Number.isInteger(itemNumber) || itemNumber <= 0) {
     return {
-      error: [`這份公文還缺少正確的${displayLabel}編號，本局未更動資料。`, "", "可以這樣輸入：", `完成${label}3`, `完成第三個${label}`].join("\n"),
+      error: [`還缺少正確的${displayLabel}編號，資料沒有變動。`, "", "可以這樣輸入：", `完成${label}3`, `完成第三個${label}`].join("\n"),
     };
   }
 
@@ -1986,7 +1990,7 @@ async function findItemByNumber({ type, numberText, label }) {
 
   if (!targetItem) {
     return {
-      error: [`本局目前查無第 ${itemNumber} 個${displayLabel}。`, "", "可以先輸入「清單」確認編號。"].join("\n"),
+      error: [`目前找不到第 ${itemNumber} 個${displayLabel}。`, "", "可以先輸入「清單」確認編號。"].join("\n"),
     };
   }
 
@@ -1999,7 +2003,7 @@ async function handleDoneCommand({ numberText, type, label, done }) {
 
   const updatedItem = await updateItemToGoogleSheets(result.item.id, { done });
   const checkbox = done ? "☑" : "☐";
-  const actionText = done ? "已辦理" : "已撤回辦理";
+  const actionText = done ? "已完成" : "已恢復未完成";
   const displayLabel = getDisplayLabel(label);
 
   return [`${actionText}第 ${result.itemNumber} 個${displayLabel}：`, `${checkbox} ${updatedItem.title || result.item.title}`, "", "小小前進，也算數。"].join("\n");
@@ -2012,7 +2016,7 @@ async function handleDeleteCommand({ numberText, type, label }) {
   const deletedItem = await deleteItemFromGoogleSheets(result.item.id);
   const displayLabel = getDisplayLabel(label);
 
-  return [`已撤案第 ${result.itemNumber} 個${displayLabel}：`, deletedItem.title || result.item.title, "", "本局已更新案件板。"].join("\n");
+  return [`已取消第 ${result.itemNumber} 個${displayLabel}：`, deletedItem.title || result.item.title, "", "已更新任務。"].join("\n");
 }
 
 async function handleEditCommand({ sourceKey, numberText, newTitle, type, label }) {
@@ -2023,7 +2027,7 @@ async function handleEditCommand({ sourceKey, numberText, newTitle, type, label 
 
   if (newTitle && newTitle.trim()) {
     const updatedItem = await updateItemToGoogleSheets(result.item.id, { title: newTitle.trim() });
-    return [`已修訂第 ${result.itemNumber} 個${displayLabel}：`, updatedItem.title || newTitle.trim(), "", "本局已更新公文內容。"].join("\n");
+    return [`已修改第 ${result.itemNumber} 個${displayLabel}：`, updatedItem.title || newTitle.trim(), "", "已更新內容。"].join("\n");
   }
 
   pendingActions.set(sourceKey, {
@@ -2036,7 +2040,7 @@ async function handleEditCommand({ sourceKey, numberText, newTitle, type, label 
     createdAt: Date.now(),
   });
 
-  return [`請輸入第 ${result.itemNumber} 個${displayLabel}的新文字：`, "", `目前內容：${result.item.title}`, "", "若不想修訂，請輸入：取消修改"].join("\n");
+  return [`請輸入第 ${result.itemNumber} 個${displayLabel}的新文字：`, "", `目前內容：${result.item.title}`, "", "若不想修改，請輸入：取消修改"].join("\n");
 }
 
 function parseFlexibleNumber(numberText) {
@@ -2062,7 +2066,7 @@ function buildLineOperationCommand(actionText, targetText, numberText, newTitle)
   const number = parseFlexibleNumber(numberText);
 
   if (!Number.isInteger(number) || number <= 0) {
-    return { error: "這份公文還缺少正確編號，本局未更動資料。可以這樣輸入：完成第 3 個任務" };
+    return { error: "還缺少正確編號，資料沒有變動。可以這樣輸入：完成第 3 個任務" };
   }
 
   const isTask = targetText.includes("任務");
@@ -2089,7 +2093,7 @@ function parseLineOperationCommand(userText) {
 
 function getFormatReminderText() {
   return [
-    "這份公文格式需補正，本局未更動資料。",
+    "格式需要再確認，資料沒有變動。",
     "",
     "常用格式：",
     "新增任務 練習 CSS｜程式學習｜練習｜適中",
@@ -2105,7 +2109,7 @@ function getFormatReminderText() {
 
 function getUnknownCommandText() {
   return [
-    "Tiny Progress 目前看不懂這份公文，所以未更動資料。",
+    "Tiny Progress 目前看不懂這個指令，所以資料沒有變動。",
     "",
     "可以輸入：",
     "清單",
@@ -2170,7 +2174,7 @@ async function handleLineTextCommand({ sourceKey, userText }) {
 // ==================== HTTP API ====================
 
 app.get("/", (req, res) => {
-  res.send("Tiny Progress V2 API 開張中。本局小櫃台今日值班。");
+  res.send("Tiny Progress API is ready ⭐");
 });
 
 app.post("/gas-queue", async (req, res) => {
@@ -2200,7 +2204,7 @@ app.post("/line/webhook", async (req, res) => {
       await replyToLine(event.replyToken, replyResult);
     } catch (error) {
       console.error("處理 LINE Webhook 發生錯誤：", error);
-      if (event.replyToken) await replyToLine(event.replyToken, "管理局小櫃台剛剛卡住了，本局未更動資料。請稍後再試一次。");
+      if (event.replyToken) await replyToLine(event.replyToken, "Tiny Progress 剛剛卡住了，資料沒有變動。請稍後再試一次。");
     }
   }
   res.status(200).send("OK");
@@ -2226,6 +2230,18 @@ app.patch("/weeks/current-plan", async (req, res) => {
   catch (error) { res.status(getApiErrorStatus(error)).json({ message: "更新本週主題失敗", error: error.message }); }
 });
 
+app.patch("/weeks/:cycleNumber/:weekNumber/plan", async (req, res) => {
+  try {
+    res.json(await gasPost("update-week-plan", {
+      cycleNumber: Number(req.params.cycleNumber),
+      weekNumber: Number(req.params.weekNumber),
+      ...(req.body || {}),
+    }));
+  } catch (error) {
+    res.status(getApiErrorStatus(error)).json({ message: "儲存安排失敗", error: error.message });
+  }
+});
+
 app.post("/weeks/postpone-current", async (req, res) => {
   try { res.json(await gasPost("postpone-current-week", req.body || {})); }
   catch (error) { res.status(getApiErrorStatus(error)).json({ message: "本週順延失敗", error: error.message }); }
@@ -2233,12 +2249,23 @@ app.post("/weeks/postpone-current", async (req, res) => {
 
 // 舊前端相容入口：V2 不再手動結案。
 app.post("/weeks/complete-current", (req, res) => {
-  res.status(409).json({ message: "V2 已改為日期到時自動切換 Week，不需要手動結案。" });
+  res.status(409).json({ message: "Week 會依日期自動前進，不需要手動完成整週。" });
 });
 
 app.post("/cycles", async (req, res) => {
   try { res.status(201).json(await gasPost("create-cycle", req.body || {})); }
   catch (error) { res.status(getApiErrorStatus(error)).json({ message: "建立 Cycle 失敗", error: error.message }); }
+});
+
+app.patch("/cycles/:cycleNumber/theme", async (req, res) => {
+  try {
+    res.json(await gasPost("update-cycle-theme", {
+      cycleNumber: Number(req.params.cycleNumber),
+      theme: String(req.body?.theme || "").trim(),
+    }));
+  } catch (error) {
+    res.status(getApiErrorStatus(error)).json({ message: "更新本輪主題失敗", error: error.message });
+  }
 });
 
 app.patch("/cycles/:cycleNumber/start-date", async (req, res) => {
@@ -2282,25 +2309,25 @@ app.post("/items/:id/correct-completion", async (req, res) => {
 
 app.post("/items/:id/cancel", async (req, res) => {
   try { res.json(normalizeItem(await gasPost("cancel-task", { id: req.params.id, ...(req.body || {}) }))); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "撤案失敗", error: error.message }); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "取消任務失敗", error: error.message }); }
 });
 
 app.post("/items/:id/reschedule", async (req, res) => {
   try { res.json(normalizeItem(await gasPost("reschedule-task", { id: req.params.id, ...(req.body || {}) }))); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "重新排程失敗", error: error.message }); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "調整時間失敗", error: error.message }); }
 });
 
 app.post("/items/:id/replan", async (req, res) => {
   try { res.json(await gasPost("replan-task", { id: req.params.id, ...(req.body || {}) })); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "重新規劃失敗", error: error.message }); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "重新整理失敗", error: error.message }); }
 });
 
 app.delete("/items/:id", async (req, res) => {
   try {
     const item = await deleteItemFromGoogleSheets(req.params.id);
-    res.json({ message: "已轉為 V2 撤案（Soft Delete）", id: item.id, item });
+    res.json({ message: "任務已取消並保留紀錄", id: item.id, item });
   } catch (error) {
-    res.status(getApiErrorStatus(error)).json({ message: "撤案失敗", error: error.message });
+    res.status(getApiErrorStatus(error)).json({ message: "取消任務失敗", error: error.message });
   }
 });
 
@@ -2326,17 +2353,17 @@ app.get("/history", async (req, res) => {
 
 app.get("/reviews/:cycleNumber", async (req, res) => {
   try { res.json((await gasGet("review", { cycleNumber: Number(req.params.cycleNumber) })).review); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "讀取 12 Week Review 失敗", error: error.message }); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "讀取 Cycle 總結失敗", error: error.message }); }
 });
 
 app.get("/retrospectives", async (req, res) => {
   try { res.json((await gasGet("retrospectives")).retrospectives || []); }
-  catch (error) { res.status(500).json({ message: "讀取復盤失敗", error: error.message }); }
+  catch (error) { res.status(500).json({ message: "讀取 Weekly Review 失敗", error: error.message }); }
 });
 
 app.post("/retrospectives", async (req, res) => {
-  try { res.json(await gasPost("save-retrospective", { retro: req.body || {} })); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "儲存復盤失敗", error: error.message }); }
+  try { res.json(await gasPost("submit-retrospective", { retro: req.body || {} })); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "送出 Weekly Review 失敗", error: error.message }); }
 });
 
 app.listen(PORT, () => {

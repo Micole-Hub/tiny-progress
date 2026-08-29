@@ -4,117 +4,109 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light" />
-  <title>Tiny Progress V2</title>
-  <link rel="stylesheet" href="style.css?v=20260829-v2" />
+  <meta name="theme-color" content="#f7f2ff" />
+  <title>Tiny Progress</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=20260829-star-1" />
 </head>
 <body>
   <main class="app v2-app">
     <nav class="v2-nav" aria-label="Tiny Progress 主導覽">
-      <button class="v2-nav-btn is-active" type="button" data-page="home">首頁</button>
-      <button class="v2-nav-btn" type="button" data-page="history">History</button>
-      <button class="v2-nav-btn" type="button" data-page="settings">設定</button>
+      <button class="v2-nav-btn is-active" type="button" data-page="home"><span class="nav-icon">⌂</span><span>Home</span></button>
+      <button class="v2-nav-btn" type="button" data-page="history"><span class="nav-icon">☆</span><span>History</span></button>
+      <button class="v2-nav-btn" type="button" data-page="settings"><span class="nav-icon">⚙</span><span>Settings</span></button>
     </nav>
 
     <section class="v2-page" id="homePage" data-page-panel="home">
-      <header class="hero" id="tourCycle">
-        <p class="eyebrow">TINY PROGRESS · 本週立案</p>
-        <h1 id="heroTitle">Tiny Progress</h1>
-        <p class="quote" id="dailyQuote">本局提醒：時間會往前，未完成的事情不會偷偷消失。</p>
-        <div class="v2-cycle-line">
-          <span class="v2-cycle-badge" id="cycleWeekBadge">讀取中…</span>
-          <span class="v2-status-badge" id="weekStatusBadge">同步中</span>
-        </div>
-        <div class="week-range" id="weekRangeWrap">
-          <span>本週期間</span>
-          <time id="weekStartText">—</time>
-          <span>～</span>
-          <time id="weekEndText">—</time>
+      <header class="star-hero" id="tourCycle">
+        <div class="star-dust star-dust-a">✦</div>
+        <div class="star-dust star-dust-b">☆</div>
+        <div class="star-dust star-dust-c">✧</div>
+        <div class="hero-copy">
+          <h1 id="heroTitle">Tiny Progress</h1>
+          <div class="cycle-theme-line">
+            <div>
+              <span class="soft-label">本輪主題</span>
+              <strong id="cycleThemeText">讀取中…</strong>
+            </div>
+            <button class="quiet-edit" id="editCycleThemeBtn" type="button">編輯</button>
+          </div>
+          <div class="v2-cycle-line">
+            <span class="v2-cycle-badge" id="cycleWeekBadge">讀取中…</span>
+            <span class="v2-status-badge" id="weekStatusBadge">同步中</span>
+          </div>
+          <div class="week-range" id="weekRangeWrap">
+            <time id="weekStartText">—</time>
+            <span>～</span>
+            <time id="weekEndText">—</time>
+          </div>
         </div>
       </header>
 
-      <section class="plan-card" id="activeWeekPanel">
-        <div class="section-header">
-          <div>
-            <p class="plan-label">12W · 本週案件主線</p>
-            <h2>本週方向</h2>
-            <p class="section-note">每天真正需要看的東西，就留在這裡。</p>
+      <section class="weekly-card" id="activeWeekPanel">
+        <button class="quiet-edit weekly-edit" id="editWeekPlanBtn" type="button">編輯</button>
+        <div id="tourPlan">
+          <div class="weekly-field">
+            <p><span class="dot dot-pink"></span>本週主題</p>
+            <h2 id="weekThemeText">尚未設定</h2>
           </div>
-          <button class="text-btn" id="editWeekPlanBtn" type="button">編輯主題／目標</button>
+          <div class="weekly-divider"></div>
+          <div class="weekly-field">
+            <p><span class="spark spark-green">✦</span>本週目標</p>
+            <div class="weekly-goal" id="weekGoalText">尚未設定</div>
+          </div>
         </div>
 
-        <div class="v2-theme-grid" id="tourPlan">
-          <article class="v2-theme-box">
-            <p class="v2-label">🚀 本週主題</p>
-            <h3 class="v2-theme-title" id="weekThemeText">尚未設定</h3>
-          </article>
-          <article class="v2-goal-box">
-            <p class="v2-label">🎯 本週目標</p>
-            <p class="v2-goal-text" id="weekGoalText">尚未設定</p>
-          </article>
-          <article class="v2-load-box">
-            <div class="v2-load-head">
-              <span>📎 待處理負荷</span>
-              <strong id="workloadCount">0 / 5</strong>
-            </div>
-            <div class="progress-track" aria-hidden="true">
-              <div class="progress-fill" id="workloadFill"></div>
-            </div>
-            <p class="v2-load-note" id="workloadNote">本週、逾期與已排未來但未完成的任務都會算進來。</p>
-          </article>
+        <div class="star-progress-wrap" aria-live="polite">
+          <div class="star-progress" id="starProgress"></div>
+          <strong id="workloadCount">已完成 0 件</strong>
+          <div id="workloadFill" hidden></div>
+          <p id="workloadNote" hidden></p>
         </div>
 
-        <div class="v2-week-action-row">
-          <button class="postpone-week-btn" id="postponeWeekBtn" type="button">特殊狀況：本週順延</button>
+        <div class="week-tools">
+          <button class="soft-link" id="nextWeekPlanBtn" type="button" hidden>下週安排 ✦</button>
+          <button class="soft-link" id="postponeWeekBtn" type="button">本週需要順延</button>
         </div>
       </section>
 
-      <section class="v2-state-panel" id="weekSetupPanel" hidden>
-        <p class="eyebrow">本週立案</p>
-        <h2>新的一週到了，先寫下方向。</h2>
-        <p>主題與目標都填完，才開始處理本週案件。</p>
+      <section class="soft-state-card" id="weekSetupPanel" hidden>
+        <span class="state-star">✦</span>
+        <h2>先寫下這週想往哪裡走</h2>
         <form id="weekSetupForm" class="v2-stack-form">
           <label>本週主題<input id="weekSetupTheme" type="text" maxlength="80" required /></label>
           <label>本週目標<textarea id="weekSetupGoal" rows="3" maxlength="240" required></textarea></label>
-          <button class="add-btn" type="submit">開始本週</button>
+          <button class="primary-pill" type="submit">開始</button>
         </form>
       </section>
 
-      <section class="v2-state-panel" id="restPanel" hidden>
-        <p class="eyebrow">CYCLE BREAK</p>
-        <h2>目前為 Cycle 間休息期 🌿</h2>
+      <section class="soft-state-card" id="restPanel" hidden>
+        <span class="state-star">☆</span>
+        <h2>這一輪和下一輪之間，先留一點空白</h2>
         <p id="restMessage">下一個 Cycle 將於指定日期開始。</p>
-        <button class="text-btn" id="changeCycleStartBtn" type="button">修改開始日期</button>
+        <button class="soft-link" id="changeCycleStartBtn" type="button">調整開始日期</button>
       </section>
 
-      <section class="v2-state-panel" id="cycleCompletePanel" hidden>
-        <p class="eyebrow">12W · 已結案</p>
+      <section class="soft-state-card" id="cycleCompletePanel" hidden>
+        <div class="mini-star-row">★★★★★★★★★★★★</div>
         <h2 id="cycleCompleteTitle">Cycle 完成</h2>
-        <p>本輪公文已正式結案。先看 Review，再建立下一個 Cycle。</p>
-        <button class="add-btn" id="openReviewBtn" type="button">查看 12 Week Review</button>
+        <p>這 12 週已經走完，可以看看這一輪留下了什麼。</p>
+        <button class="primary-pill" id="openReviewBtn" type="button">看看這一輪</button>
       </section>
 
-      <div class="v2-home-grid" id="workArea">
-        <div class="v2-main-column">
-          <section class="task-section" id="tourTasks">
-            <div class="section-header">
-              <div>
-                <h2>📋 本週任務</h2>
-                <p class="section-note" id="currentTaskNote">完成就打勾，其他操作藏在「更多」。</p>
-              </div>
-              <span class="v2-mini-badge" id="currentTaskCount">0 件</span>
-            </div>
-            <ul class="item-list" id="currentTaskList"></ul>
-          </section>
+      <div class="home-layout" id="workArea">
+        <div class="main-flow" id="tourTasks">
+          <div class="task-count-row">
+            <span id="currentTaskCount">0 件</span>
+          </div>
+          <ul class="item-list" id="currentTaskList"></ul>
 
-          <section class="task-section">
-            <div class="section-header">
-              <div>
-                <h2>＋ 新增任務</h2>
-                <p class="section-note">每週建議待處理負荷 5 件，超過只提醒、不封鎖。</p>
-              </div>
-            </div>
-            <form class="add-form task-add-form" id="addTaskForm">
-              <input id="taskInput" type="text" maxlength="120" placeholder="輸入任務名稱…" required />
+          <section class="join-card">
+            <button class="join-toggle" id="toggleAddTaskBtn" type="button">＋ 加入</button>
+            <form class="add-form task-add-form" id="addTaskForm" hidden>
+              <input id="taskInput" type="text" maxlength="120" placeholder="想加入什麼？" required />
               <select id="taskCategory" aria-label="分類"></select>
               <select id="taskSubCategory" aria-label="子分類"></select>
               <select id="taskDifficulty" aria-label="難度">
@@ -122,86 +114,72 @@
                 <option value="適中" selected>適中</option>
                 <option value="困難">困難</option>
               </select>
-              <button class="add-btn" id="addTaskBtn" type="submit">新增任務</button>
+              <button class="primary-pill" id="addTaskBtn" type="submit">加入</button>
             </form>
           </section>
         </div>
 
-        <aside class="v2-side-column">
-          <section class="v2-alert-section" id="tourOverdue">
-            <div class="v2-alert-head">
-              <div>
-                <h2 class="v2-alert-title">🕒 尚未結案 <span id="overdueCount">0</span> 件</h2>
-                <p class="v2-alert-note">未完成會留下，但不使用「失敗」這種字眼。</p>
-              </div>
-            </div>
+        <aside class="side-flow">
+          <section class="quiet-stack">
             <div class="v2-task-stack" id="overdueList"></div>
-            <button class="v2-link-btn" id="showAllOverdueBtn" type="button" hidden>查看全部</button>
+            <span id="overdueCount" hidden>0</span>
+            <button class="soft-link" id="showAllOverdueBtn" type="button" hidden>查看全部</button>
           </section>
 
-          <section class="v2-task-section v2-side-card">
-            <div class="v2-subsection-head">
-              <div>
-                <h2>♻️ 已重新排程</h2>
-                <p>排到未來，仍然看得到。</p>
-              </div>
-            </div>
+          <section class="quiet-stack">
             <div class="v2-task-stack" id="rescheduledList"></div>
-            <button class="v2-link-btn" id="showAllRescheduledBtn" type="button" hidden>查看全部</button>
+            <button class="soft-link" id="showAllRescheduledBtn" type="button" hidden>查看全部</button>
           </section>
         </aside>
       </div>
-    </section>
 
-    <section class="v2-page" id="historyPage" data-page-panel="history" hidden>
-      <header class="hero" id="tourHistory">
-        <p class="eyebrow">HISTORY · 檔案櫃</p>
-        <h1>過去發生什麼，慢慢翻就好。</h1>
-        <p class="quote">History 記重要決策，不記每一次改字。</p>
-      </header>
-      <section class="v2-task-section">
-        <div class="v2-subsection-head">
-          <div>
-            <h2>📚 Cycle 歷史</h2>
-            <p>Cycle → Week → Task，逐層展開。</p>
-          </div>
-          <button class="text-btn" id="refreshHistoryBtn" type="button">重新整理</button>
+      <section class="cycle-path-card" id="cyclePathCard" hidden>
+        <div class="cycle-path" id="cyclePath"></div>
+        <p id="cyclePathCaption"></p>
+      </section>
+
+      <section class="weekly-review-card" id="weeklyReviewPanel" hidden>
+        <div>
+          <span class="review-spark" id="weeklyReviewSpark">✦</span>
+          <strong>Weekly Review</strong>
+          <p id="weeklyReviewStatus">寫下這週真正留下的感覺。</p>
         </div>
-        <div class="v2-history-list" id="historyList"></div>
+        <button class="primary-pill small" id="weeklyReviewBtn" type="button">開始回顧</button>
       </section>
     </section>
 
+    <section class="v2-page" id="historyPage" data-page-panel="history" hidden>
+      <header class="simple-page-head" id="tourHistory">
+        <h1>Tiny Progress</h1>
+        <p>History</p>
+        <button class="quiet-edit" id="refreshHistoryBtn" type="button">重新整理</button>
+      </header>
+      <div class="v2-history-list" id="historyList"></div>
+    </section>
+
     <section class="v2-page" id="settingsPage" data-page-panel="settings" hidden>
-      <header class="hero" id="tourSettings">
-        <p class="eyebrow">SETTINGS · 小櫃台</p>
-        <h1>只放真的需要管理的東西。</h1>
-        <p class="quote">分類管理＋重新觀看新手導覽，其他不塞進來。</p>
+      <header class="simple-page-head" id="tourSettings">
+        <h1>Tiny Progress</h1>
+        <p>Settings</p>
       </header>
 
-      <div class="v2-settings">
-        <section class="v2-setting-card">
-          <div class="v2-setting-head">
-            <div>
-              <h2>🗂️ 分類管理</h2>
-              <p>分類與子分類都可以新增、改名、停用、重新啟用。</p>
-            </div>
-            <button class="add-btn" id="addCategoryBtn" type="button">＋ 新增分類</button>
+      <div class="settings-flow">
+        <section class="settings-card">
+          <div class="settings-card-head">
+            <h2>分類</h2>
+            <button class="primary-pill small" id="addCategoryBtn" type="button">＋ 加入分類</button>
           </div>
           <div class="v2-setting-list" id="categorySettingsList"></div>
-          <button class="v2-soft-btn" id="toggleInactiveBtn" type="button">顯示已停用</button>
+          <button class="soft-link" id="toggleInactiveBtn" type="button">顯示已停用</button>
         </section>
 
-        <section class="v2-setting-card">
-          <div class="v2-setting-head">
-            <div>
-              <h2>📖 使用說明</h2>
-              <p>第一次自動播放一次，需要時再回來看。</p>
-            </div>
+        <section class="settings-card intro-card">
+          <span>✦</span>
+          <div>
+            <h2>重新看看</h2>
+            <p>想再看一次 3 步介紹時，可以從這裡開始。</p>
           </div>
-          <div class="v2-replay-box">
-            <p>5 步導覽：Cycle / Week → 主題與目標 → 任務與逾期 → History → 設定。</p>
-            <button class="add-btn" id="replayTourBtn" type="button">重新觀看新手導覽</button>
-          </div>
+          <button class="primary-pill small" id="replayTourBtn" type="button">重新看看</button>
         </section>
       </div>
     </section>
@@ -216,29 +194,29 @@
       <div class="v2-sheet-handle"></div>
       <div class="v2-sheet-title" id="sheetTitle">任務操作</div>
       <div id="sheetActions"></div>
-      <button class="v2-sheet-action" id="closeSheetBtn" type="button">取消</button>
+      <button class="v2-sheet-action cancel-sheet" id="closeSheetBtn" type="button">先等等</button>
     </div>
   </div>
 
   <div class="v2-cycle-celebration" id="cycleCelebration" hidden>
-    <div class="v2-celebration-paper">
-      <div class="v2-celebration-stamp">已結案</div>
-      <h2 id="celebrationTitle">Cycle 完成！</h2>
-      <p>12 / 12 Weeks</p>
-      <button class="tp-btn tp-btn-primary" id="skipCelebrationBtn" type="button">查看 Review</button>
+    <div class="star-celebration-card">
+      <div class="celebration-stars">★ ★ ★ ★ ★ ★<br />★ ★ ★ ★ ★ ★</div>
+      <h2 id="celebrationTitle">Cycle 完成</h2>
+      <p>12 週都走過了。</p>
+      <button class="primary-pill" id="skipCelebrationBtn" type="button">看看這一輪</button>
     </div>
   </div>
 
   <div class="v2-tour-popover" id="tourPopover" hidden>
-    <div class="v2-tour-step" id="tourStepLabel">1 / 5</div>
-    <h3 id="tourTitle">導覽</h3>
+    <div class="v2-tour-step" id="tourStepLabel">1 / 3</div>
+    <h3 id="tourTitle">Tiny Progress</h3>
     <p id="tourText"></p>
     <div class="v2-tour-actions">
-      <button class="text-btn" id="tourSkipBtn" type="button">略過</button>
-      <button class="add-btn" id="tourNextBtn" type="button">下一步</button>
+      <button class="text-only-btn" id="tourSkipBtn" type="button">略過</button>
+      <button class="primary-pill small" id="tourNextBtn" type="button">下一步</button>
     </div>
   </div>
 
-  <script src="script.js?v=20260829-v2"></script>
+  <script src="script.js?v=20260829-star-1"></script>
 </body>
 </html>
