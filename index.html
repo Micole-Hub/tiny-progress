@@ -1,137 +1,223 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tiny Progress Preview</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f8f4ea" />
+  <title>Tiny Progress</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=20260829-sage-live-1" />
 </head>
 <body>
-<div class="app">
-  <nav class="topnav">
-    <button class="navbtn active">Home</button>
-    <button class="navbtn">History</button>
-    <button class="navbtn">Settings</button>
-  </nav>
+  <main class="app v2-app">
+    <nav class="v2-nav" aria-label="Tiny Progress 主導覽">
+      <button class="v2-nav-btn is-active" type="button" data-page="home"><span class="nav-icon">⌂</span><span>Home</span></button>
+      <button class="v2-nav-btn" type="button" data-page="history"><span class="nav-icon">☆</span><span>History</span></button>
+      <button class="v2-nav-btn" type="button" data-page="settings"><span class="nav-icon">⚙</span><span>Settings</span></button>
+    </nav>
 
-  <section class="hero">
-    <h1 class="brand">Tiny Progress</h1>
-    <div class="pills">
-      <span class="pill">Cycle 1</span>
-      <span class="pill week">Week 12</span>
+    <section class="v2-page" id="homePage" data-page-panel="home">
+      <header class="star-hero" id="tourCycle">
+        <div class="star-dust star-dust-a">✦</div>
+        <div class="star-dust star-dust-b">☆</div>
+        <div class="star-dust star-dust-c">✧</div>
+        <div class="hero-copy">
+          <h1 id="heroTitle">Tiny Progress</h1>
+          <div class="v2-cycle-line">
+            <span class="v2-cycle-badge" id="cycleWeekBadge">讀取中…</span>
+            <span class="v2-status-badge" id="weekStatusBadge">同步中</span>
+          </div>
+          <div class="week-range" id="weekRangeWrap">
+            <time id="weekStartText">—</time>
+            <span>～</span>
+            <time id="weekEndText">—</time>
+          </div>
+          <div class="cycle-theme-line compact-cycle-theme">
+            <div class="cycle-theme-value-row">
+              <span class="soft-label">本輪：</span>
+              <strong id="cycleThemeText">讀取中…</strong>
+              <span class="cycle-theme-spark" aria-hidden="true">✦</span>
+            </div>
+            <button class="quiet-edit" id="editCycleThemeBtn" type="button">編輯</button>
+          </div>
+        </div>
+      </header>
+
+      <section class="weekly-card" id="activeWeekPanel">
+        <button class="quiet-edit weekly-edit" id="editWeekPlanBtn" type="button">編輯</button>
+        <div id="tourPlan">
+          <div class="weekly-field">
+            <p><span class="dot dot-pink"></span>本週主題</p>
+            <h2 id="weekThemeText">尚未設定</h2>
+          </div>
+          <div class="weekly-divider"></div>
+          <div class="weekly-field">
+            <p><span class="spark spark-green">✦</span>本週目標</p>
+            <div class="weekly-goal" id="weekGoalText">尚未設定</div>
+          </div>
+        </div>
+
+        <div class="star-progress-wrap" aria-live="polite">
+          <div class="star-progress" id="starProgress"></div>
+          <strong id="workloadCount">已完成 0 件</strong>
+          <div id="workloadFill" hidden></div>
+          <p id="workloadNote" hidden></p>
+        </div>
+
+        <div class="week-tools">
+          <button class="soft-link" id="nextWeekPlanBtn" type="button" hidden>下週安排 ✦</button>
+          <button class="soft-link" id="postponeWeekBtn" type="button">本週需要順延</button>
+        </div>
+      </section>
+
+      <section class="soft-state-card" id="weekSetupPanel" hidden>
+        <span class="state-star">✦</span>
+        <h2>先寫下這週想往哪裡走</h2>
+        <form id="weekSetupForm" class="v2-stack-form">
+          <label>本週主題<input id="weekSetupTheme" type="text" maxlength="80" required /></label>
+          <label>本週目標<textarea id="weekSetupGoal" rows="3" maxlength="240" required></textarea></label>
+          <button class="primary-pill" type="submit">開始</button>
+        </form>
+      </section>
+
+      <section class="soft-state-card" id="restPanel" hidden>
+        <span class="state-star">☆</span>
+        <h2>這一輪和下一輪之間，先留一點空白</h2>
+        <p id="restMessage">下一個 Cycle 將於指定日期開始。</p>
+        <button class="soft-link" id="changeCycleStartBtn" type="button">調整開始日期</button>
+      </section>
+
+      <section class="soft-state-card" id="cycleCompletePanel" hidden>
+        <div class="mini-star-row">★★★★★★★★★★★★</div>
+        <h2 id="cycleCompleteTitle">Cycle 完成</h2>
+        <p>這 12 週已經走完，可以看看這一輪留下了什麼。</p>
+        <button class="primary-pill" id="openReviewBtn" type="button">看看這一輪</button>
+      </section>
+
+      <div class="home-layout" id="workArea">
+        <div class="main-flow" id="tourTasks">
+          <div class="task-count-row">
+            <span id="currentTaskCount">0 件</span>
+          </div>
+          <ul class="item-list" id="currentTaskList"></ul>
+
+          <section class="join-card">
+            <button class="join-toggle" id="toggleAddTaskBtn" type="button">＋ 加入</button>
+            <form class="add-form task-add-form" id="addTaskForm" hidden>
+              <input id="taskInput" type="text" maxlength="120" placeholder="想加入什麼？" required />
+              <select id="taskCategory" aria-label="分類"></select>
+              <select id="taskSubCategory" aria-label="子分類"></select>
+              <select id="taskDifficulty" aria-label="難度">
+                <option value="簡單">簡單</option>
+                <option value="適中" selected>適中</option>
+                <option value="困難">困難</option>
+              </select>
+              <button class="primary-pill" id="addTaskBtn" type="submit">加入</button>
+            </form>
+          </section>
+        </div>
+
+        <aside class="side-flow">
+          <section class="quiet-stack">
+            <div class="v2-task-stack" id="overdueList"></div>
+            <span id="overdueCount" hidden>0</span>
+            <button class="soft-link" id="showAllOverdueBtn" type="button" hidden>查看全部</button>
+          </section>
+
+          <section class="quiet-stack">
+            <div class="v2-task-stack" id="rescheduledList"></div>
+            <button class="soft-link" id="showAllRescheduledBtn" type="button" hidden>查看全部</button>
+          </section>
+        </aside>
+      </div>
+
+      <section class="cycle-path-card" id="cyclePathCard" hidden>
+        <div class="cycle-path" id="cyclePath"></div>
+        <p id="cyclePathCaption"></p>
+      </section>
+
+      <section class="weekly-review-card" id="weeklyReviewPanel" hidden>
+        <div>
+          <span class="review-spark" id="weeklyReviewSpark">✦</span>
+          <strong>Weekly Review</strong>
+          <p id="weeklyReviewStatus">寫下這週真正留下的感覺。</p>
+        </div>
+        <button class="primary-pill small" id="weeklyReviewBtn" type="button">開始回顧</button>
+      </section>
+    </section>
+
+    <section class="v2-page" id="historyPage" data-page-panel="history" hidden>
+      <header class="simple-page-head" id="tourHistory">
+        <h1>Tiny Progress</h1>
+        <p>History</p>
+        <button class="quiet-edit" id="refreshHistoryBtn" type="button">重新整理</button>
+      </header>
+      <div class="v2-history-list" id="historyList"></div>
+    </section>
+
+    <section class="v2-page" id="settingsPage" data-page-panel="settings" hidden>
+      <header class="simple-page-head" id="tourSettings">
+        <h1>Tiny Progress</h1>
+        <p>Settings</p>
+      </header>
+
+      <div class="settings-flow">
+        <section class="settings-card">
+          <div class="settings-card-head">
+            <h2>分類</h2>
+            <button class="primary-pill small" id="addCategoryBtn" type="button">＋ 加入分類</button>
+          </div>
+          <div class="v2-setting-list" id="categorySettingsList"></div>
+          <button class="soft-link" id="toggleInactiveBtn" type="button">顯示已停用</button>
+        </section>
+
+        <section class="settings-card intro-card">
+          <span>✦</span>
+          <div>
+            <h2>重新看看</h2>
+            <p>想再看一次 3 步介紹時，可以從這裡開始。</p>
+          </div>
+          <button class="primary-pill small" id="replayTourBtn" type="button">重新看看</button>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div class="loading-toast" id="loadingToast" role="status" aria-live="polite">處理中…</div>
+  <div id="tp-modal-root"></div>
+  <div id="taskMenuRoot"></div>
+
+  <div class="v2-bottom-sheet" id="bottomSheet" aria-hidden="true">
+    <div class="v2-sheet-card" role="dialog" aria-modal="true" aria-label="任務操作">
+      <div class="v2-sheet-handle"></div>
+      <div class="v2-sheet-title" id="sheetTitle">任務操作</div>
+      <div id="sheetActions"></div>
+      <button class="v2-sheet-action cancel-sheet" id="closeSheetBtn" type="button">先等等</button>
     </div>
-    <div class="date">2026/08/24 ～ 2026/08/30</div>
-    <div class="cycle-theme">
-      <span class="label">本輪：</span>
-      <span>CSS</span>
-      <span class="star-mini">✦</span>
-    </div>
-  </section>
-
-  <div class="grid">
-    <main class="maincol">
-      <section class="card week-card">
-        <div class="section">
-          <div class="labelrow"><span class="dot"></span>本週主題 <button class="edit">編輯</button></div>
-          <p class="bigvalue">工具升級＋需求盤點</p>
-        </div>
-        <div class="section">
-          <div class="labelrow"><span class="spark">✦</span>本週目標</div>
-          <p class="bigvalue" style="font-size:22px">Tiny Progress 升級＋螢幕小鍵盤需求盤點</p>
-        </div>
-      </section>
-
-      <section class="card stars-card">
-        <div class="stars">
-          <span class="on">★</span><span class="on">★</span><span class="on">★</span><span class="on">★</span><span class="on">★</span>
-          <span class="rowbreak"></span>
-          <span class="on">★</span><span class="on">★</span><span class="on">★</span><span class="off">☆</span><span class="off">☆</span>
-        </div>
-        <div class="count">已完成 8 件</div>
-      </section>
-
-      <section class="card">
-        <div class="task-list">
-          <div class="task pink">
-            <div class="check"></div>
-            <div>
-              <div class="task-title">Tiny Progress 首頁新版設計</div>
-              <div class="meta"><span>程式學習</span><span>Vibe Coding</span><span>適中</span></div>
-            </div>
-            <div class="more">⋯</div>
-          </div>
-          <div class="task green">
-            <div class="check"></div>
-            <div>
-              <div class="task-title">整理 CSS 卡片與 RWD</div>
-              <div class="meta"><span>程式學習</span><span>CSS</span><span>適中</span></div>
-            </div>
-            <div class="more">⋯</div>
-          </div>
-          <div class="task lav">
-            <div class="check"></div>
-            <div>
-              <div class="task-title">螢幕小鍵盤需求盤點</div>
-              <div class="meta"><span>產品想法</span><span>需求整理</span><span>簡單</span></div>
-            </div>
-            <div class="more">⋯</div>
-          </div>
-        </div>
-        <button class="join">＋ 加入</button>
-      </section>
-
-      <section class="card">
-        <div class="story-task">
-          <div class="title">Flexbox 練習整理</div>
-          <div class="sub">原本安排：Week 11</div>
-          <div class="status">未完待續 ✦</div>
-        </div>
-      </section>
-    </main>
-
-    <aside class="sidecol">
-      <section class="card">
-        <div class="story-task future">
-          <div class="title">JavaScript 基礎整理</div>
-          <div class="sub">Week 1 · 下一個 Cycle</div>
-          <div class="status">之後再接著做</div>
-        </div>
-      </section>
-
-      <section class="card week-path">
-        <div class="path-title">Cycle 1 · Week 12 / 12</div>
-        <div class="path-grid">
-          <div class="weeknode done"><div class="star">★</div><small>W1</small></div>
-          <div class="weeknode done"><div class="star">★</div><small>W2</small></div>
-          <div class="weeknode done"><div class="star">★</div><small>W3</small></div>
-          <div class="weeknode done"><div class="star">★</div><small>W4</small></div>
-          <div class="weeknode done"><div class="star">★</div><small>W5</small></div>
-          <div class="weeknode done"><div class="star">★</div><small>W6</small></div>
-          <div class="weeknode done"><div class="star">★</div><small>W7</small></div>
-          <div class="weeknode done"><div class="star">★</div><small>W8</small></div>
-          <div class="weeknode done"><div class="star">★</div><small>W9</small></div>
-          <div class="weeknode done"><div class="star">★</div><small>W10</small></div>
-          <div class="weeknode done"><div class="star">★</div><small>W11</small></div>
-          <div class="weeknode current"><div class="star">✦</div><small>W12</small></div>
-        </div>
-      </section>
-
-      <section class="card review">
-        <div class="review-head">Weekly Review ✦</div>
-        <p>回頭看一下這週發生了什麼。送出前可以修改，確定送出後就留作這週的紀錄。</p>
-        <button class="primary">開始回顧</button>
-        <div class="note">Cycle 1 預覽時可隱藏；Cycle 2 起正式出現。</div>
-      </section>
-    </aside>
   </div>
 
-  <div class="preview-caption">Tiny Progress · Sage & Cream Preview</div>
-</div>
+  <div class="v2-cycle-celebration" id="cycleCelebration" hidden>
+    <div class="star-celebration-card">
+      <div class="celebration-stars">★ ★ ★ ★ ★ ★<br />★ ★ ★ ★ ★ ★</div>
+      <h2 id="celebrationTitle">Cycle 完成</h2>
+      <p>12 週都走過了。</p>
+      <button class="primary-pill" id="skipCelebrationBtn" type="button">看看這一輪</button>
+    </div>
+  </div>
 
-<nav class="mobile-nav">
-  <button class="active">Home</button>
-  <button>History</button>
-  <button>Settings</button>
-</nav>
+  <div class="v2-tour-popover" id="tourPopover" hidden>
+    <div class="v2-tour-step" id="tourStepLabel">1 / 3</div>
+    <h3 id="tourTitle">Tiny Progress</h3>
+    <p id="tourText"></p>
+    <div class="v2-tour-actions">
+      <button class="text-only-btn" id="tourSkipBtn" type="button">略過</button>
+      <button class="primary-pill small" id="tourNextBtn" type="button">下一步</button>
+    </div>
+  </div>
+
+  <script src="script.js?v=20260829-sage-live-1"></script>
 </body>
 </html>
