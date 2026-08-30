@@ -603,7 +603,7 @@ async function addTask(event) {
     title: "要加入這件事嗎？",
     text: `「${payload.title}」\n\n${detailBits.join(" · ")}${workloadLine}`,
     confirmText: "加入",
-    cancelText: "返回修改",
+    cancelText: "取消",
   });
   if (!ok) return;
 
@@ -628,7 +628,7 @@ async function confirmComplete(item) {
     title: "要完成這件事嗎？",
     text: `「${item.title}」\n\n完成後會收下一顆星；如果是不小心按到，之後仍可更正。`,
     confirmText: "完成",
-    cancelText: "再等等",
+    cancelText: "取消",
   });
   if (!ok) return;
 
@@ -796,7 +796,7 @@ function openDirectReschedule(item) {
     icon: "✦",
     title: "調整時間",
     confirmText: "確定",
-    cancelText: "先等等",
+    cancelText: "取消",
     body: `
       <label class="v2-form-field">放到哪一週<select id="rescheduleTarget">${weekOptions}</select></label>
       <label class="v2-form-field">原因<select id="rescheduleReason">${RESCHEDULE_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
@@ -822,7 +822,7 @@ function openReplanTask(item) {
   let rowCount = 0;
 
   openFormModal({
-    icon: "✦", title: "重新整理", confirmText: "確定", cancelText: "先等等", wide: true,
+    icon: "✦", title: "重新整理", confirmText: "確定", cancelText: "取消", wide: true,
     body: `
       <div class="tp-modal-preformatted">原本：${escapeHtml(item.title)}\n整理後的新任務會放在目前 Week。</div>
       <div id="replanRows" class="v2-replan-rows"></div>
@@ -888,7 +888,7 @@ async function openDeleteTask(item) {
       title: "確定刪除這件草稿任務嗎？",
       text: `「${item.title}」\n\n下一輪還沒開始，刪除後不會留下 History 紀錄。`,
       confirmText: "刪除",
-      cancelText: "先留著",
+      cancelText: "取消",
       danger: true,
     });
     if (!ok) return;
@@ -907,7 +907,7 @@ async function openDeleteTask(item) {
     icon: "✦",
     title: "確定刪除這件事嗎？",
     confirmText: "刪除",
-    cancelText: "先留著",
+    cancelText: "取消",
     danger: true,
     body: `
       <div class="tp-modal-preformatted">${escapeHtml(item.title)}</div>
@@ -933,7 +933,7 @@ async function correctCompletion(item) {
     title: "這顆星是不是按早了？",
     text: "會恢復成進行中的狀態，History 只留一筆「誤操作更正」。",
     confirmText: "恢復",
-    cancelText: "先等等",
+    cancelText: "取消",
   });
   if (!ok) return;
   showLoading("更正中…");
@@ -949,7 +949,7 @@ function openWeekPlanEditor() {
   const week = currentWeek();
   if (!week) return;
   openFormModal({
-    icon: "✦", title: `Week ${week.weekNumber}`, confirmText: "儲存", cancelText: "先等等",
+    icon: "✦", title: `Week ${week.weekNumber}`, confirmText: "儲存", cancelText: "取消",
     body: `
       <label class="v2-form-field">本週主題<input id="weekPlanTheme" maxlength="80" value="${escapeHtml(week.title || "")}" /></label>
       <label class="v2-form-field">本週目標<textarea id="weekPlanGoal" rows="3" maxlength="240">${escapeHtml(week.achievement || "")}</textarea></label>`,
@@ -981,7 +981,7 @@ function openPostponeWeek() {
   const week = currentWeek();
   if (!week || week.postponed) return;
   openFormModal({
-    icon: "✦", title: "本週需要多一點時間？", confirmText: "確定順延", cancelText: "先等等",
+    icon: "✦", title: "本週需要多一點時間？", confirmText: "確定順延", cancelText: "取消",
     body: `
       <label class="v2-form-field">順延天數<select id="postponeDays">${[1,2,3,4,5,6,7].map((d) => `<option value="${d}" ${d === 7 ? "selected" : ""}>${d} 天</option>`).join("")}</select></label>
       <label class="v2-form-field">原因<select id="postponeReason">${POSTPONE_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
@@ -1340,7 +1340,7 @@ function closeCelebrationAndReview() {
 function openCreateCycle() {
   const latest = state.cycles.length ? Math.max(...state.cycles.map((c) => Number(c.cycleNumber))) : 0;
   openFormModal({
-    icon: "★", title: `Cycle ${latest + 1}`, confirmText: "開始下一輪", cancelText: "先等等", wide: true,
+    icon: "★", title: `Cycle ${latest + 1}`, confirmText: "開始下一輪", cancelText: "取消", wide: true,
     body: `
       <label class="v2-form-field">開始日期<input id="newCycleStart" type="date" min="${todayYmd()}" /></label>
       <label class="v2-form-field">本輪主題<input id="newCycleMainTheme" maxlength="80" placeholder="例如：CSS" /></label>
@@ -1365,7 +1365,7 @@ function openChangeCycleStart() {
     icon: "✦",
     title: `Cycle ${cycle.cycleNumber} 開始日期`,
     confirmText: "儲存",
-    cancelText: "先等等",
+    cancelText: "取消",
     body: `
       <p class="tp-modal-preformatted">下一輪正式開始前都可以修改；開始日期有變動時，會留一筆時間紀錄。</p>
       <label class="v2-form-field">開始日期<input id="cycleStartDate" type="date" value="${escapeHtml(cycle.startDate || "")}" min="${todayYmd()}" /></label>`,
@@ -1424,7 +1424,7 @@ function renderSettings() {
           <div class="tp-modal-icon">✦</div>
           <p class="tp-modal-body"><strong>${escapeHtml(cat.name)}</strong></p>
           <div class="tp-modal-actions">
-            <button class="tp-btn tp-btn-ghost" id="catClose" type="button">先等等</button>
+            <button class="tp-btn tp-btn-ghost" id="catClose" type="button">取消</button>
             <button class="tp-btn tp-btn-primary" id="catRename" type="button">改名</button>
             <button class="tp-btn ${cat.active ? "tp-btn-danger" : "tp-btn-primary"}" id="catToggle" type="button">${cat.active ? "停用" : "重新啟用"}</button>
           </div>
@@ -1439,7 +1439,7 @@ function renderSettings() {
 function openAddCategory(type = "category", parentId = "") {
   const label = type === "subcategory" ? "子分類" : "分類";
   openFormModal({
-    icon: "✦", title: `加入${label}`, confirmText: "加入", cancelText: "先等等",
+    icon: "✦", title: `加入${label}`, confirmText: "加入", cancelText: "取消",
     body: `<label class="v2-form-field">名稱<input id="newCategoryName" maxlength="50" /></label>`,
     onConfirm: async () => {
       const name = document.getElementById("newCategoryName").value.trim();
@@ -1474,7 +1474,7 @@ async function toggleCategory(id) {
     title: `${action}「${cat.name}」？`,
     text: cat.active ? "停用後不會出現在新的任務裡，但舊紀錄會保留。" : "重新啟用後會再次出現在加入表單。",
     confirmText: action,
-    cancelText: "先等等",
+    cancelText: "取消",
     danger: cat.active,
   });
   if (!ok) return;
@@ -1497,7 +1497,7 @@ function openSubcategoryActions(id) {
     <div class="tp-modal-overlay tp-modal-open"><div class="tp-modal" role="dialog" aria-modal="true">
       <div class="tp-modal-icon">✦</div><p class="tp-modal-body"><strong>${escapeHtml(sub.name)}</strong></p>
       <div class="tp-modal-actions">
-        <button class="tp-btn tp-btn-ghost" id="subCancel" type="button">先等等</button>
+        <button class="tp-btn tp-btn-ghost" id="subCancel" type="button">取消</button>
         <button class="tp-btn tp-btn-primary" id="subRename" type="button">改名</button>
         <button class="tp-btn ${sub.active ? "tp-btn-danger" : "tp-btn-primary"}" id="subToggle" type="button">${sub.active ? "停用" : "重新啟用"}</button>
       </div></div></div>`;
@@ -1523,7 +1523,7 @@ function showAlert(title, text, icon = "✦") {
   document.getElementById("alertOk").onclick = closeModal;
 }
 
-function showConfirm({ icon = "✦", title, text, confirmText = "確認", cancelText = "先等等", danger = false }) {
+function showConfirm({ icon = "✦", title, text, confirmText = "確認", cancelText = "取消", danger = false }) {
   return new Promise((resolve) => {
     els.modalRoot.innerHTML = `
       <div class="tp-modal-overlay tp-modal-open"><div class="tp-modal" role="dialog" aria-modal="true">
@@ -1539,7 +1539,7 @@ function showConfirm({ icon = "✦", title, text, confirmText = "確認", cancel
   });
 }
 
-function openFormModal({ icon = "✦", title, body, confirmText = "確認", cancelText = "先等等", danger = false, wide = false, onReady, onConfirm }) {
+function openFormModal({ icon = "✦", title, body, confirmText = "確認", cancelText = "取消", danger = false, wide = false, onReady, onConfirm }) {
   els.modalRoot.innerHTML = `
     <div class="tp-modal-overlay tp-modal-open">
       <div class="tp-modal ${wide ? "tp-modal-wide" : ""}" role="dialog" aria-modal="true">
@@ -1661,7 +1661,7 @@ function openCycleThemeEditor() {
     icon: "✦",
     title: "本輪主題",
     confirmText: "儲存",
-    cancelText: "先等等",
+    cancelText: "取消",
     body: `<label class="v2-form-field">本輪主題<input id="cycleThemeInput" maxlength="80" value="${escapeHtml(cycle.theme || "")}" placeholder="例如：CSS" /></label>`,
     onConfirm: async () => {
       const theme = document.getElementById("cycleThemeInput").value.trim();
@@ -1759,7 +1759,7 @@ function openNextCyclePlanner(draft = null) {
         </div>
 
         <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" id="nextCyclePlannerCancel" type="button">先等等</button>
+          <button class="tp-btn tp-btn-ghost" id="nextCyclePlannerCancel" type="button">取消</button>
           <button class="tp-btn tp-btn-primary" id="nextCyclePlannerSave" type="button">儲存下一輪</button>
         </div>
       </div>
@@ -1794,7 +1794,7 @@ function openNextCyclePlanner(draft = null) {
         title: "確定刪除這件草稿任務嗎？",
         text: `「${item?.title || "這件任務"}」\n\n下一輪還沒開始，刪除後不會留下 History 紀錄。`,
         confirmText: "刪除",
-        cancelText: "先留著",
+        cancelText: "取消",
         danger: true,
       });
       if (!ok) return openNextCyclePlanner(draftSnapshot);
@@ -1821,7 +1821,7 @@ function openNextCyclePlanner(draft = null) {
         title: "確定刪除這件草稿任務嗎？",
         text: `「${task?.title || "這件任務"}」\n\n這件事還沒儲存，刪除後不會留下紀錄。`,
         confirmText: "刪除",
-        cancelText: "先留著",
+        cancelText: "取消",
         danger: true,
       });
       if (!ok) return openNextCyclePlanner(nextDraft);
@@ -1980,7 +1980,7 @@ function openNextWeekPlanner(draft = null) {
         </div>
 
         <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" id="nextPlannerCancel" type="button">先等等</button>
+          <button class="tp-btn tp-btn-ghost" id="nextPlannerCancel" type="button">取消</button>
           <button class="tp-btn tp-btn-primary" id="nextPlannerSave" type="button">儲存安排</button>
         </div>
       </div>
@@ -2107,7 +2107,7 @@ function openWeeklyReview(cycleNumber, weekNumber, draft = null) {
     icon: "✦",
     title: `Weekly Review · Week ${weekNumber}`,
     confirmText: "送出",
-    cancelText: "先等等",
+    cancelText: "取消",
     wide: true,
     body: `
       <label class="v2-form-field">1. 這週做得最好的地方是什麼？<textarea id="retroQ1" rows="3">${escapeHtml(values.q1 || "")}</textarea></label>
