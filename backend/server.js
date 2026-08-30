@@ -525,28 +525,8 @@ function getDifficultyAccentColor(difficulty) {
 }
 
 function getDifficultyCardTheme(difficulty) {
-  const normalizedDifficulty = normalizeDifficulty(difficulty);
-
-  if (normalizedDifficulty === "簡單") {
-    return {
-      accentColor: FLEX_ACCENTS.easy,
-      backgroundColor: "#F1F7F1",
-      textColor: "#5D7961",
-    };
-  }
-
-  if (normalizedDifficulty === "適中") {
-    return {
-      accentColor: FLEX_ACCENTS.medium,
-      backgroundColor: "#FFF2EA",
-      textColor: "#94613F",
-    };
-  }
-
   return {
-    accentColor: FLEX_ACCENTS.hard,
-    backgroundColor: "#F7F0FA",
-    textColor: "#765F82",
+    accentColor: getDifficultyAccentColor(difficulty),
   };
 }
 
@@ -583,7 +563,7 @@ function buildTinyStamp(text, options = {}) {
   };
 }
 
-function buildCuteSectionLabel(emoji, text, color) {
+function buildCuteSectionLabel(emoji, text, color, iconColor) {
   const contents = [];
 
   if (emoji) {
@@ -592,7 +572,7 @@ function buildCuteSectionLabel(emoji, text, color) {
       text: emoji,
       size: "sm",
       flex: 0,
-      color: color || FLEX_COLORS.mutedText,
+      color: iconColor || color || FLEX_COLORS.mutedText,
       weight: "bold",
     });
   }
@@ -776,7 +756,14 @@ function buildFlexInfoCard(contents, options = {}) {
 
   if (options.label || options.emoji) {
     const sectionIcon = options.emoji === undefined ? "📎" : options.emoji;
-    cardContents.push(buildCuteSectionLabel(sectionIcon, options.label || "Tiny Progress", options.labelColor || FLEX_COLORS.mutedText));
+    cardContents.push(
+      buildCuteSectionLabel(
+        sectionIcon,
+        options.label || "Tiny Progress",
+        options.labelColor || FLEX_COLORS.mutedText,
+        options.iconColor
+      )
+    );
   }
 
   return {
@@ -1231,9 +1218,9 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
         {
           label: `${difficulty}任務`,
           emoji: "● ─ ○",
-          labelColor: difficultyTheme.textColor,
-          backgroundColor: difficultyTheme.backgroundColor,
-          borderColor: difficultyTheme.accentColor,
+          iconColor: difficultyTheme.accentColor,
+          labelColor: FLEX_COLORS.mutedText,
+          backgroundColor: FLEX_COLORS.paper,
         }
       ),
     ];
@@ -1273,9 +1260,9 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
         {
           label: `${difficulty}任務`,
           emoji: "● ─ ○",
-          labelColor: difficultyTheme.textColor,
-          backgroundColor: difficultyTheme.backgroundColor,
-          borderColor: difficultyTheme.accentColor,
+          iconColor: difficultyTheme.accentColor,
+          labelColor: FLEX_COLORS.mutedText,
+          backgroundColor: FLEX_COLORS.paper,
         }
       ),
     ];
