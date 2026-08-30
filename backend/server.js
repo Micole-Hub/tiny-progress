@@ -839,7 +839,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
           type: "text",
           text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title)}`,
           size: task.done ? "md" : "lg",
-          color: task.done ? "#70786C" : "#394334",
+          color: task.done ? "#5F695B" : "#394334",
           wrap: true,
           maxLines: 2,
           weight: task.done ? "regular" : "bold",
@@ -929,17 +929,17 @@ function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, ac
 
   return {
     type: "bubble",
-    size: "giga",
+    size: "mega",
     styles: { body: { backgroundColor: FLEX_COLORS.cream } },
     body: {
       type: "box",
       layout: "vertical",
-      paddingAll: "12px",
+      paddingAll: "6px",
       contents: [
         {
           type: "box",
           layout: "vertical",
-          paddingAll: "20px",
+          paddingAll: "15px",
           spacing: "md",
           backgroundColor: FLEX_COLORS.card,
           borderColor: accentColor || FLEX_COLORS.greenFresh,
