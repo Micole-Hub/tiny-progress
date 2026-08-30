@@ -838,10 +838,10 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
         {
           type: "text",
           text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title)}`,
-          size: task.done ? "sm" : "md",
-          color: task.done ? "#92867B" : FLEX_COLORS.darkGreen,
-          wrap: false,
-          maxLines: 1,
+          size: task.done ? "md" : "lg",
+          color: task.done ? "#70786C" : "#394334",
+          wrap: true,
+          maxLines: 2,
           weight: task.done ? "regular" : "bold",
           flex: 1,
         },
@@ -929,7 +929,7 @@ function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, ac
 
   return {
     type: "bubble",
-    size: "mega",
+    size: "giga",
     styles: { body: { backgroundColor: FLEX_COLORS.cream } },
     body: {
       type: "box",
@@ -1118,12 +1118,12 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
           {
             type: "text",
             text: getLineTaskTitle(selectedTask.title),
-            size: "md",
+            size: "lg",
             weight: "bold",
-            color: FLEX_COLORS.darkGreen,
+            color: "#394334",
             margin: "xs",
-            wrap: false,
-            maxLines: 1,
+            wrap: true,
+            maxLines: 2,
           },
           buildDrawTaskTagBox(selectedTask),
         ],
@@ -1277,7 +1277,6 @@ async function handleDifficultyTaskFlexCommand(difficulty) {
 
 function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   const taskDoneCount = tasks.filter((task) => task.done).length;
-  const standardDoneCount = standards.filter((standard) => standard.done).length;
   const weekTitle = currentWeek
     ? `第${currentWeek.weekNumber}週｜${currentWeek.title}`
     : "本週清單";
@@ -1291,34 +1290,26 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     })
   );
 
-  const standardRows = standards.slice(0, 5).map((standard, index) =>
-    buildStandardFlexRow({
-      standard,
-      standardNumber: index + 1,
-    })
-  );
-
   const bodyContents = [
     buildFlexInfoCard(
       [
         {
           type: "text",
           text: weekTitle,
-          size: "xs",
+          size: "sm",
           color: FLEX_COLORS.mutedText,
           weight: "bold",
-          wrap: false,
-          maxLines: 1,
+          wrap: true,
+          maxLines: 2,
         },
-        buildProgressBlock("任務進度", taskDoneCount, tasks.length, FLEX_ACCENTS.all),
-        buildProgressBlock("標準進度", standardDoneCount, standards.length, "#9CB994"),
+        buildProgressBlock("本週進度", taskDoneCount, tasks.length, FLEX_ACCENTS.all),
       ],
       {
         label: "本週概況",
-        emoji: "🐾",
+        emoji: "◌",
         backgroundColor: "#FFFAF1",
-        borderColor: "#DCCB9C",
-        labelColor: "#8A7448",
+        borderColor: "#B7CAD8",
+        labelColor: "#60798B",
       }
     ),
   ];
@@ -1331,12 +1322,12 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
             type: "text",
             text: "本週還沒有任務。",
             size: "md",
-            color: FLEX_COLORS.darkGreen,
+            color: "#394334",
             weight: "bold",
             wrap: true,
           },
         ],
-        { label: "本週任務", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
+        { label: "本週任務", emoji: "•", backgroundColor: FLEX_COLORS.paper }
       )
     );
   } else {
@@ -1348,7 +1339,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
             ? [
                 {
                   type: "text",
-                  text: `還有 ${tasks.length - taskRows.length} 件任務在完整任務板裡。`,
+                  text: `還有 ${tasks.length - taskRows.length} 件任務，可繼續查看。`,
                   size: "xs",
                   color: FLEX_COLORS.mutedText,
                   wrap: true,
@@ -1356,52 +1347,14 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
               ]
             : []),
         ],
-        { label: "本週任務", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
-      )
-    );
-  }
-
-  if (standards.length === 0) {
-    bodyContents.push(
-      buildFlexInfoCard(
-        [
-          {
-            type: "text",
-            text: "本週驗收標準尚未成文。",
-            size: "md",
-            color: FLEX_COLORS.darkGreen,
-            weight: "bold",
-            wrap: true,
-          },
-        ],
-        { label: "本週標準", emoji: "🥚", backgroundColor: "#FFFAF1" }
-      )
-    );
-  } else {
-    bodyContents.push(
-      buildFlexInfoCard(
-        [
-          ...standardRows,
-          ...(standards.length > standardRows.length
-            ? [
-                {
-                  type: "text",
-                  text: `還有 ${standards.length - standardRows.length} 則標準在任務板裡。`,
-                  size: "xs",
-                  color: FLEX_COLORS.mutedText,
-                  wrap: true,
-                },
-              ]
-            : []),
-        ],
-        { label: "本週標準", emoji: "🥚", backgroundColor: "#FFFAF1" }
+        { label: "本週任務", emoji: "•", backgroundColor: FLEX_COLORS.paper }
       )
     );
   }
 
   const bubble = buildBaseFlexBubble({
     title: "本週清單",
-    subtitle: "完整查看本週內容",
+    subtitle: "完整查看本週任務",
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
     footerContents: buildFlexFooterHint(["需要操作說明請輸入：說明"]),
@@ -1409,7 +1362,6 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
 
   return {
     type: "flex",
-    // ── altText 帶入週次 ──
     altText: currentWeek
       ? `Tiny Progress｜第 ${currentWeek.weekNumber} 週清單｜任務 ${taskDoneCount}/${tasks.length}`
       : "Tiny Progress｜本週清單",
