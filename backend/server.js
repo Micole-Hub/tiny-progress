@@ -618,15 +618,15 @@ function buildCategoryFlexTag(category, options = {}) {
   const style = getCategoryFlexStyle(category, options.valueKey);
 
   return buildFlexTag(category, style.backgroundColor, style.textColor, {
-    width: options.width || "100px",
+    width: options.width || "82px",
     cornerRadius: "999px",
-    size: "xs",
+    size: "xxs",
     weight: "bold",
     borderColor: style.borderColor,
-    paddingTop: "5px",
-    paddingBottom: "5px",
-    paddingStart: "7px",
-    paddingEnd: "7px",
+    paddingTop: "4px",
+    paddingBottom: "4px",
+    paddingStart: "6px",
+    paddingEnd: "6px",
   });
 }
 
@@ -637,48 +637,24 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
 
   const style = getSubCategoryFlexStyle(subCategory, options.valueKey, options.parentKey);
 
-  return {
-    type: "box",
-    layout: "horizontal",
-    flex: 0,
-    width: options.width || "70px",
-    backgroundColor: style.backgroundColor,
-    cornerRadius: "10px",
+  return buildFlexTag(label, style.backgroundColor, style.textColor, {
+    width: options.width || "66px",
+    cornerRadius: "999px",
+    size: "xxs",
+    weight: "bold",
     borderColor: style.borderColor,
-    borderWidth: "1px",
     paddingTop: "4px",
     paddingBottom: "4px",
-    paddingStart: "0px",
+    paddingStart: "6px",
     paddingEnd: "6px",
-    spacing: "xs",
-    contents: [
-      {
-        type: "box",
-        layout: "vertical",
-        width: "4px",
-        backgroundColor: style.accentColor,
-        cornerRadius: "999px",
-        contents: [],
-      },
-      {
-        type: "text",
-        text: label,
-        size: "xxs",
-        weight: "bold",
-        color: style.textColor,
-        align: "center",
-        flex: 1,
-        maxLines: 1,
-      },
-    ],
-  };
+  });
 }
 
 function getSubCategoryFlexTagWidth(subCategory) {
-  if (subCategory === "W3Schools") return "86px";
-  if (subCategory === "freeCodeCamp") return "96px";
-  if (subCategory === "Vibe Coding") return "96px";
-  return "70px";
+  if (subCategory === "W3Schools") return "76px";
+  if (subCategory === "freeCodeCamp") return "86px";
+  if (subCategory === "Vibe Coding") return "80px";
+  return "66px";
 }
 
 function buildDifficultyFlexTag(difficulty, options = {}) {
@@ -811,13 +787,12 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
   if (showCategory) {
     tagContents.push(
       buildCategoryFlexTag(category, {
-        width: isProgrammingTask ? "100px" : "128px",
+        width: isProgrammingTask ? "82px" : "94px",
         valueKey: task.categoryId || category,
       })
     );
   }
 
-  // ── 只有程式學習且子分類有標籤才渲染 ──
   if (showSubCategory && isProgrammingTask) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
     const subTag = buildSubCategoryFlexTag(subCategory, {
@@ -828,31 +803,23 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     if (subTag) tagContents.push(subTag);
   }
 
+  if (showDifficulty) {
+    tagContents.push(
+      buildDifficultyFlexTag(difficulty, {
+        width: "48px",
+      })
+    );
+  }
+
   const rowContents = [
     {
-      type: "box",
-      layout: "horizontal",
-      spacing: "sm",
-      alignItems: "center",
-      contents: [
-        {
-          type: "text",
-          text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title)}`,
-          size: task.done ? "md" : "lg",
-          color: task.done ? "#5F695B" : "#394334",
-          wrap: true,
-          maxLines: 2,
-          weight: task.done ? "regular" : "bold",
-          flex: 1,
-        },
-        ...(showDifficulty
-          ? [
-              buildDifficultyFlexTag(difficulty, {
-                width: isProgrammingTask ? "54px" : "62px",
-              }),
-            ]
-          : []),
-      ],
+      type: "text",
+      text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title)}`,
+      size: "lg",
+      color: task.done ? "#4F5947" : "#394334",
+      wrap: true,
+      maxLines: 2,
+      weight: "bold",
     },
   ];
 
@@ -860,7 +827,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     rowContents.push({
       type: "box",
       layout: "horizontal",
-      spacing: "sm",
+      spacing: "xs",
       margin: "sm",
       contents: tagContents,
     });
@@ -870,6 +837,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     type: "box",
     layout: "vertical",
     spacing: "xs",
+    paddingTop: "4px",
     paddingBottom: "12px",
     contents: rowContents,
   };
@@ -1359,6 +1327,10 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     bodyContents,
     footerContents: buildFlexFooterHint(["需要操作說明請輸入：說明"]),
   });
+
+  // v4.2.4：只有「本週清單」需要更寬。
+  // 其他 LINE 卡片仍維持 mega，避免整套介面一起變得過寬。
+  bubble.size = "giga";
 
   return {
     type: "flex",
