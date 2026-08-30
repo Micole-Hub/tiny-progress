@@ -10,6 +10,10 @@ const GOOGLE_SHEETS_API_URL = process.env.GOOGLE_SHEETS_API_URL;
 const GOOGLE_SHEETS_API_SECRET = process.env.GOOGLE_SHEETS_API_SECRET;
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
+// 把你自己的 Tiny Progress 網頁網址貼在下面。
+// 例如：https://你的網站網址
+const TINY_PROGRESS_WEB_URL = "https://micole-hub.github.io/tiny-progress/";
+
 const pendingActions = new Map();
 const PENDING_ACTION_TTL_MS = 10 * 60 * 1000;
 
@@ -914,6 +918,52 @@ function buildStandardFlexRow({ standard, standardNumber }) {
   };
 }
 
+function getTinyProgressWebUrl() {
+  const url = String(TINY_PROGRESS_WEB_URL || "").trim();
+  if (!/^https?:\/\//i.test(url)) return "";
+  return url;
+}
+
+function buildTinyProgressWebButton() {
+  const url = getTinyProgressWebUrl();
+  if (!url) return null;
+
+  return {
+    type: "button",
+    style: "primary",
+    height: "sm",
+    color: "#769275",
+    action: {
+      type: "uri",
+      label: "查看完整任務",
+      uri: url,
+    },
+  };
+}
+
+function buildListFooter() {
+  const contents = [];
+  const button = buildTinyProgressWebButton();
+
+  if (button) contents.push(button);
+
+  contents.push({
+    type: "text",
+    text: "需要操作說明請輸入：說明",
+    size: "xxs",
+    color: "#92867B",
+    wrap: true,
+    margin: button ? "sm" : "none",
+  });
+
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "sm",
+    contents,
+  };
+}
+
 function buildFlexFooterHint(lines) {
   return {
     type: "box",
@@ -1379,7 +1429,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     subtitle: "完整查看本週任務",
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
-    footerContents: buildFlexFooterHint(["需要操作說明請輸入：說明"]),
+    footerContents: buildListFooter(),
   });
 
   // v4.2.5：本週清單回到窄版。
