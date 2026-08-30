@@ -664,25 +664,25 @@ function buildDifficultyFlexTag(difficulty, options = {}) {
     type: "box",
     layout: "horizontal",
     flex: 0,
-    width: options.width || "46px",
+    width: options.width || "58px",
     backgroundColor: style.backgroundColor,
     cornerRadius: "7px",
     borderColor: style.borderColor,
     borderWidth: "1px",
     paddingTop: "3px",
     paddingBottom: "3px",
-    paddingStart: "6px",
-    paddingEnd: "6px",
+    paddingStart: "4px",
+    paddingEnd: "4px",
     spacing: "xs",
     contents: [
       {
         type: "box",
         layout: "vertical",
-        width: "6px",
-        height: "6px",
+        width: "5px",
+        height: "5px",
         backgroundColor: style.accentColor,
         cornerRadius: "999px",
-        margin: "sm",
+        margin: "xs",
         contents: [],
       },
       {
@@ -822,7 +822,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
       ...(showDifficulty
         ? [
             buildDifficultyFlexTag(difficulty, {
-              width: "46px",
+              width: "58px",
             }),
           ]
         : []),
