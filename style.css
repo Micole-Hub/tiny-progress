@@ -448,14 +448,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .v2-task-card.is-done {
-  opacity: .55;
-  filter: saturate(.74);
+  opacity: .62;
+  filter: saturate(.55);
 }
 
 .v2-task-card.is-done .v2-task-title {
-  color: var(--red);
-  text-decoration: line-through 2px var(--red);
-  text-decoration-thickness: 2px;
+  color: #858d82;
+  text-decoration: none;
 }
 
 .v2-task-card input[type="checkbox"] {

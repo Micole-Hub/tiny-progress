@@ -558,31 +558,43 @@ function buildTinyStamp(text, options = {}) {
 }
 
 function buildCuteSectionLabel(emoji, text, color) {
+  const contents = [];
+
+  if (emoji) {
+    contents.push({ type: "text", text: emoji, size: "sm", flex: 0 });
+  }
+
+  contents.push({
+    type: "text",
+    text,
+    size: "sm",
+    weight: "bold",
+    color: color || FLEX_COLORS.mutedText,
+    flex: 1,
+  });
+
   return {
     type: "box",
     layout: "horizontal",
     spacing: "sm",
     alignItems: "center",
-    contents: [
-      { type: "text", text: emoji, size: "sm", flex: 0 },
-      {
-        type: "text",
-        text,
-        size: "sm",
-        weight: "bold",
-        color: color || FLEX_COLORS.mutedText,
-        flex: 1,
-      },
-    ],
+    contents,
   };
 }
 
 function buildCuteEmptyNote(title, note, emoji) {
-  return [
-    { type: "text", text: emoji || "🐣", size: "lg", align: "center" },
+  const contents = [];
+
+  if (emoji) {
+    contents.push({ type: "text", text: emoji, size: "lg", align: "center" });
+  }
+
+  contents.push(
     { type: "text", text: title, size: "md", color: FLEX_COLORS.darkGreen, weight: "bold", wrap: true, align: "center" },
-    { type: "text", text: note, size: "sm", color: FLEX_COLORS.mutedText, wrap: true, align: "center" },
-  ];
+    { type: "text", text: note, size: "sm", color: FLEX_COLORS.mutedText, wrap: true, align: "center" }
+  );
+
+  return contents;
 }
 
 function buildFlexTag(label, backgroundColor, textColor, options = {}) {
@@ -722,7 +734,8 @@ function buildFlexInfoCard(contents, options = {}) {
   const cardContents = [];
 
   if (options.label || options.emoji) {
-    cardContents.push(buildCuteSectionLabel(options.emoji || "📎", options.label || "Tiny Progress", options.labelColor || FLEX_COLORS.mutedText));
+    const sectionIcon = options.emoji === undefined ? "📎" : options.emoji;
+    cardContents.push(buildCuteSectionLabel(sectionIcon, options.label || "Tiny Progress", options.labelColor || FLEX_COLORS.mutedText));
   }
 
   return {
@@ -813,10 +826,10 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
         type: "text",
         text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title)}`,
         size: "md",
-        color: task.done ? "#4F5947" : "#394334",
+        color: task.done ? "#8D9589" : "#394334",
         wrap: false,
         maxLines: 1,
-        weight: "bold",
+        weight: task.done ? "regular" : "bold",
         flex: 1,
       },
       ...(showDifficulty
@@ -1027,7 +1040,7 @@ function buildDrawEmptyFlexMessage() {
         ],
         {
           label: "今天抽一件",
-          emoji: "🐣",
+          emoji: "",
           borderColor: "#DCCB9C",
           backgroundColor: "#FFFAF1",
           labelColor: "#8A7448",
@@ -1175,7 +1188,7 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
         ],
         {
           label: `${difficulty}任務`,
-          emoji: "🗂️",
+          emoji: "● ─ ○",
           backgroundColor: FLEX_COLORS.paper,
         }
       ),
@@ -1215,7 +1228,7 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
         ],
         {
           label: `${difficulty}任務`,
-          emoji: "🗂️",
+          emoji: "● ─ ○",
           backgroundColor: FLEX_COLORS.paper,
         }
       ),
