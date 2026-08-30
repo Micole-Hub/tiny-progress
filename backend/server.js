@@ -524,6 +524,32 @@ function getDifficultyAccentColor(difficulty) {
   return FLEX_ACCENTS.hard;
 }
 
+function getDifficultyCardTheme(difficulty) {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
+
+  if (normalizedDifficulty === "簡單") {
+    return {
+      accentColor: FLEX_ACCENTS.easy,
+      backgroundColor: "#F1F7F1",
+      textColor: "#5D7961",
+    };
+  }
+
+  if (normalizedDifficulty === "適中") {
+    return {
+      accentColor: FLEX_ACCENTS.medium,
+      backgroundColor: "#FFF2EA",
+      textColor: "#94613F",
+    };
+  }
+
+  return {
+    accentColor: FLEX_ACCENTS.hard,
+    backgroundColor: "#F7F0FA",
+    textColor: "#765F82",
+  };
+}
+
 function getDifficultyFooterCopy(difficulty, isCompleted) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
 
@@ -561,7 +587,14 @@ function buildCuteSectionLabel(emoji, text, color) {
   const contents = [];
 
   if (emoji) {
-    contents.push({ type: "text", text: emoji, size: "sm", flex: 0 });
+    contents.push({
+      type: "text",
+      text: emoji,
+      size: "sm",
+      flex: 0,
+      color: color || FLEX_COLORS.mutedText,
+      weight: "bold",
+    });
   }
 
   contents.push({
@@ -724,6 +757,14 @@ function buildAccentBar(accentColor) {
 
 function buildFlexHeader(title, subtitle) {
   const contents = [
+    {
+      type: "text",
+      text: "Tiny Progress",
+      size: "xxs",
+      weight: "bold",
+      color: "#7C8A74",
+      wrap: false,
+    },
     { type: "text", text: title, size: "xl", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true },
   ];
   if (subtitle) contents.push({ type: "text", text: subtitle, size: "sm", color: FLEX_COLORS.mutedText, wrap: true });
@@ -1165,6 +1206,7 @@ function buildDifficultyTaskFooterLines(matchedTasks, difficulty) {
 }
 
 function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
+  const difficultyTheme = getDifficultyCardTheme(difficulty);
   const matchedTasks = tasks
     .map((task, index) => ({ task, originalNumber: index + 1 }))
     .filter((entry) => normalizeDifficulty(entry.task.difficulty) === difficulty);
@@ -1189,7 +1231,9 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
         {
           label: `${difficulty}任務`,
           emoji: "● ─ ○",
-          backgroundColor: FLEX_COLORS.paper,
+          labelColor: difficultyTheme.textColor,
+          backgroundColor: difficultyTheme.backgroundColor,
+          borderColor: difficultyTheme.accentColor,
         }
       ),
     ];
@@ -1229,7 +1273,9 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
         {
           label: `${difficulty}任務`,
           emoji: "● ─ ○",
-          backgroundColor: FLEX_COLORS.paper,
+          labelColor: difficultyTheme.textColor,
+          backgroundColor: difficultyTheme.backgroundColor,
+          borderColor: difficultyTheme.accentColor,
         }
       ),
     ];
@@ -1238,7 +1284,7 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
   const bubble = buildBaseFlexBubble({
     title: `本週${difficulty}任務`,
     subtitle: `本週 ${matchedTasks.length} 件`,
-    accentColor: getDifficultyAccentColor(difficulty),
+    accentColor: difficultyTheme.accentColor,
     bodyContents,
     footerContents: buildFlexFooterHint(
       matchedTasks.length === 0
