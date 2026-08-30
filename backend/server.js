@@ -324,7 +324,7 @@ function formatTaskSectionByCategory(tasks) {
         if (subLabel) lines.push(`  ［${subLabel}］`);
 
         groupTasks.forEach(function (task) {
-          const checkbox = task.done ? "★" : "☆";
+          const checkbox = task.done ? "✓" : "•";
           lines.push(
             `${taskNumber}. ${checkbox} ${task.title}｜${normalizeSubCategory(task.subCategory, category)}｜${normalizeDifficulty(task.difficulty)}`
           );
@@ -335,7 +335,7 @@ function formatTaskSectionByCategory(tasks) {
     }
 
     categoryTasks.forEach(function (task) {
-      const checkbox = task.done ? "★" : "☆";
+      const checkbox = task.done ? "✓" : "•";
       lines.push(`${taskNumber}. ${checkbox} ${task.title}｜${normalizeDifficulty(task.difficulty)}`);
       taskNumber += 1;
     });
@@ -403,7 +403,7 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
 }
 
 const FLEX_BRAND_NAME = "Tiny Progress";
-const FLEX_FIXED_LINE = "今天的任務與進度 ✦";
+const FLEX_FIXED_LINE = "";
 
 const FLEX_COLORS = {
   cream: "#F8F4EA",
@@ -455,26 +455,26 @@ const FLEX_COLORS = {
 };
 
 const FLEX_ACCENTS = {
-  all: FLEX_COLORS.red,
-  draw: FLEX_COLORS.gold,
-  easy: FLEX_COLORS.greenFresh,
-  medium: FLEX_COLORS.gold,
-  hard: FLEX_COLORS.red,
+  all: "#93B9D1",
+  draw: "#6EB7B0",
+  easy: "#A9CFAE",
+  medium: "#E9A276",
+  hard: "#C6A8D4",
 };
 
 const LINE_TAG_PALETTE = [
-  { bg: "#E6EDF4", text: "#526C82", border: "#CEDAE5", accent: "#8097AA" },
-  { bg: "#F2E3E6", text: "#7F5D65", border: "#E3C9D0", accent: "#C997A1" },
-  { bg: "#E3EEE1", text: "#58705A", border: "#CDDCCB", accent: "#8FAA8C" },
-  { bg: "#F3E7D7", text: "#80664A", border: "#E3D1BB", accent: "#C3A57C" },
-  { bg: "#EAE4F0", text: "#6C5B78", border: "#D8CFE2", accent: "#A698B3" },
-  { bg: "#E4EEF0", text: "#4F7075", border: "#C9DEE1", accent: "#86AEB3" },
-  { bg: "#F1E8D2", text: "#7E6B40", border: "#E2D4AE", accent: "#BDA45E" },
-  { bg: "#E9EDE0", text: "#647052", border: "#D5DCC7", accent: "#9BAA80" },
-  { bg: "#F2E7DF", text: "#7C6255", border: "#E2D1C6", accent: "#B8917D" },
-  { bg: "#E5EAF2", text: "#5D6578", border: "#D0D8E4", accent: "#929CAF" },
-  { bg: "#EAF0E4", text: "#5D6E52", border: "#D5E0CD", accent: "#95AA84" },
-  { bg: "#F0E5ED", text: "#745E70", border: "#DFCFE0", accent: "#B397AF" },
+  { bg: "#E6F0E4", text: "#56705A", border: "#BDD5BC", accent: "#87AA88" },
+  { bg: "#F6E5E7", text: "#805D67", border: "#E5BEC6", accent: "#C88998" },
+  { bg: "#E5EEF7", text: "#526B84", border: "#BDD1E5", accent: "#83A9CB" },
+  { bg: "#F7E9D8", text: "#806349", border: "#E7C9A8", accent: "#CFA276" },
+  { bg: "#EEE6F5", text: "#6C5B7C", border: "#D5C3E5", accent: "#AA90C0" },
+  { bg: "#E1F0EF", text: "#4F7272", border: "#B9D9D6", accent: "#72AAA8" },
+  { bg: "#F4EBCF", text: "#7A693D", border: "#E2D095", accent: "#C7AE5F" },
+  { bg: "#E8EEE0", text: "#607052", border: "#C7D4B9", accent: "#92A97B" },
+  { bg: "#F5E4DD", text: "#7D5F54", border: "#E4C0B2", accent: "#C48E79" },
+  { bg: "#E6EAF5", text: "#5B647D", border: "#C7CFE5", accent: "#8E9ABD" },
+  { bg: "#E5F0E8", text: "#58705F", border: "#C0D9C6", accent: "#82A991" },
+  { bg: "#F2E4EF", text: "#755E72", border: "#DFC0D7", accent: "#B98EAE" },
 ];
 
 function stableLineTagIndex(value, salt) {
@@ -487,15 +487,18 @@ function stableLineTagIndex(value, salt) {
   return Math.abs(hash >>> 0) % LINE_TAG_PALETTE.length;
 }
 
-function getCategoryFlexStyle(category) {
+function getCategoryFlexStyle(category, valueKey) {
   const normalizedCategory = normalizeCategory(category);
-  const style = LINE_TAG_PALETTE[stableLineTagIndex(normalizedCategory, "category")];
+  const key = valueKey || normalizedCategory;
+  const style = LINE_TAG_PALETTE[stableLineTagIndex(key, "category")];
   return { backgroundColor: style.bg, textColor: style.text, borderColor: style.border, accentColor: style.accent };
 }
 
-function getSubCategoryFlexStyle(subCategory) {
+function getSubCategoryFlexStyle(subCategory, valueKey, parentKey) {
   const label = getLineSubCategoryLabel(subCategory) || "未分類";
-  const index = (stableLineTagIndex(label, "subcategory") + 1) % LINE_TAG_PALETTE.length;
+  let index = stableLineTagIndex(valueKey || label, "subcategory");
+  const parentIndex = stableLineTagIndex(parentKey || "parent", "category");
+  if (index === parentIndex) index = (index + 1) % LINE_TAG_PALETTE.length;
   const style = LINE_TAG_PALETTE[index];
   return { backgroundColor: style.bg, textColor: style.text, borderColor: style.border, accentColor: style.accent };
 }
@@ -526,7 +529,7 @@ function getDifficultyFooterCopy(difficulty, isCompleted) {
 
   if (normalizedDifficulty === "簡單") return isCompleted ? "這件完成了。" : "可以先從這件開始。";
   if (normalizedDifficulty === "適中") return isCompleted ? "這件完成了，已經留下進度。" : "照自己的速度往前就好。";
-  return isCompleted ? "這件完成了，星星再多一顆。" : "需要的話，可以先拆成更小的步驟。";
+  return isCompleted ? "這件完成了，進度又往前一點。" : "需要的話，可以先拆成更小的步驟。";
 }
 
 function buildTinyStamp(text, options = {}) {
@@ -612,7 +615,7 @@ function buildFlexTag(label, backgroundColor, textColor, options = {}) {
 }
 
 function buildCategoryFlexTag(category, options = {}) {
-  const style = getCategoryFlexStyle(category);
+  const style = getCategoryFlexStyle(category, options.valueKey);
 
   return buildFlexTag(category, style.backgroundColor, style.textColor, {
     width: options.width || "100px",
@@ -632,7 +635,7 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
   const label = getLineSubCategoryLabel(subCategory);
   if (!label) return null;
 
-  const style = getSubCategoryFlexStyle(subCategory);
+  const style = getSubCategoryFlexStyle(subCategory, options.valueKey, options.parentKey);
 
   return {
     type: "box",
@@ -732,33 +735,11 @@ function buildAccentBar(accentColor) {
 }
 
 function buildFlexHeader(title, subtitle) {
-  return {
-    type: "box",
-    layout: "vertical",
-    spacing: "sm",
-    contents: [
-      {
-        type: "box",
-        layout: "horizontal",
-        justifyContent: "space-between",
-        alignItems: "center",
-        contents: [
-          {
-            type: "box",
-            layout: "horizontal",
-            spacing: "sm",
-            alignItems: "center",
-            contents: [
-              { type: "text", text: FLEX_BRAND_NAME, size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold", flex: 0 },
-            ],
-          },
-          buildTinyStamp("進度中", { backgroundColor: FLEX_COLORS.stampBg, color: FLEX_COLORS.stampText }),
-        ],
-      },
-      { type: "text", text: title, size: "xl", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true },
-      { type: "text", text: subtitle || FLEX_FIXED_LINE, size: "sm", color: FLEX_COLORS.mutedText, wrap: true },
-    ],
-  };
+  const contents = [
+    { type: "text", text: title, size: "xl", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true },
+  ];
+  if (subtitle) contents.push({ type: "text", text: subtitle, size: "sm", color: FLEX_COLORS.mutedText, wrap: true });
+  return { type: "box", layout: "vertical", spacing: "xs", contents };
 }
 
 function buildFlexInfoCard(contents, options = {}) {
@@ -781,20 +762,47 @@ function buildFlexInfoCard(contents, options = {}) {
   };
 }
 
-function buildProgressLine(label, doneCount, totalCount) {
+function buildSegmentedProgressBar(doneCount, totalCount, color) {
+  const segments = 10;
+  const filled = totalCount > 0 ? Math.round((doneCount / totalCount) * segments) : 0;
   return {
     type: "box",
     layout: "horizontal",
-    spacing: "sm",
+    spacing: "xs",
+    margin: "sm",
+    contents: Array.from({ length: segments }, (_, index) => ({
+      type: "box",
+      layout: "vertical",
+      height: "8px",
+      flex: 1,
+      backgroundColor: index < filled ? (color || FLEX_COLORS.greenFresh) : "#E7E5DF",
+      cornerRadius: "999px",
+      contents: [],
+    })),
+  };
+}
+
+function buildProgressBlock(label, doneCount, totalCount, color) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "xs",
     contents: [
-      { type: "text", text: label, size: "sm", color: FLEX_COLORS.mutedText, flex: 0 },
-      { type: "text", text: `${doneCount} / ${totalCount}`, size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold", align: "end" },
+      {
+        type: "box",
+        layout: "horizontal",
+        contents: [
+          { type: "text", text: label, size: "sm", color: FLEX_COLORS.mutedText, flex: 1 },
+          { type: "text", text: `${doneCount} / ${totalCount}`, size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold", align: "end", flex: 0 },
+        ],
+      },
+      buildSegmentedProgressBar(doneCount, totalCount, color),
     ],
   };
 }
 
 function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, showSubCategory = true }) {
-  const checkbox = task.done ? "★" : "☆";
+  const checkbox = task.done ? "✓" : "•";
   const difficulty = normalizeDifficulty(task.difficulty);
   const category = normalizeCategory(task.category);
   const isProgrammingTask = category === "程式學習";
@@ -804,6 +812,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     tagContents.push(
       buildCategoryFlexTag(category, {
         width: isProgrammingTask ? "100px" : "128px",
+        valueKey: task.categoryId || category,
       })
     );
   }
@@ -813,6 +822,8 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     const subCategory = normalizeSubCategory(task.subCategory, category);
     const subTag = buildSubCategoryFlexTag(subCategory, {
       width: getSubCategoryFlexTagWidth(subCategory),
+      valueKey: task.subCategoryId || subCategory,
+      parentKey: task.categoryId || category,
     });
     if (subTag) tagContents.push(subTag);
   }
@@ -905,54 +916,45 @@ function buildFlexFooterHint(lines) {
 }
 
 function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor }) {
-  const contents = [
-    {
-      type: "box",
-      layout: "horizontal",
-      spacing: "xs",
-      contents: [
-        buildAccentBar(accentColor),
-        {
-          type: "box",
-          layout: "vertical",
-          width: "12px",
-          height: "6px",
-          backgroundColor: "#E4EADC",
-          cornerRadius: "999px",
-          contents: [],
-        },
-      ],
-    },
+  const innerContents = [
     buildFlexHeader(title, subtitle),
     { type: "separator", margin: "md", color: FLEX_COLORS.beigeLine },
     ...bodyContents,
   ];
 
   if (footerContents) {
-    contents.push({ type: "separator", margin: "md", color: FLEX_COLORS.beigeLine });
-    contents.push(footerContents);
+    innerContents.push({ type: "separator", margin: "md", color: FLEX_COLORS.beigeLine });
+    innerContents.push(footerContents);
   }
 
   return {
     type: "bubble",
     size: "mega",
-    styles: {
-      body: { backgroundColor: FLEX_COLORS.cream },
-      footer: { backgroundColor: FLEX_COLORS.cream },
-    },
+    styles: { body: { backgroundColor: FLEX_COLORS.cream } },
     body: {
       type: "box",
       layout: "vertical",
-      paddingAll: "22px",
-      spacing: "md",
-      contents,
+      paddingAll: "12px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          paddingAll: "20px",
+          spacing: "md",
+          backgroundColor: FLEX_COLORS.card,
+          borderColor: accentColor || FLEX_COLORS.greenFresh,
+          borderWidth: "2px",
+          cornerRadius: "22px",
+          contents: innerContents,
+        },
+      ],
     },
   };
 }
 
 function buildDrawOneTaskFallbackText({ selectedTask, taskNumber, unfinishedCount }) {
   return [
-    "🎲 Tiny Progress｜今天抽到這一件",
+    "Tiny Progress｜今天抽到",
     "",
     `第 ${taskNumber} 個任務`,
     `☐ ${selectedTask.title}`,
@@ -963,7 +965,7 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber, unfinishedCoun
     "完成後可以輸入：",
     `完成任務${taskNumber}`,
     "",
-    "先做這件就好，其他事情慢慢來。",
+    
   ].join("\n");
 }
 
@@ -975,12 +977,13 @@ function buildTaskTagBox(task, showDifficulty) {
   tags.push(
     buildCategoryFlexTag(category, {
       width: isProgrammingTask ? "100px" : "128px",
+      valueKey: task.categoryId || category,
     })
   );
 
   if (isProgrammingTask) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
-    const subTag = buildSubCategoryFlexTag(subCategory, { width: getSubCategoryFlexTagWidth(subCategory) });
+    const subTag = buildSubCategoryFlexTag(subCategory, { width: getSubCategoryFlexTagWidth(subCategory), valueKey: task.subCategoryId || subCategory, parentKey: task.categoryId || category });
     if (subTag) tags.push(subTag);
   }
 
@@ -1010,12 +1013,13 @@ function buildDrawTaskTagBox(task) {
   tags.push(
     buildCategoryFlexTag(category, {
       width: isProgrammingTask ? "92px" : "120px",
+      valueKey: task.categoryId || category,
     })
   );
 
   if (isProgrammingTask) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
-    const subTag = buildSubCategoryFlexTag(subCategory, { width: getSubCategoryFlexTagWidth(subCategory) });
+    const subTag = buildSubCategoryFlexTag(subCategory, { width: getSubCategoryFlexTagWidth(subCategory), valueKey: task.subCategoryId || subCategory, parentKey: task.categoryId || category });
     if (subTag) tags.push(subTag);
   }
 
@@ -1067,9 +1071,9 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
   const difficulty = normalizeDifficulty(selectedTask.difficulty);
 
   const bubble = buildBaseFlexBubble({
-    title: "抽到一件",
+    title: "今天抽到",
     // ── 剩餘件數帶入副標 ──
-    subtitle: `今天幫你抽到一件，還有 ${unfinishedCount} 件等著。`,
+    subtitle: "今天選中的任務",
     accentColor: FLEX_ACCENTS.draw,
     bodyContents: [
       buildFlexInfoCard(
@@ -1122,14 +1126,6 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
             maxLines: 1,
           },
           buildDrawTaskTagBox(selectedTask),
-          {
-            type: "text",
-            text: "先做這件就好，其他事情慢慢來。",
-            size: "xs",
-            color: FLEX_COLORS.mutedText,
-            wrap: true,
-            margin: "sm",
-          },
         ],
         {
           borderColor: "#DCCB9C",
@@ -1137,10 +1133,7 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
         }
       ),
     ],
-    footerContents: buildFlexFooterHint([
-      `完成後輸入：完成任務${taskNumber}`,
-      "不用想整週，先過這一關。",
-    ]),
+    footerContents: buildFlexFooterHint([`完成後可輸入：完成任務${taskNumber}`]),
   });
 
   return {
@@ -1205,7 +1198,7 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
           },
         ],
         {
-          label: `${difficulty}任務小抽屜`,
+          label: `${difficulty}任務`,
           emoji: "🗂️",
           backgroundColor: FLEX_COLORS.paper,
         }
@@ -1236,7 +1229,7 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
             ? [
                 {
                   type: "text",
-                  text: `還有 ${matchedTasks.length - limitedEntries.length} 件躲在完整清單裡，可輸入「清單」查看。`,
+                  text: `還有 ${matchedTasks.length - limitedEntries.length} 件，可輸入「清單」查看。`,
                   size: "xs",
                   color: FLEX_COLORS.mutedText,
                   wrap: true,
@@ -1245,7 +1238,7 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
             : []),
         ],
         {
-          label: `${difficulty}任務小抽屜`,
+          label: `${difficulty}任務`,
           emoji: "🗂️",
           backgroundColor: FLEX_COLORS.paper,
         }
@@ -1255,7 +1248,7 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
 
   const bubble = buildBaseFlexBubble({
     title: `本週${difficulty}任務`,
-    subtitle: "同一個清單，打開比較剛好的小抽屜。",
+    subtitle: `本週 ${matchedTasks.length} 件`,
     accentColor: getDifficultyAccentColor(difficulty),
     bodyContents,
     footerContents: buildFlexFooterHint(
@@ -1317,8 +1310,8 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
           wrap: false,
           maxLines: 1,
         },
-        buildProgressLine("任務進度", taskDoneCount, tasks.length),
-        buildProgressLine("標準進度", standardDoneCount, standards.length),
+        buildProgressBlock("任務進度", taskDoneCount, tasks.length, FLEX_ACCENTS.all),
+        buildProgressBlock("標準進度", standardDoneCount, standards.length, "#9CB994"),
       ],
       {
         label: "本週概況",
@@ -1408,13 +1401,10 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
 
   const bubble = buildBaseFlexBubble({
     title: "本週清單",
-    subtitle: "事情都在這裡，今天先做一小件。",
+    subtitle: "完整查看本週內容",
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
-    footerContents: buildFlexFooterHint([
-      "今天先看一件就好。",
-      "需要操作說明請輸入：說明",
-    ]),
+    footerContents: buildFlexFooterHint(["需要操作說明請輸入：說明"]),
   });
 
   return {
@@ -1526,7 +1516,7 @@ function getGuideText() {
     "【修改中止】",
     "取消修改",
     "",
-    "Tiny Progress ✦",
+    "Tiny Progress",
   ].join("\n");
 }
 
@@ -1658,7 +1648,7 @@ function buildGuideFlexMessage() {
     accentColor: FLEX_COLORS.gold,
     bodyContents: [viewCard, createCard, actionCard],
     footerContents: buildFlexFooterHint([
-      "Tiny Progress ✦",
+      "Tiny Progress",
       "想看用量請輸入：用量小抄",
     ]),
   });
@@ -1847,7 +1837,7 @@ function buildUsageFlexMessage() {
     bodyContents: [youAskCard, botPushCard, tipCard],
     footerContents: buildFlexFooterHint([
       "需要操作說明請輸入：說明",
-      "Tiny Progress ✦",
+      "Tiny Progress",
     ]),
   });
 
@@ -2005,7 +1995,7 @@ async function handleDoneCommand({ numberText, type, label, done }) {
   const actionText = done ? "已完成" : "已恢復未完成";
   const displayLabel = getDisplayLabel(label);
 
-  return [`${actionText}第 ${result.itemNumber} 個${displayLabel}：`, `${checkbox} ${updatedItem.title || result.item.title}`, "", "Tiny Progress ✦"].join("\n");
+  return [`${actionText}第 ${result.itemNumber} 個${displayLabel}：`, `${checkbox} ${updatedItem.title || result.item.title}`, "", "Tiny Progress"].join("\n");
 }
 
 async function handleDeleteCommand({ numberText, type, label }) {

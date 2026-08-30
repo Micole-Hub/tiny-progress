@@ -1335,15 +1335,7 @@ body.is-busy { cursor: progress; }
   animation: join-pulse .7s ease-out 1;
 }
 
-.join-toggle.just-added::after {
-  content: "✦";
-  position: absolute;
-  right: -12px;
-  top: -10px;
-  color: var(--lavender-400);
-  font-size: 18px;
-  animation: join-spark .7s ease-out 1;
-}
+.join-toggle.just-added::after { display: none; }
 
 @keyframes join-pulse {
   0% { transform: scale(.96); }
@@ -2235,4 +2227,265 @@ button:active,
   color: var(--tag-text, var(--ink));
   font-size: 13px;
   font-weight: 700;
+}
+
+/* =========================================================
+   Tiny Progress v4.2 — Morandi progress + Möbius accents
+   ========================================================= */
+
+/* Brand accent: one small Möbius mark, not repeated everywhere */
+.mobius-hero {
+  position: absolute;
+  right: 34px;
+  top: 30px;
+  width: 44px;
+  height: 30px;
+  color: #7f9a79;
+  opacity: .92;
+  pointer-events: none;
+}
+
+.mobius-hero svg,
+.cycle-complete-mobius svg,
+.celebration-mobius svg,
+.mobius-mark,
+.path-mobius,
+.summary-mobius {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.mobius-hero path,
+.cycle-complete-mobius path,
+.celebration-mobius path,
+.mobius-mark path,
+.path-mobius path,
+.summary-mobius path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mobius-cross { opacity: .52; }
+
+.star-dust,
+.cycle-theme-spark,
+.state-star,
+.mini-star-row,
+.celebration-stars,
+.cycle-summary-stars {
+  display: none !important;
+}
+
+.goal-dot,
+.intro-dot,
+.review-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #9ec1a2;
+  flex: 0 0 auto;
+}
+
+.review-status-dot {
+  width: 10px;
+  height: 10px;
+  background: #cfd5c8;
+}
+
+.review-status-dot.is-done { background: #84a781; }
+
+.cycle-complete-mobius,
+.celebration-mobius,
+.cycle-summary-mobius {
+  width: 58px;
+  height: 39px;
+  margin: 0 auto 12px;
+  color: #c3a167;
+}
+
+.cycle-summary-mobius .summary-mobius {
+  display: block;
+  width: 58px;
+  height: 39px;
+  margin: 0 auto;
+}
+
+/* Weekly completion is now a real progress bar */
+.week-progress-wrap {
+  margin-top: 22px;
+  padding: 17px 18px 16px;
+  border: 1px solid rgba(221, 220, 207, .92);
+  border-radius: 18px;
+  background: #fbf8ef;
+}
+
+.week-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.week-progress-head strong {
+  color: var(--ink);
+  font-family: "Nunito", "Noto Sans TC", sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.week-progress-track {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e6e5df;
+}
+
+.week-progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #9db79a 0%, #7f9a79 100%);
+  transition: width .35s ease;
+}
+
+.star-progress-wrap,
+.star-progress-row,
+.progress-star {
+  display: none !important;
+}
+
+/* Task completion: rounded square check, no circle and no star */
+.v2-complete-star { display: none !important; }
+
+.v2-complete-check {
+  appearance: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1.7px solid #aab5a4;
+  border-radius: 10px;
+  background: #fffdf7;
+  color: #fffdf7;
+  cursor: pointer;
+  transition: transform .15s ease, border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
+}
+
+.v2-complete-check:hover {
+  border-color: #7f9a79;
+  background: #f0f5ec;
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(79, 89, 71, .10);
+}
+
+.v2-complete-check:active {
+  transform: translateY(1px) scale(.96);
+  box-shadow: none;
+}
+
+.v2-complete-check.is-complete,
+.v2-complete-check:disabled {
+  border-color: #7f9a79;
+  background: #7f9a79;
+  color: #fffdf7;
+  cursor: default;
+}
+
+.v2-complete-check span {
+  font-size: 19px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+/* 12-week timeline: dots for time, Möbius only for current week */
+.path-node {
+  min-width: 0;
+}
+
+.path-star { display: none !important; }
+
+.path-dot {
+  display: block;
+  width: 15px;
+  height: 15px;
+  margin: 0 auto 7px;
+  border-radius: 999px;
+  border: 1.7px solid #c9ccc3;
+  background: transparent;
+}
+
+.path-node.is-past .path-dot {
+  border-color: #a4aa98;
+  background: #a4aa98;
+}
+
+.path-node.is-future .path-dot {
+  border-color: #d1d3cc;
+  background: #fbf8ef;
+}
+
+.path-mobius {
+  display: block;
+  width: 27px;
+  height: 18px;
+  margin: -2px auto 6px;
+  color: #7f9a79;
+}
+
+.path-node.is-current > span:last-child {
+  color: #56614d;
+  font-weight: 800;
+}
+
+/* Brighter Morandi tag surfaces; JS injects each stable category/subcategory color */
+.chip-category,
+.chip-subcategory,
+.v2-subcategory-chip {
+  box-shadow: none !important;
+}
+
+/* Keep task content dominant */
+.v2-task-title {
+  font-size: 18.5px;
+  line-height: 1.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .week-progress-fill,
+  .v2-complete-check {
+    transition: none !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .mobius-hero {
+    right: 22px;
+    top: 23px;
+    width: 35px;
+    height: 24px;
+  }
+
+  .week-progress-wrap {
+    padding: 15px 16px;
+  }
+
+  .v2-task-title { font-size: 17px; }
+
+  .v2-complete-check {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+  }
 }

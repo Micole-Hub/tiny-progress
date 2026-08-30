@@ -6,25 +6,27 @@
   <meta name="color-scheme" content="light" />
   <meta name="theme-color" content="#f8f4ea" />
   <title>Tiny Progress</title>
-  <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20260830-v4.1-cancel" />
+  <link rel="stylesheet" href="style.css?v=20260830-v4.2-morandi" />
 </head>
 <body>
   <main class="app v2-app">
     <nav class="v2-nav" aria-label="Tiny Progress 主導覽">
       <button class="v2-nav-btn is-active" type="button" data-page="home"><span class="nav-icon">⌂</span><span>Home</span></button>
-      <button class="v2-nav-btn" type="button" data-page="history"><span class="nav-icon">☆</span><span>History</span></button>
+      <button class="v2-nav-btn" type="button" data-page="history"><span class="nav-icon">◷</span><span>History</span></button>
       <button class="v2-nav-btn" type="button" data-page="settings"><span class="nav-icon">⚙</span><span>Settings</span></button>
     </nav>
 
     <section class="v2-page" id="homePage" data-page-panel="home">
       <header class="star-hero" id="tourCycle">
-        <div class="star-dust star-dust-a">✦</div>
-        <div class="star-dust star-dust-b">☆</div>
-        <div class="star-dust star-dust-c">✧</div>
+        <div class="mobius-hero" aria-hidden="true">
+          <svg viewBox="0 0 36 24" role="img" focusable="false">
+            <path d="M3 12C7 4 13 4 18 12C23 20 29 20 33 12C29 4 23 4 18 12C13 20 7 20 3 12Z" />
+            <path class="mobius-cross" d="M18 12C21 7 25 5 29 7" />
+          </svg>
+        </div>
         <div class="hero-copy">
           <h1 id="heroTitle">Tiny Progress</h1>
           <div class="v2-cycle-line">
@@ -40,7 +42,6 @@
             <div class="cycle-theme-value-row">
               <span class="soft-label">本輪：</span>
               <strong id="cycleThemeText">讀取中…</strong>
-              <span class="cycle-theme-spark" aria-hidden="true">✦</span>
             </div>
             <button class="quiet-edit" id="editCycleThemeBtn" type="button">編輯</button>
           </div>
@@ -56,26 +57,29 @@
           </div>
           <div class="weekly-divider"></div>
           <div class="weekly-field">
-            <p><span class="spark spark-green">✦</span>本週目標</p>
+            <p><span class="goal-dot" aria-hidden="true"></span>本週目標</p>
             <div class="weekly-goal" id="weekGoalText">尚未設定</div>
           </div>
         </div>
 
-        <div class="star-progress-wrap" aria-live="polite">
-          <div class="star-progress" id="starProgress"></div>
-          <strong id="workloadCount">已完成 0 件</strong>
-          <div id="workloadFill" hidden></div>
+        <div class="week-progress-wrap" aria-live="polite">
+          <div class="week-progress-head">
+            <span>本週進度</span>
+            <strong id="workloadCount">0 / 0</strong>
+          </div>
+          <div class="week-progress-track" id="starProgress" role="progressbar" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+            <div class="week-progress-fill" id="workloadFill"></div>
+          </div>
           <p id="workloadNote" hidden></p>
         </div>
 
         <div class="week-tools">
-          <button class="soft-link" id="nextWeekPlanBtn" type="button" hidden>下週安排 ✦</button>
+          <button class="soft-link" id="nextWeekPlanBtn" type="button" hidden>下週安排</button>
           <button class="soft-link" id="postponeWeekBtn" type="button">本週需要順延</button>
         </div>
       </section>
 
       <section class="soft-state-card" id="weekSetupPanel" hidden>
-        <span class="state-star">✦</span>
         <h2>先寫下這週想往哪裡走</h2>
         <form id="weekSetupForm" class="v2-stack-form">
           <label>本週主題<input id="weekSetupTheme" type="text" maxlength="80" required /></label>
@@ -85,14 +89,18 @@
       </section>
 
       <section class="soft-state-card" id="restPanel" hidden>
-        <span class="state-star">☆</span>
         <h2>這一輪和下一輪之間，先留一點空白</h2>
         <p id="restMessage">下一個 Cycle 將於指定日期開始。</p>
-        <button class="soft-link" id="changeCycleStartBtn" type="button">修改下一輪 ✦</button>
+        <button class="soft-link" id="changeCycleStartBtn" type="button">修改下一輪</button>
       </section>
 
       <section class="soft-state-card" id="cycleCompletePanel" hidden>
-        <div class="mini-star-row">★★★★★★★★★★★★</div>
+        <div class="cycle-complete-mobius" aria-hidden="true">
+          <svg viewBox="0 0 36 24" focusable="false">
+            <path d="M3 12C7 4 13 4 18 12C23 20 29 20 33 12C29 4 23 4 18 12C13 20 7 20 3 12Z" />
+            <path class="mobius-cross" d="M18 12C21 7 25 5 29 7" />
+          </svg>
+        </div>
         <h2 id="cycleCompleteTitle">Cycle 完成</h2>
         <p>這 12 週已經走完，可以看看這一輪留下了什麼。</p>
         <button class="primary-pill" id="openReviewBtn" type="button">看看這一輪</button>
@@ -142,7 +150,7 @@
 
       <section class="weekly-review-card" id="weeklyReviewPanel" hidden>
         <div>
-          <span class="review-spark" id="weeklyReviewSpark">✦</span>
+          <span class="review-status-dot" id="weeklyReviewSpark" aria-hidden="true"></span>
           <strong>Weekly Review</strong>
           <p id="weeklyReviewStatus">寫下這週真正留下的感覺。</p>
         </div>
@@ -176,7 +184,7 @@
         </section>
 
         <section class="settings-card intro-card">
-          <span>✦</span>
+          <span class="intro-dot" aria-hidden="true"></span>
           <div>
             <h2>重新看看</h2>
             <p>想再看一次 3 步介紹時，可以從這裡開始。</p>
@@ -202,7 +210,12 @@
 
   <div class="v2-cycle-celebration" id="cycleCelebration" hidden>
     <div class="star-celebration-card">
-      <div class="celebration-stars">★ ★ ★ ★ ★ ★<br />★ ★ ★ ★ ★ ★</div>
+      <div class="celebration-mobius" aria-hidden="true">
+        <svg viewBox="0 0 36 24" focusable="false">
+          <path d="M3 12C7 4 13 4 18 12C23 20 29 20 33 12C29 4 23 4 18 12C13 20 7 20 3 12Z" />
+          <path class="mobius-cross" d="M18 12C21 7 25 5 29 7" />
+        </svg>
+      </div>
       <h2 id="celebrationTitle">Cycle 完成</h2>
       <p>12 週都走過了。</p>
       <button class="primary-pill" id="skipCelebrationBtn" type="button">看看這一輪</button>
@@ -219,6 +232,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=20260830-v4.1-cancel"></script>
+  <script src="script.js?v=20260830-v4.2-morandi"></script>
 </body>
 </html>
