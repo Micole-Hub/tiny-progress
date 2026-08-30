@@ -625,8 +625,8 @@ function buildCategoryFlexTag(category, options = {}) {
     borderColor: style.borderColor,
     paddingTop: "4px",
     paddingBottom: "4px",
-    paddingStart: "6px",
-    paddingEnd: "6px",
+    paddingStart: "4px",
+    paddingEnd: "4px",
   });
 }
 
@@ -664,7 +664,7 @@ function buildDifficultyFlexTag(difficulty, options = {}) {
     type: "box",
     layout: "horizontal",
     flex: 0,
-    width: options.width || "56px",
+    width: options.width || "46px",
     backgroundColor: style.backgroundColor,
     cornerRadius: "7px",
     borderColor: style.borderColor,
@@ -803,25 +803,33 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     if (subTag) tagContents.push(subTag);
   }
 
-  if (showDifficulty) {
-    tagContents.push(
-      buildDifficultyFlexTag(difficulty, {
-        width: "48px",
-      })
-    );
-  }
+  const topRow = {
+    type: "box",
+    layout: "horizontal",
+    spacing: "xs",
+    alignItems: "center",
+    contents: [
+      {
+        type: "text",
+        text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title)}`,
+        size: "md",
+        color: task.done ? "#4F5947" : "#394334",
+        wrap: false,
+        maxLines: 1,
+        weight: "bold",
+        flex: 1,
+      },
+      ...(showDifficulty
+        ? [
+            buildDifficultyFlexTag(difficulty, {
+              width: "46px",
+            }),
+          ]
+        : []),
+    ],
+  };
 
-  const rowContents = [
-    {
-      type: "text",
-      text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title)}`,
-      size: "lg",
-      color: task.done ? "#4F5947" : "#394334",
-      wrap: true,
-      maxLines: 2,
-      weight: "bold",
-    },
-  ];
+  const rowContents = [topRow];
 
   if (tagContents.length > 0) {
     rowContents.push({
@@ -1328,9 +1336,8 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     footerContents: buildFlexFooterHint(["需要操作說明請輸入：說明"]),
   });
 
-  // v4.2.4：只有「本週清單」需要更寬。
-  // 其他 LINE 卡片仍維持 mega，避免整套介面一起變得過寬。
-  bubble.size = "giga";
+  // v4.2.5：本週清單回到窄版。
+  bubble.size = "mega";
 
   return {
     type: "flex",
