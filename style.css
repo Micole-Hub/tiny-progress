@@ -1835,3 +1835,404 @@ textarea:focus-visible {
     padding: 20px !important;
   }
 }
+
+
+/* =========================================================
+   Sage interaction + category colors
+   ========================================================= */
+
+a,
+button,
+.text-btn,
+.soft-link,
+.quiet-edit,
+.v2-subcategory-chip {
+  text-decoration: none !important;
+}
+
+a:hover,
+button:hover,
+.text-btn:hover,
+.soft-link:hover,
+.quiet-edit:hover,
+.v2-subcategory-chip:hover {
+  text-decoration: none !important;
+}
+
+.chip-category,
+.chip-subcategory,
+.v2-subcategory-chip {
+  background: var(--tag-bg, var(--green-soft)) !important;
+  color: var(--tag-text, var(--ink)) !important;
+  border: 1px solid var(--tag-border, var(--line)) !important;
+}
+
+.v2-setting-row-top strong::before {
+  background: var(--category-dot, var(--lavender-400)) !important;
+}
+
+.primary-pill,
+.join-toggle,
+.tp-btn-primary,
+.tp-btn-seal {
+  min-height: 46px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: #8f9b79 !important;
+  color: #fffaf1 !important;
+  font-weight: 700;
+  box-shadow: none;
+  transition:
+    transform .16s ease,
+    background-color .16s ease,
+    box-shadow .16s ease,
+    filter .16s ease;
+}
+
+.primary-pill:hover,
+.join-toggle:hover,
+.tp-btn-primary:hover,
+.tp-btn-seal:hover {
+  background: #7d896b !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(79, 89, 71, .16);
+}
+
+.primary-pill:active,
+.join-toggle:active,
+.tp-btn-primary:active,
+.tp-btn-seal:active {
+  background: #667357 !important;
+  transform: translateY(1px) scale(.98);
+  box-shadow: none;
+}
+
+.v2-soft-btn,
+.text-btn,
+.soft-link,
+.quiet-edit,
+.v2-more-btn,
+.v2-subcategory-chip {
+  transition:
+    transform .14s ease,
+    background-color .14s ease,
+    color .14s ease,
+    box-shadow .14s ease;
+}
+
+.v2-soft-btn:hover,
+.v2-subcategory-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(79, 89, 71, .09);
+}
+
+.v2-soft-btn:active,
+.v2-subcategory-chip:active,
+.text-btn:active,
+.soft-link:active,
+.quiet-edit:active,
+.v2-more-btn:active {
+  transform: translateY(1px) scale(.98);
+  box-shadow: none;
+}
+
+.next-task-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+
+/* =========================================================
+   Tiny Progress v4
+   Wider desktop + larger task text + star completion control
+   ========================================================= */
+
+.app {
+  width: min(calc(100% - 48px), 1280px);
+}
+
+.home-layout {
+  grid-template-columns: minmax(0, 1.82fr) minmax(290px, .68fr);
+  gap: 22px;
+}
+
+/* Main task cards: easier to read on desktop */
+.v2-task-card {
+  min-height: 90px;
+  padding: 16px 16px 16px 20px;
+  gap: 14px;
+  box-shadow: 0 7px 20px rgba(72, 82, 67, .045);
+}
+
+.v2-task-title {
+  font-size: 18px;
+  line-height: 1.55;
+  font-weight: 650;
+  letter-spacing: .005em;
+}
+
+.v2-task-route,
+.v2-task-status-line {
+  font-size: 13px;
+}
+
+.chip {
+  min-height: 27px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+/* Complete = collect a star, not a form checkbox */
+.v2-task-card input[type="checkbox"] {
+  display: none !important;
+}
+
+.v2-complete-star {
+  appearance: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #a8ad9f;
+  font-family: "Nunito", "Noto Sans TC", sans-serif;
+  font-size: 29px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    transform .15s ease,
+    color .15s ease,
+    background-color .15s ease,
+    box-shadow .15s ease;
+}
+
+.v2-complete-star:hover {
+  color: var(--gold);
+  background: rgba(201, 163, 95, .10);
+  transform: translateY(-1px) scale(1.08);
+  box-shadow: 0 5px 14px rgba(201, 163, 95, .13);
+}
+
+.v2-complete-star:active {
+  color: #aa8347;
+  transform: translateY(1px) scale(.94);
+  box-shadow: none;
+}
+
+.v2-complete-star.is-complete,
+.v2-complete-star:disabled {
+  color: var(--gold);
+  background: rgba(201, 163, 95, .08);
+  cursor: default;
+  opacity: 1;
+}
+
+.v2-task-card.is-done .v2-complete-star {
+  filter: none;
+}
+
+/* Every category/subcategory gets its own stable soft color */
+.chip-category,
+.chip-subcategory,
+.v2-subcategory-chip {
+  background: var(--tag-bg, var(--green-soft)) !important;
+  color: var(--tag-text, var(--ink)) !important;
+  border-color: var(--tag-border, var(--line)) !important;
+}
+
+/* One primary-button language across the app */
+.primary-pill,
+.join-toggle,
+.tp-btn-primary,
+.tp-btn-seal {
+  min-height: 48px;
+  padding-inline: 24px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tp-btn-danger {
+  min-height: 48px;
+  padding-inline: 24px;
+  border-radius: 999px;
+  font-weight: 700;
+  transition:
+    transform .16s ease,
+    background-color .16s ease,
+    box-shadow .16s ease;
+}
+
+.tp-btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(183, 101, 96, .16);
+}
+
+.tp-btn-danger:active {
+  transform: translateY(1px) scale(.98);
+  box-shadow: none;
+}
+
+/* No underline interaction language anywhere */
+a,
+a:hover,
+a:active,
+button,
+button:hover,
+button:active,
+.text-btn,
+.text-btn:hover,
+.text-btn:active,
+.soft-link,
+.soft-link:hover,
+.soft-link:active,
+.quiet-edit,
+.quiet-edit:hover,
+.quiet-edit:active,
+.tp-btn-ghost,
+.tp-btn-ghost:hover,
+.tp-btn-ghost:active {
+  text-decoration: none !important;
+}
+
+/* Important text buttons use background/position instead of underline */
+.soft-link:hover,
+.quiet-edit:hover,
+.text-btn:hover,
+.tp-btn-ghost:hover {
+  background: rgba(228, 234, 220, .72);
+  color: var(--lavender-800);
+  border-radius: 999px;
+}
+
+.soft-link:active,
+.quiet-edit:active,
+.text-btn:active,
+.tp-btn-ghost:active {
+  background: rgba(209, 218, 197, .86);
+  transform: translateY(1px) scale(.98);
+}
+
+/* Start-date history is compact and only appears once the Cycle is visible */
+.history-cycle-events {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.history-cycle-event {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fbf8ef;
+}
+
+.history-cycle-event strong {
+  color: var(--lavender-800);
+  font-size: 13px;
+}
+
+.history-cycle-event span {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.history-cycle-event small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 1100px) {
+  .app {
+    width: min(calc(100% - 36px), 1180px);
+  }
+
+  .home-layout {
+    grid-template-columns: minmax(0, 1.55fr) minmax(270px, .72fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .home-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .side-flow {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .app {
+    width: min(calc(100% - 24px), 1280px);
+  }
+
+  .home-layout,
+  .side-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .v2-task-card {
+    min-height: 84px;
+    padding: 15px 13px 15px 17px;
+    gap: 11px;
+  }
+
+  .v2-task-title {
+    font-size: 17px;
+    line-height: 1.5;
+  }
+
+  .chip {
+    font-size: 12px;
+  }
+
+  .v2-complete-star {
+    width: 34px;
+    height: 34px;
+    font-size: 26px;
+  }
+
+  .history-cycle-event {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v2-complete-star,
+  .primary-pill,
+  .join-toggle,
+  .tp-btn-primary,
+  .tp-btn-danger,
+  .soft-link,
+  .quiet-edit,
+  .text-btn {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+
+.v2-category-name-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--tag-border, var(--line));
+  border-radius: 999px;
+  background: var(--tag-bg, var(--green-soft));
+  color: var(--tag-text, var(--ink));
+  font-size: 13px;
+  font-weight: 700;
+}

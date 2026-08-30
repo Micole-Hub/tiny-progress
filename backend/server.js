@@ -262,7 +262,7 @@ async function getTaskBoardForLine() {
 }
 
 function getLineCommandHintText() {
-  return ["需要操作說明請輸入：攻略", "想看用量請輸入：用量小抄"].join("\n");
+  return ["需要操作說明請輸入：說明", "想看用量請輸入：用量小抄"].join("\n");
 }
 
 function getTaskMetaText(task, includeDifficulty = true) {
@@ -324,7 +324,7 @@ function formatTaskSectionByCategory(tasks) {
         if (subLabel) lines.push(`  ［${subLabel}］`);
 
         groupTasks.forEach(function (task) {
-          const checkbox = task.done ? "☑" : "☐";
+          const checkbox = task.done ? "★" : "☆";
           lines.push(
             `${taskNumber}. ${checkbox} ${task.title}｜${normalizeSubCategory(task.subCategory, category)}｜${normalizeDifficulty(task.difficulty)}`
           );
@@ -335,7 +335,7 @@ function formatTaskSectionByCategory(tasks) {
     }
 
     categoryTasks.forEach(function (task) {
-      const checkbox = task.done ? "☑" : "☐";
+      const checkbox = task.done ? "★" : "☆";
       lines.push(`${taskNumber}. ${checkbox} ${task.title}｜${normalizeDifficulty(task.difficulty)}`);
       taskNumber += 1;
     });
@@ -403,55 +403,55 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
 }
 
 const FLEX_BRAND_NAME = "Tiny Progress";
-const FLEX_FIXED_LINE = "小小前進，也算數。今天慢慢辦也可以。";
+const FLEX_FIXED_LINE = "今天的任務與進度 ✦";
 
 const FLEX_COLORS = {
-  cream: "#FBF1E3",
-  card: "#FFF8ED",
+  cream: "#F8F4EA",
+  card: "#FFFAF1",
   paper: "#FFFDF7",
-  cardSoft: "#FFF3E4",
+  cardSoft: "#F4F0E7",
 
-  darkGreen: "#263D35",
-  greenFresh: "#91B980",
-  beigeLine: "#E5D2BA",
-  mutedText: "#75695F",
-  softText: "#93867A",
+  darkGreen: "#4F5947",
+  greenFresh: "#8F9B79",
+  beigeLine: "#E8E1D5",
+  mutedText: "#7F8777",
+  softText: "#92998B",
 
-  red: "#C97461",
-  gold: "#DDB36A",
-  peach: "#F2C6B6",
-  mint: "#EAF3E3",
+  red: "#B76560",
+  gold: "#C9A35F",
+  peach: "#E7A6B7",
+  mint: "#E4EADC",
 
-  stampBg: "#F8DDD2",
-  stampText: "#A75D4B",
-  stickerBg: "#FFF6D8",
-  stickerText: "#95662B",
+  stampBg: "#E4EADC",
+  stampText: "#56614D",
+  stickerBg: "#EFE2BF",
+  stickerText: "#7A6338",
 
-  programming: "#E2ECF6",
-  programmingText: "#3F6380",
-  wellness: "#F0E2E9",
-  wellnessText: "#77576B",
-  interest: "#F4E0C3",
-  interestText: "#8A5A25",
+  programming: "#E6EDF4",
+  programmingText: "#526C82",
+  wellness: "#F0E5E8",
+  wellnessText: "#7B5F6B",
+  interest: "#F2E7D2",
+  interestText: "#80633E",
 
-  video: "#D9E1F2",
-  videoText: "#405989",
-  videoAccent: "#6F7FA8",
-  practice: "#DDEBD8",
-  practiceText: "#466F48",
-  practiceAccent: "#6E9B72",
-  note: "#F1DAC0",
-  noteText: "#815426",
-  noteAccent: "#C28A5A",
-  w3schools: "#F1DDE0",
-  w3schoolsText: "#7A4B52",
-  w3schoolsAccent: "#C47F88",
-  freecodecamp: "#E6DDF1",
-  freecodecampText: "#604A78",
-  freecodecampAccent: "#9A80BF",
+  video: "#E7EBF5",
+  videoText: "#596882",
+  videoAccent: "#8795B2",
+  practice: "#E3EEE1",
+  practiceText: "#58705A",
+  practiceAccent: "#8FAA8C",
+  note: "#F3E7D7",
+  noteText: "#80664A",
+  noteAccent: "#C3A57C",
+  w3schools: "#F2E3E6",
+  w3schoolsText: "#7F5D65",
+  w3schoolsAccent: "#C997A1",
+  freecodecamp: "#EAE4F0",
+  freecodecampText: "#6C5B78",
+  freecodecampAccent: "#A698B3",
 
-  uncategorized: "#EFE4D8",
-  uncategorizedText: "#7A6E5F",
+  uncategorized: "#EEEAE1",
+  uncategorizedText: "#716F67",
 };
 
 const FLEX_ACCENTS = {
@@ -462,44 +462,42 @@ const FLEX_ACCENTS = {
   hard: FLEX_COLORS.red,
 };
 
+const LINE_TAG_PALETTE = [
+  { bg: "#E6EDF4", text: "#526C82", border: "#CEDAE5", accent: "#8097AA" },
+  { bg: "#F2E3E6", text: "#7F5D65", border: "#E3C9D0", accent: "#C997A1" },
+  { bg: "#E3EEE1", text: "#58705A", border: "#CDDCCB", accent: "#8FAA8C" },
+  { bg: "#F3E7D7", text: "#80664A", border: "#E3D1BB", accent: "#C3A57C" },
+  { bg: "#EAE4F0", text: "#6C5B78", border: "#D8CFE2", accent: "#A698B3" },
+  { bg: "#E4EEF0", text: "#4F7075", border: "#C9DEE1", accent: "#86AEB3" },
+  { bg: "#F1E8D2", text: "#7E6B40", border: "#E2D4AE", accent: "#BDA45E" },
+  { bg: "#E9EDE0", text: "#647052", border: "#D5DCC7", accent: "#9BAA80" },
+  { bg: "#F2E7DF", text: "#7C6255", border: "#E2D1C6", accent: "#B8917D" },
+  { bg: "#E5EAF2", text: "#5D6578", border: "#D0D8E4", accent: "#929CAF" },
+  { bg: "#EAF0E4", text: "#5D6E52", border: "#D5E0CD", accent: "#95AA84" },
+  { bg: "#F0E5ED", text: "#745E70", border: "#DFCFE0", accent: "#B397AF" },
+];
+
+function stableLineTagIndex(value, salt) {
+  const text = String(salt || "") + "|" + String(value || "未分類");
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash >>> 0) % LINE_TAG_PALETTE.length;
+}
+
 function getCategoryFlexStyle(category) {
   const normalizedCategory = normalizeCategory(category);
-
-  if (normalizedCategory === "程式學習") {
-    return { backgroundColor: FLEX_COLORS.programming, textColor: FLEX_COLORS.programmingText, borderColor: "#C7D7E6" };
-  }
-
-  if (normalizedCategory === "身心穩定") {
-    return { backgroundColor: FLEX_COLORS.wellness, textColor: FLEX_COLORS.wellnessText, borderColor: "#DEC9D3" };
-  }
-
-  if (normalizedCategory === "興趣探索") {
-    return { backgroundColor: FLEX_COLORS.interest, textColor: FLEX_COLORS.interestText, borderColor: "#E3C79F" };
-  }
-
-  return { backgroundColor: "#EAF2E6", textColor: "#4F6F4D", borderColor: "#D1DEC9" };
+  const style = LINE_TAG_PALETTE[stableLineTagIndex(normalizedCategory, "category")];
+  return { backgroundColor: style.bg, textColor: style.text, borderColor: style.border, accentColor: style.accent };
 }
 
 function getSubCategoryFlexStyle(subCategory) {
-  if (subCategory === "觀看課程影片") {
-    return { backgroundColor: FLEX_COLORS.video, textColor: FLEX_COLORS.videoText, borderColor: "#BBC7E7", accentColor: FLEX_COLORS.videoAccent };
-  }
-  if (subCategory === "練習") {
-    return { backgroundColor: FLEX_COLORS.practice, textColor: FLEX_COLORS.practiceText, borderColor: "#B9D9BC", accentColor: FLEX_COLORS.practiceAccent };
-  }
-  if (subCategory === "寫筆記") {
-    return { backgroundColor: FLEX_COLORS.note, textColor: FLEX_COLORS.noteText, borderColor: "#DEBA8D", accentColor: FLEX_COLORS.noteAccent };
-  }
-  if (subCategory === "W3Schools") {
-    return { backgroundColor: FLEX_COLORS.w3schools, textColor: FLEX_COLORS.w3schoolsText, borderColor: "#D9B7BE", accentColor: FLEX_COLORS.w3schoolsAccent };
-  }
-  if (subCategory === "freeCodeCamp") {
-    return { backgroundColor: FLEX_COLORS.freecodecamp, textColor: FLEX_COLORS.freecodecampText, borderColor: "#CABADD", accentColor: FLEX_COLORS.freecodecampAccent };
-  }
-  if (subCategory === "Vibe Coding") {
-    return { backgroundColor: "#DFF0F3", textColor: "#336B75", borderColor: "#B9DDE3", accentColor: "#4F9CAA" };
-  }
-  return { backgroundColor: FLEX_COLORS.uncategorized, textColor: FLEX_COLORS.uncategorizedText, borderColor: "#D9CCBC", accentColor: "#B6A999" };
+  const label = getLineSubCategoryLabel(subCategory) || "未分類";
+  const index = (stableLineTagIndex(label, "subcategory") + 1) % LINE_TAG_PALETTE.length;
+  const style = LINE_TAG_PALETTE[index];
+  return { backgroundColor: style.bg, textColor: style.text, borderColor: style.border, accentColor: style.accent };
 }
 
 function getDifficultyFlexStyle(difficulty) {
@@ -526,9 +524,9 @@ function getDifficultyAccentColor(difficulty) {
 function getDifficultyFooterCopy(difficulty, isCompleted) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
 
-  if (normalizedDifficulty === "簡單") return isCompleted ? "熱身完成，今天已經有動起來。" : "先從簡單的開始就好。";
-  if (normalizedDifficulty === "適中") return isCompleted ? "穩穩完成，已經留下紀錄了。" : "穩穩推進，不用開倍速。";
-  return isCompleted ? "大案收妥，今天可以蓋一枚章。" : "大案也能小辦，不必硬闖。";
+  if (normalizedDifficulty === "簡單") return isCompleted ? "這件完成了。" : "可以先從這件開始。";
+  if (normalizedDifficulty === "適中") return isCompleted ? "這件完成了，已經留下進度。" : "照自己的速度往前就好。";
+  return isCompleted ? "這件完成了，星星再多一顆。" : "需要的話，可以先拆成更小的步驟。";
 }
 
 function buildTinyStamp(text, options = {}) {
@@ -754,7 +752,7 @@ function buildFlexHeader(title, subtitle) {
               { type: "text", text: FLEX_BRAND_NAME, size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold", flex: 0 },
             ],
           },
-          buildTinyStamp("小小前進", { backgroundColor: FLEX_COLORS.stampBg, color: FLEX_COLORS.stampText }),
+          buildTinyStamp("進度中", { backgroundColor: FLEX_COLORS.stampBg, color: FLEX_COLORS.stampText }),
         ],
       },
       { type: "text", text: title, size: "xl", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true },
@@ -777,7 +775,7 @@ function buildFlexInfoCard(contents, options = {}) {
     backgroundColor: options.backgroundColor || FLEX_COLORS.card,
     cornerRadius: "18px",
     paddingAll: "16px",
-    borderColor: options.borderColor || "#E6D4BD",
+    borderColor: options.borderColor || "#E8E1D5",
     borderWidth: "1px",
     contents: cardContents.concat(contents),
   };
@@ -796,7 +794,7 @@ function buildProgressLine(label, doneCount, totalCount) {
 }
 
 function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, showSubCategory = true }) {
-  const checkbox = task.done ? "☑" : "☐";
+  const checkbox = task.done ? "★" : "☆";
   const difficulty = normalizeDifficulty(task.difficulty);
   const category = normalizeCategory(task.category);
   const isProgrammingTask = category === "程式學習";
@@ -919,7 +917,7 @@ function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, ac
           layout: "vertical",
           width: "12px",
           height: "6px",
-          backgroundColor: "#F2D8C4",
+          backgroundColor: "#E4EADC",
           cornerRadius: "999px",
           contents: [],
         },
@@ -954,13 +952,13 @@ function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, ac
 
 function buildDrawOneTaskFallbackText({ selectedTask, taskNumber, unfinishedCount }) {
   return [
-    "🎲 Tiny Progress｜今日抽到一件小案子",
+    "🎲 Tiny Progress｜今天抽到這一件",
     "",
     `第 ${taskNumber} 個任務`,
     `☐ ${selectedTask.title}`,
     "",
     `分類：${getTaskMetaText(selectedTask)}`,
-    `目前還有 ${unfinishedCount} 件未辦。`,
+    `目前還有 ${unfinishedCount} 件未完成。`,
     "",
     "完成後可以輸入：",
     `完成任務${taskNumber}`,
@@ -1050,9 +1048,9 @@ function buildDrawEmptyFlexMessage() {
         {
           label: "今天抽一件",
           emoji: "🐣",
-          borderColor: "#E5C98F",
-          backgroundColor: "#FFF6E3",
-          labelColor: "#9A6B2E",
+          borderColor: "#DCCB9C",
+          backgroundColor: "#FFFAF1",
+          labelColor: "#8A7448",
         }
       ),
     ],
@@ -1060,7 +1058,7 @@ function buildDrawEmptyFlexMessage() {
 
   return {
     type: "flex",
-    altText: "Tiny Progress｜目前沒有任務可以抽，本週都辦完了！",
+    altText: "Tiny Progress｜目前沒有任務可以抽，本週都完成了！",
     contents: bubble,
   };
 }
@@ -1069,7 +1067,7 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
   const difficulty = normalizeDifficulty(selectedTask.difficulty);
 
   const bubble = buildBaseFlexBubble({
-    title: "抽到一件小案子",
+    title: "抽到一件",
     // ── 剩餘件數帶入副標 ──
     subtitle: `今天幫你抽到一件，還有 ${unfinishedCount} 件等著。`,
     accentColor: FLEX_ACCENTS.draw,
@@ -1134,8 +1132,8 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
           },
         ],
         {
-          borderColor: "#E5C98F",
-          backgroundColor: "#FFF6E3",
+          borderColor: "#DCCB9C",
+          backgroundColor: "#FFFAF1",
         }
       ),
     ],
@@ -1148,7 +1146,7 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
   return {
     type: "flex",
     // ── altText 帶入週次動態資訊 ──
-    altText: `Tiny Progress｜今日抽到：${selectedTask.title}（共 ${unfinishedCount} 件未辦）`,
+    altText: `Tiny Progress｜今天抽到：${selectedTask.title}（還有 ${unfinishedCount} 件未完成）`,
     contents: bubble,
   };
 }
@@ -1323,11 +1321,11 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
         buildProgressLine("標準進度", standardDoneCount, standards.length),
       ],
       {
-        label: "本週小章",
+        label: "本週概況",
         emoji: "🐾",
-        backgroundColor: "#FFF6E3",
-        borderColor: "#E5C98F",
-        labelColor: "#9A6B2E",
+        backgroundColor: "#FFFAF1",
+        borderColor: "#DCCB9C",
+        labelColor: "#8A7448",
       }
     ),
   ];
@@ -1345,7 +1343,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
             wrap: true,
           },
         ],
-        { label: "本週任務櫃", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
+        { label: "本週任務", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
       )
     );
   } else {
@@ -1365,7 +1363,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
               ]
             : []),
         ],
-        { label: "本週任務櫃", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
+        { label: "本週任務", emoji: "🐣", backgroundColor: FLEX_COLORS.paper }
       )
     );
   }
@@ -1383,7 +1381,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
             wrap: true,
           },
         ],
-        { label: "驗收小紙條", emoji: "🥚", backgroundColor: "#FFF8EF" }
+        { label: "本週標準", emoji: "🥚", backgroundColor: "#FFFAF1" }
       )
     );
   } else {
@@ -1403,7 +1401,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
               ]
             : []),
         ],
-        { label: "驗收小紙條", emoji: "🥚", backgroundColor: "#FFF8EF" }
+        { label: "本週標準", emoji: "🥚", backgroundColor: "#FFFAF1" }
       )
     );
   }
@@ -1414,8 +1412,8 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
     footerContents: buildFlexFooterHint([
-      "今天不用清空整櫃，先辦一件。",
-      "需要操作說明請輸入：攻略",
+      "今天先看一件就好。",
+      "需要操作說明請輸入：說明",
     ]),
   });
 
@@ -1528,7 +1526,7 @@ function getGuideText() {
     "【修改中止】",
     "取消修改",
     "",
-    "小小前進，也算數。",
+    "Tiny Progress ✦",
   ].join("\n");
 }
 
@@ -1592,9 +1590,9 @@ function buildGuideFlexMessage() {
     {
       label: "查看",
       emoji: "🔍",
-      backgroundColor: "#FFF8ED",
-      borderColor: "#E5C98F",
-      labelColor: "#9A6B2E",
+      backgroundColor: "#FFFAF1",
+      borderColor: "#DCCB9C",
+      labelColor: "#8A7448",
     }
   );
 
@@ -1628,7 +1626,7 @@ function buildGuideFlexMessage() {
       label: "新增",
       emoji: "✏️",
       backgroundColor: FLEX_COLORS.mint,
-      borderColor: "#C2DEB8",
+      borderColor: "#D1DAC5",
       labelColor: "#3D6B38",
     }
   );
@@ -1648,19 +1646,19 @@ function buildGuideFlexMessage() {
     {
       label: "完成",
       emoji: "✅",
-      backgroundColor: "#F4EBF2",
+      backgroundColor: "#EEF2E8",
       borderColor: "#DEC9D3",
-      labelColor: "#7A5D69",
+      labelColor: "#6C6F64",
     }
   );
 
   const bubble = buildBaseFlexBubble({
     title: "使用方式",
-    subtitle: "不知道怎麼辦，先看這裡。",
+    subtitle: "操作方式都在這裡。",
     accentColor: FLEX_COLORS.gold,
     bodyContents: [viewCard, createCard, actionCard],
     footerContents: buildFlexFooterHint([
-      "小小前進，也算數。",
+      "Tiny Progress ✦",
       "想看用量請輸入：用量小抄",
     ]),
   });
@@ -1685,7 +1683,7 @@ function getUsageText() {
     "",
     "【你主動傳 → Bot 回覆】不佔額度",
     "Bot 用 Reply API 回覆，LINE 官方不計入每月 200 則。",
-    "清單、攻略、抽一件、新增、完成、修改、刪除",
+    "清單、說明、抽一件、新增、完成、修改、取消",
     "",
     "【Bot 主動傳給你】佔用額度",
     "Bot 用 Push API 主動發送，每則都計入每月 200 則免費額度。",
@@ -1765,15 +1763,15 @@ function buildUsageFlexMessage() {
         wrap: true,
         margin: "xs",
       },
-      buildTagRow(["清單", "攻略", "抽一件", "簡單任務", "適中任務", "困難任務"]),
+      buildTagRow(["清單", "說明", "抽一件", "簡單任務", "適中任務", "困難任務"]),
       buildTagRow(["新增任務", "新增標準", "完成", "取消", "修改", "刪除"]),
     ],
     {
       label: "你主動傳 → Bot 立刻回（不佔額度）",
       emoji: "💬",
-      backgroundColor: "#FFF8ED",
-      borderColor: "#E5C98F",
-      labelColor: "#9A6B2E",
+      backgroundColor: "#FFFAF1",
+      borderColor: "#DCCB9C",
+      labelColor: "#8A7448",
     }
   );
 
@@ -1784,7 +1782,7 @@ function buildUsageFlexMessage() {
         type: "text",
         text: "用 Push API 主動發送，每則計入每月 200 則額度",
         size: "xs",
-        color: "#7A5D69",
+        color: "#6C6F64",
         wrap: true,
         margin: "xs",
       },
@@ -1795,9 +1793,9 @@ function buildUsageFlexMessage() {
     {
       label: "Bot 主動傳給你（佔用額度）",
       emoji: "📮",
-      backgroundColor: "#F4EBF2",
+      backgroundColor: "#EEF2E8",
       borderColor: "#DEC9D3",
-      labelColor: "#7A5D69",
+      labelColor: "#6C6F64",
     }
   );
 
@@ -1837,8 +1835,8 @@ function buildUsageFlexMessage() {
       label: "目前建議",
       emoji: "📌",
       backgroundColor: "#FBF5EA",
-      borderColor: "#E5C98F",
-      labelColor: "#9A6B2E",
+      borderColor: "#DCCB9C",
+      labelColor: "#8A7448",
     }
   );
 
@@ -1848,8 +1846,8 @@ function buildUsageFlexMessage() {
     accentColor: FLEX_COLORS.greenFresh,
     bodyContents: [youAskCard, botPushCard, tipCard],
     footerContents: buildFlexFooterHint([
-      "需要操作說明請輸入：攻略",
-      "小小前進，也算數。",
+      "需要操作說明請輸入：說明",
+      "Tiny Progress ✦",
     ]),
   });
 
@@ -2007,7 +2005,7 @@ async function handleDoneCommand({ numberText, type, label, done }) {
   const actionText = done ? "已完成" : "已恢復未完成";
   const displayLabel = getDisplayLabel(label);
 
-  return [`${actionText}第 ${result.itemNumber} 個${displayLabel}：`, `${checkbox} ${updatedItem.title || result.item.title}`, "", "小小前進，也算數。"].join("\n");
+  return [`${actionText}第 ${result.itemNumber} 個${displayLabel}：`, `${checkbox} ${updatedItem.title || result.item.title}`, "", "Tiny Progress ✦"].join("\n");
 }
 
 async function handleDeleteCommand({ numberText, type, label }) {
@@ -2104,7 +2102,7 @@ function getFormatReminderText() {
     "刪除任務3",
     "完成標準2",
     "",
-    "需要完整說明請輸入：攻略",
+    "需要完整說明請輸入：說明",
   ].join("\n");
 }
 
@@ -2298,6 +2296,15 @@ app.patch("/items/:id", async (req, res) => {
   catch (error) { res.status(getApiErrorStatus(error)).json({ message: "更新任務失敗", error: error.message }); }
 });
 
+app.delete("/items/:id/draft", async (req, res) => {
+  try {
+    const result = await gasPost("remove-draft-task", { id: req.params.id });
+    res.json({ message: "草稿任務已移除", ...(result || {}) });
+  } catch (error) {
+    res.status(getApiErrorStatus(error)).json({ message: "移除草稿任務失敗", error: error.message });
+  }
+});
+
 app.post("/items/:id/complete", async (req, res) => {
   try { res.json(normalizeItem(await gasPost("complete-task", { id: req.params.id }))); }
   catch (error) { res.status(getApiErrorStatus(error)).json({ message: "完成任務失敗", error: error.message }); }
@@ -2310,7 +2317,12 @@ app.post("/items/:id/correct-completion", async (req, res) => {
 
 app.post("/items/:id/cancel", async (req, res) => {
   try { res.json(normalizeItem(await gasPost("cancel-task", { id: req.params.id, ...(req.body || {}) }))); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "取消任務失敗", error: error.message }); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "刪除任務失敗", error: error.message }); }
+});
+
+app.post("/items/:id/delete", async (req, res) => {
+  try { res.json(normalizeItem(await gasPost("cancel-task", { id: req.params.id, ...(req.body || {}) }))); }
+  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "刪除任務失敗", error: error.message }); }
 });
 
 app.post("/items/:id/reschedule", async (req, res) => {
@@ -2326,9 +2338,9 @@ app.post("/items/:id/replan", async (req, res) => {
 app.delete("/items/:id", async (req, res) => {
   try {
     const item = await deleteItemFromGoogleSheets(req.params.id);
-    res.json({ message: "任務已取消並保留紀錄", id: item.id, item });
+    res.json({ message: "任務已刪除並保留紀錄", id: item.id, item });
   } catch (error) {
-    res.status(getApiErrorStatus(error)).json({ message: "取消任務失敗", error: error.message });
+    res.status(getApiErrorStatus(error)).json({ message: "刪除任務失敗", error: error.message });
   }
 });
 

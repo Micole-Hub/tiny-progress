@@ -32,7 +32,7 @@ const RESCHEDULE_REASONS = [
   "其他",
 ];
 
-const CANCEL_REASONS = [
+const DELETE_REASONS = [
   "任務已不需要",
   "任務內容重複",
   "當初規劃錯誤",
@@ -447,6 +447,42 @@ function renderRescheduled() {
   bindTaskCardEvents(els.rescheduledList);
 }
 
+const TAG_COLOR_PALETTE = [
+  { bg: "#E6EDF4", text: "#526C82", border: "#CEDAE5" },
+  { bg: "#F2E3E6", text: "#7F5D65", border: "#E3C9D0" },
+  { bg: "#E3EEE1", text: "#58705A", border: "#CDDCCB" },
+  { bg: "#F3E7D7", text: "#80664A", border: "#E3D1BB" },
+  { bg: "#EAE4F0", text: "#6C5B78", border: "#D8CFE2" },
+  { bg: "#E4EEF0", text: "#4F7075", border: "#C9DEE1" },
+  { bg: "#F1E8D2", text: "#7E6B40", border: "#E2D4AE" },
+  { bg: "#E9EDE0", text: "#647052", border: "#D5DCC7" },
+  { bg: "#F2E7DF", text: "#7C6255", border: "#E2D1C6" },
+  { bg: "#E5EAF2", text: "#5D6578", border: "#D0D8E4" },
+  { bg: "#EAF0E4", text: "#5D6E52", border: "#D5E0CD" },
+  { bg: "#F0E5ED", text: "#745E70", border: "#DFCFE0" },
+];
+
+function stableTagIndex(value, salt = "") {
+  const text = `${salt}|${String(value || "未分類")}`;
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash >>> 0) % TAG_COLOR_PALETTE.length;
+}
+
+function getTagColors(value, type = "category") {
+  let index = stableTagIndex(value, type);
+  if (type === "subcategory") index = (index + 1) % TAG_COLOR_PALETTE.length;
+  return TAG_COLOR_PALETTE[index];
+}
+
+function tagStyle(value, type = "category") {
+  const c = getTagColors(value, type);
+  return `--tag-bg:${c.bg};--tag-text:${c.text};--tag-border:${c.border};`;
+}
+
 function renderTaskCard(item, options = {}) {
   const compact = options.compact === true;
   const classes = ["v2-task-card"];
@@ -472,18 +508,18 @@ function renderTaskCard(item, options = {}) {
 
   const meta = compact ? "" : `
     <div class="v2-task-meta">
-      <span class="chip chip-category">${escapeHtml(item.category || "未分類")}</span>
-      ${item.subCategory && item.subCategory !== "未分類" ? `<span class="chip chip-subcategory">${escapeHtml(item.subCategory)}</span>` : ""}
+      <span class="chip chip-category" style="${tagStyle(item.categoryId || item.category || "未分類", "category")}">${escapeHtml(item.category || "未分類")}</span>
+      ${item.subCategory && item.subCategory !== "未分類" ? `<span class="chip chip-subcategory" style="${tagStyle(item.subCategoryId || item.subCategory, "subcategory")}">${escapeHtml(item.subCategory)}</span>` : ""}
       <span class="chip chip-difficulty">${escapeHtml(item.difficulty)}</span>
     </div>`;
 
-  const checkbox = item.status === "completed"
-    ? `<input type="checkbox" checked disabled aria-label="已完成：${escapeHtml(item.title)}" />`
-    : `<input type="checkbox" data-complete-id="${escapeHtml(item.id)}" aria-label="完成：${escapeHtml(item.title)}" />`;
+  const completionControl = item.status === "completed"
+    ? `<button class="v2-complete-star is-complete" type="button" disabled aria-label="已完成：${escapeHtml(item.title)}">★</button>`
+    : `<button class="v2-complete-star" type="button" data-complete-id="${escapeHtml(item.id)}" aria-label="完成：${escapeHtml(item.title)}">☆</button>`;
 
   return `
     <article class="${classes.join(" ")}" data-task-id="${escapeHtml(item.id)}">
-      ${checkbox}
+      ${completionControl}
       <div class="v2-task-main">
         <p class="v2-task-title">${escapeHtml(item.title)}</p>
         ${route ? `<p class="v2-task-route">${escapeHtml(route)}</p>` : ""}
@@ -496,11 +532,9 @@ function renderTaskCard(item, options = {}) {
 
 function bindTaskCardEvents(root) {
   if (!root) return;
-  root.querySelectorAll("[data-complete-id]").forEach((box) => {
-    box.addEventListener("change", async () => {
-      if (!box.checked) return;
-      box.checked = false;
-      const item = state.items.find((x) => x.id === box.dataset.completeId);
+  root.querySelectorAll("[data-complete-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const item = state.items.find((x) => x.id === button.dataset.completeId);
       if (item) await confirmComplete(item);
     });
   });
@@ -552,17 +586,26 @@ async function addTask(event) {
   if (!payload.title) return;
   if (!payload.categoryId) return showAlert("還缺一個分類", "先到 Settings 加入至少一個分類。", "✦");
 
+  const category = state.categories.find((c) => c.id === payload.categoryId);
+  const subCategory = state.categories.find((c) => c.id === payload.subCategoryId);
   const workload = activeWorkloadItems().length;
-  if (workload >= WORKLOAD_RECOMMENDED) {
-    const ok = await showConfirm({
-      icon: "✦",
-      title: "這週已經安排不少事情了",
-      text: `現在有 ${workload} 件事情還在進行中。還是可以加入，只是先確認一下。`,
-      confirmText: "仍然加入",
-      cancelText: "再看看",
-    });
-    if (!ok) return;
-  }
+  const detailBits = [
+    category?.name || "未分類",
+    subCategory?.name || "",
+    payload.difficulty,
+  ].filter(Boolean);
+  const workloadLine = workload >= WORKLOAD_RECOMMENDED
+    ? `\n\n目前還有 ${workload} 件事情在進行中。`
+    : "";
+
+  const ok = await showConfirm({
+    icon: "✦",
+    title: "要加入這件事嗎？",
+    text: `「${payload.title}」\n\n${detailBits.join(" · ")}${workloadLine}`,
+    confirmText: "加入",
+    cancelText: "返回修改",
+  });
+  if (!ok) return;
 
   showLoading("加入中…");
   try {
@@ -583,7 +626,7 @@ async function confirmComplete(item) {
   const ok = await showConfirm({
     icon: "★",
     title: "要完成這件事嗎？",
-    text: `「${item.title}」\n\n完成後會收下一顆星。如果是不小心按到，之後仍然可以更正。`,
+    text: `「${item.title}」\n\n完成後會收下一顆星；如果是不小心按到，之後仍可更正。`,
     confirmText: "完成",
     cancelText: "再等等",
   });
@@ -596,6 +639,13 @@ async function confirmComplete(item) {
   } catch (error) {
     showAlert("完成失敗", error.message, "✦");
   } finally { hideLoading(); }
+}
+
+function isUnstartedCycleTask(item) {
+  const cycleNumber = Number(item?.scheduledCycleNumber || item?.cycleNumber || 0);
+  const cycle = state.cycles.find((row) => Number(row.cycleNumber) === cycleNumber);
+  const startDate = String(cycle?.startDate || "").slice(0, 10);
+  return !!(startDate && startDate > todayYmd());
 }
 
 function getTaskActions(item) {
@@ -613,7 +663,7 @@ function getTaskActions(item) {
     { key: "reschedule", label: "調整時間" },
     { key: "replan", label: "重新整理" },
     { key: "history", label: "查看紀錄" },
-    { key: "cancel", label: "取消任務", danger: true },
+    { key: "delete", label: "刪除", danger: true },
   ];
 }
 
@@ -668,7 +718,7 @@ async function handleTaskAction(item, action) {
   if (action === "reschedule") return openDirectReschedule(item);
   if (action === "replan") return openReplanTask(item);
   if (action === "history") return goToTaskHistory(item.id);
-  if (action === "cancel") return openCancelTask(item);
+  if (action === "delete") return openDeleteTask(item);
   if (action === "correct") return correctCompletion(item);
 }
 
@@ -829,20 +879,47 @@ function setupReplanRow(row) {
   refresh();
 }
 
-function openCancelTask(item) {
+async function openDeleteTask(item) {
+  const isDraft = isUnstartedCycleTask(item);
+
+  if (isDraft) {
+    const ok = await showConfirm({
+      icon: "✦",
+      title: "確定刪除這件草稿任務嗎？",
+      text: `「${item.title}」\n\n下一輪還沒開始，刪除後不會留下 History 紀錄。`,
+      confirmText: "刪除",
+      cancelText: "先留著",
+      danger: true,
+    });
+    if (!ok) return;
+
+    showLoading("刪除中…");
+    try {
+      await api(`/items/${encodeURIComponent(item.id)}/draft`, { method: "DELETE" });
+      await loadCore({ quiet: true });
+    } catch (error) {
+      showAlert("刪除失敗", error.message, "✦");
+    } finally { hideLoading(); }
+    return;
+  }
+
   openFormModal({
-    icon: "✦", title: "確定不繼續這件事嗎？", confirmText: "取消任務", cancelText: "先留著", danger: true,
+    icon: "✦",
+    title: "確定刪除這件事嗎？",
+    confirmText: "刪除",
+    cancelText: "先留著",
+    danger: true,
     body: `
       <div class="tp-modal-preformatted">${escapeHtml(item.title)}</div>
-      <p class="section-note">取消後仍然會留在紀錄裡。</p>
-      <label class="v2-form-field">原因<select id="cancelReason">${CANCEL_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
-      <label class="v2-form-field">想補充的話（選填）<textarea id="cancelNote" rows="3"></textarea></label>`,
+      <p class="section-note">刪除後仍會保留在 History。</p>
+      <label class="v2-form-field">原因<select id="deleteReason">${DELETE_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
+      <label class="v2-form-field">想補充的話（選填）<textarea id="deleteNote" rows="3"></textarea></label>`,
     onConfirm: async () => {
-      await api(`/items/${encodeURIComponent(item.id)}/cancel`, {
+      await api(`/items/${encodeURIComponent(item.id)}/delete`, {
         method: "POST",
         body: {
-          reason: document.getElementById("cancelReason").value,
-          note: document.getElementById("cancelNote").value.trim(),
+          reason: document.getElementById("deleteReason").value,
+          note: document.getElementById("deleteNote").value.trim(),
         },
       });
       await loadCore({ quiet: true });
@@ -973,7 +1050,7 @@ function renderHistory() {
       `後來完成 ${summary.lateCompleted || 0}`,
       `未完待續 ${summary.incomplete || 0}`,
       `重新整理 ${summary.replanned || 0}`,
-      `取消 ${summary.cancelled || 0}`,
+      `刪除 ${summary.cancelled || 0}`,
     ];
     if (Number(cycle.cycleNumber) >= 2) summaryBits.push(`Weekly Review ${summary.retrospectiveCount || 0}/12`);
 
@@ -990,6 +1067,7 @@ function renderHistory() {
           <div class="history-cycle-body">
             <div class="history-path">${renderHistoryCyclePath(weeks)}</div>
             <div class="history-summary-line">${summaryBits.map((bit) => `<span>${escapeHtml(bit)}</span>`).join("")}</div>
+            ${renderCycleHistoryEvents(wrapper.events || [])}
             <div class="history-week-grid">
               ${weeks.map((weekWrap) => `
                 <button class="history-week-btn ${Number(selected) === Number(weekWrap.week.weekNumber) ? "is-selected" : ""}" type="button"
@@ -1031,6 +1109,27 @@ function renderHistory() {
   els.historyList.querySelectorAll("[data-retro-cycle]").forEach((button) => {
     button.addEventListener("click", () => openWeeklyReview(Number(button.dataset.retroCycle), Number(button.dataset.retroWeek)));
   });
+}
+
+function renderCycleHistoryEvents(events) {
+  const relevant = (Array.isArray(events) ? events : []).filter((event) =>
+    ["cycle_start_changed"].includes(event.eventType)
+  );
+  if (!relevant.length) return "";
+
+  return `
+    <div class="history-cycle-events">
+      ${relevant.map((event) => {
+        const beforeDate = event.before?.startDate || "";
+        const afterDate = event.after?.startDate || "";
+        return `
+          <div class="history-cycle-event">
+            <strong>開始日期調整</strong>
+            <span>${beforeDate && afterDate ? `${formatDate(beforeDate)} → ${formatDate(afterDate)}` : escapeHtml(event.summary || "")}</span>
+            <small>${formatDateTime(event.occurredAt)}</small>
+          </div>`;
+      }).join("")}
+    </div>`;
 }
 
 function renderHistoryCyclePath(weeks) {
@@ -1115,7 +1214,8 @@ function eventLabel(event) {
     task_rescheduled: "調整時間",
     task_replanned: "重新整理",
     task_completed: "完成",
-    task_cancelled: "取消",
+    task_cancelled: "刪除",
+    task_deleted: "刪除",
     completion_corrected: "誤操作更正",
   })[event.eventType] || event.summary || event.eventType;
 }
@@ -1126,7 +1226,7 @@ function statusLabel(status) {
     overdue: "未完待續",
     completed: "已完成",
     replanned: "已重新整理",
-    cancelled: "已取消",
+    cancelled: "已刪除",
   })[status] || status;
 }
 
@@ -1189,7 +1289,7 @@ async function openReview(cycleNumber, fromCompletion = false) {
             ${stat(review.lateCompleted, "後來完成")}
             ${stat(review.incomplete, "未完待續")}
             ${stat(review.replanned, "重新整理")}
-            ${stat(review.cancelled, "取消")}
+            ${stat(review.cancelled, "刪除")}
             ${stat(`${review.onTimeRate}%`, "按期完成率")}
             ${stat(review.postponedWeeks, "Week 順延")}
             ${Number(cycleNumber) >= 2 ? stat(`${review.retrospectiveCount}/12`, "Weekly Review") : ""}
@@ -1262,18 +1362,18 @@ function openChangeCycleStart() {
   const cycle = state.context?.nextCycle;
   if (!cycle) return;
   openFormModal({
-    icon: "✦", title: `Cycle ${cycle.cycleNumber} 開始日期`, confirmText: "確定", cancelText: "先等等",
+    icon: "✦",
+    title: `Cycle ${cycle.cycleNumber} 開始日期`,
+    confirmText: "儲存",
+    cancelText: "先等等",
     body: `
-      <label class="v2-form-field">開始日期<input id="cycleStartDate" type="date" value="${escapeHtml(cycle.startDate || "")}" min="${todayYmd()}" /></label>
-      <label class="v2-form-field">原因<select id="cycleStartReason">${CYCLE_DATE_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
-      <label class="v2-form-field">想補充的話（選填）<textarea id="cycleStartNote" rows="3"></textarea></label>`,
+      <p class="tp-modal-preformatted">下一輪正式開始前都可以修改；開始日期有變動時，會留一筆時間紀錄。</p>
+      <label class="v2-form-field">開始日期<input id="cycleStartDate" type="date" value="${escapeHtml(cycle.startDate || "")}" min="${todayYmd()}" /></label>`,
     onConfirm: async () => {
       await api(`/cycles/${cycle.cycleNumber}/start-date`, {
         method: "PATCH",
         body: {
           startDate: document.getElementById("cycleStartDate").value,
-          reason: document.getElementById("cycleStartReason").value,
-          note: document.getElementById("cycleStartNote").value.trim(),
         },
       });
       await loadCore({ quiet: true });
@@ -1289,10 +1389,10 @@ function renderSettings() {
   els.categorySettingsList.innerHTML = visible.length ? visible.map((cat) => {
     const subs = getSubcategories(cat.id, true).filter((sub) => sub.active || state.showInactiveCategories);
     return `
-      <article class="v2-setting-row">
+      <article class="v2-setting-row" style="--category-dot:${getTagColors(cat.id || cat.name, "category").border};">
         <div class="v2-setting-row-top">
           <div>
-            <strong>${escapeHtml(cat.name)}</strong>
+            <strong class="v2-category-name-chip" style="${tagStyle(cat.id || cat.name, "category")}">${escapeHtml(cat.name)}</strong>
             ${!cat.active ? `<span class="v2-category-state">已停用</span>` : ""}
           </div>
           <div class="v2-setting-actions">
@@ -1301,7 +1401,7 @@ function renderSettings() {
           </div>
         </div>
         ${subs.length ? `<div class="v2-subcategory-list">${subs.map((sub) => `
-          <button class="v2-subcategory-chip ${!sub.active ? "is-inactive" : ""}" type="button" data-sub-actions="${sub.id}">
+          <button class="v2-subcategory-chip ${!sub.active ? "is-inactive" : ""}" style="${tagStyle(sub.id || sub.name, "subcategory")}" type="button" data-sub-actions="${sub.id}">
             ${escapeHtml(sub.name)}${!sub.active ? " · 已停用" : ""}
           </button>`).join("")}</div>` : ""}
       </article>`;
@@ -1580,9 +1680,12 @@ function openPlanningEntry() {
 function openNextCyclePlanner(draft = null) {
   const context = state.context || {};
   const current = context.currentWeek;
-  if (!current || Number(current.weekNumber) !== 12 || !context.canPlanNextCycle) return;
-
   const existingCycle = context.nextCycle || null;
+  const inFinalWeekWindow = !!(current && Number(current.weekNumber) === 12 && context.canPlanNextCycle);
+  const inRestDraftWindow = !!(context.restPeriod && existingCycle);
+  if (!inFinalWeekWindow && !inRestDraftWindow) return;
+
+
   const cycleNumber = existingCycle?.cycleNumber || ((state.cycles.length ? Math.max(...state.cycles.map((c) => Number(c.cycleNumber))) : 0) + 1);
   const weekOne = existingCycle
     ? state.weeks.find((week) => Number(week.cycleNumber) === Number(existingCycle.cycleNumber) && Number(week.weekNumber) === 1) || null
@@ -1595,7 +1698,13 @@ function openNextCyclePlanner(draft = null) {
   ) : [];
   const pendingTasks = Array.isArray(draft?.pendingTasks) ? draft.pendingTasks : [];
 
-  const minStart = addDaysYmd(current.weekEnd, 1);
+  const previousCycleNumber = Number(existingCycle?.cycleNumber || cycleNumber) - 1;
+  const previousWeek12 = state.weeks.find((week) =>
+    Number(week.cycleNumber) === previousCycleNumber && Number(week.weekNumber) === 12
+  ) || null;
+  const minStart = current?.weekEnd
+    ? addDaysYmd(current.weekEnd, 1)
+    : (previousWeek12?.weekEnd ? addDaysYmd(previousWeek12.weekEnd, 1) : todayYmd());
   const startDate = draft?.startDate ?? existingCycle?.startDate ?? minStart;
   const cycleTheme = draft?.cycleTheme ?? existingCycle?.theme ?? "";
   const title = draft?.title ?? weekOne?.title ?? "";
@@ -1606,12 +1715,15 @@ function openNextCyclePlanner(draft = null) {
   const existingRows = existingTasks.length ? existingTasks.map((item) => `
     <div class="next-task-row">
       <span>${escapeHtml(item.title)}</span>
-      <button class="text-btn" type="button" data-next-cycle-task-edit="${escapeHtml(item.id)}">編輯</button>
+      <div class="next-task-actions">
+        <button class="text-btn" type="button" data-next-cycle-task-edit="${escapeHtml(item.id)}">編輯</button>
+        <button class="text-btn" type="button" data-next-cycle-task-remove="${escapeHtml(item.id)}">刪除</button>
+      </div>
     </div>`).join("") : "";
   const pendingRows = pendingTasks.length ? pendingTasks.map((item, index) => `
     <div class="next-task-row">
       <span>${escapeHtml(item.title)}</span>
-      <button class="text-btn" type="button" data-next-cycle-draft-remove="${index}">移除</button>
+      <button class="text-btn" type="button" data-next-cycle-draft-remove="${index}">刪除</button>
     </div>`).join("") : "";
 
   els.modalRoot.innerHTML = `
@@ -1619,7 +1731,7 @@ function openNextCyclePlanner(draft = null) {
       <div class="tp-modal tp-modal-wide" role="dialog" aria-modal="true">
         <div class="tp-modal-icon">★</div>
         <p class="tp-modal-body"><strong>Cycle ${cycleNumber}</strong><br>
-          <span style="color:var(--muted);font-size:12px;">先準備下一輪，不會提前結束現在的 Cycle。</span>
+          <span style="color:var(--muted);font-size:12px;">先準備下一輪，不會提前結束現在的 Cycle；開始日期若有調整，會留下時間紀錄。</span>
         </p>
 
         <div class="v2-modal-form">
@@ -1672,10 +1784,48 @@ function openNextCyclePlanner(draft = null) {
     });
   });
 
+  els.modalRoot.querySelectorAll("[data-next-cycle-task-remove]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const id = button.dataset.nextCycleTaskRemove;
+      const item = state.items.find((x) => x.id === id);
+      const draftSnapshot = collectDraft();
+      const ok = await showConfirm({
+        icon: "✦",
+        title: "確定刪除這件草稿任務嗎？",
+        text: `「${item?.title || "這件任務"}」\n\n下一輪還沒開始，刪除後不會留下 History 紀錄。`,
+        confirmText: "刪除",
+        cancelText: "先留著",
+        danger: true,
+      });
+      if (!ok) return openNextCyclePlanner(draftSnapshot);
+      try {
+        showLoading("刪除中…");
+        await api(`/items/${encodeURIComponent(id)}/draft`, { method: "DELETE" });
+        await loadCore({ quiet: true });
+        openNextCyclePlanner(draftSnapshot);
+      } catch (e) {
+        showAlert("刪除失敗", e.message || "草稿任務刪除失敗", "✦");
+      } finally {
+        hideLoading();
+      }
+    });
+  });
+
   els.modalRoot.querySelectorAll("[data-next-cycle-draft-remove]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const nextDraft = collectDraft();
-      nextDraft.pendingTasks.splice(Number(button.dataset.nextCycleDraftRemove), 1);
+      const index = Number(button.dataset.nextCycleDraftRemove);
+      const task = nextDraft.pendingTasks[index];
+      const ok = await showConfirm({
+        icon: "✦",
+        title: "確定刪除這件草稿任務嗎？",
+        text: `「${task?.title || "這件任務"}」\n\n這件事還沒儲存，刪除後不會留下紀錄。`,
+        confirmText: "刪除",
+        cancelText: "先留著",
+        danger: true,
+      });
+      if (!ok) return openNextCyclePlanner(nextDraft);
+      nextDraft.pendingTasks.splice(index, 1);
       openNextCyclePlanner(nextDraft);
     });
   });
@@ -1740,7 +1890,7 @@ function openNextCyclePlanner(draft = null) {
         if (finalDraft.startDate !== String(existingCycle.startDate || "").slice(0, 10)) {
           await api(`/cycles/${existingCycle.cycleNumber}/start-date`, {
             method: "PATCH",
-            body: { startDate: finalDraft.startDate, reason: "下一輪安排", note: "正式開始前調整" },
+            body: { startDate: finalDraft.startDate },
           });
         }
         if (finalDraft.cycleTheme !== String(existingCycle.theme || "").trim()) {
@@ -2037,7 +2187,7 @@ function bindGlobalEvents() {
   els.addCategoryBtn.addEventListener("click", () => openAddCategory("category", ""));
   els.toggleInactiveBtn.addEventListener("click", () => { state.showInactiveCategories = !state.showInactiveCategories; renderSettings(); });
   els.replayTourBtn.addEventListener("click", () => startTour(true));
-  els.changeCycleStartBtn.addEventListener("click", openChangeCycleStart);
+  els.changeCycleStartBtn.addEventListener("click", () => openNextCyclePlanner());
   els.openReviewBtn.addEventListener("click", () => openReview(Number(state.context.completedCycleNumber), true));
   els.skipCelebrationBtn.addEventListener("click", closeCelebrationAndReview);
   els.closeSheetBtn.addEventListener("click", closeBottomSheet);
