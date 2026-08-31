@@ -1426,15 +1426,6 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   const bodyContents = [
     buildFlexInfoCard(
       [
-        {
-          type: "text",
-          text: weekTitle,
-          size: "sm",
-          color: FLEX_COLORS.mutedText,
-          weight: "bold",
-          wrap: true,
-          maxLines: 2,
-        },
         buildProgressBlock("本週進度", taskDoneCount, tasks.length, FLEX_ACCENTS.all),
       ],
       {
