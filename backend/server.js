@@ -12,7 +12,7 @@ const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
 // 把你自己的 Tiny Progress 網頁網址貼在下面。
 // 例如：https://你的網站網址
-const TINY_PROGRESS_WEB_URL = "https://micole-hub.github.io/tiny-progress/";
+const TINY_PROGRESS_WEB_URL = "請把你的 Tiny Progress 網址貼在這裡";
 
 const pendingActions = new Map();
 const PENDING_ACTION_TTL_MS = 10 * 60 * 1000;
@@ -739,7 +739,78 @@ function buildAccentBar(accentColor) {
   };
 }
 
-function buildFlexHeader(title, subtitle) {
+function buildDifficultyHeaderNode(accentColor) {
+  return {
+    type: "text",
+    text: "● ─ ○",
+    size: "xxs",
+    weight: "bold",
+    color: accentColor || FLEX_COLORS.greenFresh,
+    flex: 0,
+    align: "end",
+    wrap: false,
+  };
+}
+
+function buildDrawLotsIcon(accentColor) {
+  const mutedStick = "#C9B98E";
+  const highlight = accentColor || FLEX_ACCENTS.draw;
+
+  return {
+    type: "box",
+    layout: "vertical",
+    width: "30px",
+    flex: 0,
+    alignItems: "center",
+    spacing: "none",
+    contents: [
+      {
+        type: "box",
+        layout: "horizontal",
+        height: "14px",
+        spacing: "xs",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        contents: [
+          { type: "box", layout: "vertical", width: "2px", height: "9px", backgroundColor: mutedStick, cornerRadius: "2px", contents: [] },
+          { type: "box", layout: "vertical", width: "2px", height: "11px", backgroundColor: mutedStick, cornerRadius: "2px", contents: [] },
+          { type: "box", layout: "vertical", width: "3px", height: "14px", backgroundColor: highlight, cornerRadius: "2px", contents: [] },
+          { type: "box", layout: "vertical", width: "2px", height: "10px", backgroundColor: mutedStick, cornerRadius: "2px", contents: [] },
+          { type: "box", layout: "vertical", width: "2px", height: "8px", backgroundColor: mutedStick, cornerRadius: "2px", contents: [] },
+        ],
+      },
+      {
+        type: "box",
+        layout: "vertical",
+        width: "26px",
+        height: "12px",
+        backgroundColor: "#F3E7C7",
+        borderColor: highlight,
+        borderWidth: "1px",
+        cornerRadius: "5px",
+        contents: [],
+      },
+    ],
+  };
+}
+
+function buildFlexHeader(title, subtitle, headerAccessory) {
+  const titleContents = [
+    {
+      type: "text",
+      text: title,
+      size: "xl",
+      weight: "bold",
+      color: FLEX_COLORS.darkGreen,
+      wrap: true,
+      flex: 1,
+    },
+  ];
+
+  if (headerAccessory) {
+    titleContents.push(headerAccessory);
+  }
+
   const contents = [
     {
       type: "text",
@@ -749,9 +820,25 @@ function buildFlexHeader(title, subtitle) {
       color: "#7C8A74",
       wrap: false,
     },
-    { type: "text", text: title, size: "xl", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true },
+    {
+      type: "box",
+      layout: "horizontal",
+      spacing: "sm",
+      alignItems: "center",
+      contents: titleContents,
+    },
   ];
-  if (subtitle) contents.push({ type: "text", text: subtitle, size: "sm", color: FLEX_COLORS.mutedText, wrap: true });
+
+  if (subtitle) {
+    contents.push({
+      type: "text",
+      text: subtitle,
+      size: "sm",
+      color: FLEX_COLORS.mutedText,
+      wrap: true,
+    });
+  }
+
   return { type: "box", layout: "vertical", spacing: "xs", contents };
 }
 
@@ -982,9 +1069,9 @@ function buildFlexFooterHint(lines) {
   };
 }
 
-function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor }) {
+function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor, headerAccessory }) {
   const innerContents = [
-    buildFlexHeader(title, subtitle),
+    buildFlexHeader(title, subtitle, headerAccessory),
     { type: "separator", margin: "md", color: FLEX_COLORS.beigeLine },
     ...bodyContents,
   ];
@@ -1104,6 +1191,7 @@ function buildDrawEmptyFlexMessage() {
     title: "今日抽到空抽屜",
     subtitle: "本週暫時沒有未完成任務。",
     accentColor: FLEX_ACCENTS.draw,
+    headerAccessory: buildDrawLotsIcon(FLEX_ACCENTS.draw),
     bodyContents: [
       buildFlexInfoCard(
         [
@@ -1117,11 +1205,8 @@ function buildDrawEmptyFlexMessage() {
           },
         ],
         {
-          label: "今天抽一件",
-          emoji: "",
           borderColor: "#DCCB9C",
           backgroundColor: "#FFFAF1",
-          labelColor: "#8A7448",
         }
       ),
     ],
@@ -1142,6 +1227,7 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
     // ── 剩餘件數帶入副標 ──
     subtitle: "今天選中的任務",
     accentColor: FLEX_ACCENTS.draw,
+    headerAccessory: buildDrawLotsIcon(FLEX_ACCENTS.draw),
     bodyContents: [
       buildFlexInfoCard(
         [
@@ -1151,24 +1237,6 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
             spacing: "sm",
             alignItems: "center",
             contents: [
-              {
-                type: "box",
-                layout: "vertical",
-                width: "24px",
-                height: "24px",
-                backgroundColor: FLEX_COLORS.stickerBg,
-                cornerRadius: "999px",
-                justifyContent: "center",
-                alignItems: "center",
-                contents: [
-                  {
-                    type: "text",
-                    text: "🎲",
-                    size: "xs",
-                    align: "center",
-                  },
-                ],
-              },
               {
                 type: "text",
                 text: `第 ${taskNumber} 個任務`,
@@ -1218,7 +1286,7 @@ async function handleDrawOneTaskCommand() {
   if (unfinishedTasks.length === 0) {
     return {
       replyText: [
-        "🎲 Tiny Progress｜今天抽一件",
+        "Tiny Progress｜今天抽一件",
         "",
         "目前沒有任務可以抽。",
       ].join("\n"),
@@ -1266,10 +1334,6 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
           },
         ],
         {
-          label: `${difficulty}任務`,
-          emoji: "● ─ ○",
-          iconColor: difficultyTheme.accentColor,
-          labelColor: FLEX_COLORS.mutedText,
           backgroundColor: FLEX_COLORS.paper,
         }
       ),
@@ -1308,10 +1372,6 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
             : []),
         ],
         {
-          label: `${difficulty}任務`,
-          emoji: "● ─ ○",
-          iconColor: difficultyTheme.accentColor,
-          labelColor: FLEX_COLORS.mutedText,
           backgroundColor: FLEX_COLORS.paper,
         }
       ),
@@ -1322,6 +1382,7 @@ function buildDifficultyTaskListFlexMessage({ tasks, difficulty }) {
     title: `本週${difficulty}任務`,
     subtitle: `本週 ${matchedTasks.length} 件`,
     accentColor: difficultyTheme.accentColor,
+    headerAccessory: buildDifficultyHeaderNode(difficultyTheme.accentColor),
     bodyContents,
     footerContents: buildFlexFooterHint(
       matchedTasks.length === 0

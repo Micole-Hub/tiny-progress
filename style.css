@@ -2488,3 +2488,64 @@ button:active,
     border-radius: 9px;
   }
 }
+
+
+/* =========================================================
+   v4.2.14 — Web navigation: keep desktop nav out of Header
+   ========================================================= */
+
+/* Desktop / tablet:
+   Navigation stays in normal document flow, so it can never
+   float over Tiny Progress / History / Settings headers. */
+@media (min-width: 681px) {
+  .v2-nav {
+    position: static;
+    inset: auto;
+    z-index: auto;
+    width: fit-content;
+    margin: 0 0 14px auto;
+    padding: 4px;
+    justify-content: flex-end;
+    gap: 4px;
+    border: 1px solid rgba(210, 217, 198, .66);
+    border-radius: 16px;
+    background: rgba(255, 250, 241, .72);
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .v2-nav-btn {
+    padding: 7px 11px;
+    gap: 6px;
+    border-radius: 12px;
+    font-size: 13px;
+  }
+
+  .v2-nav-btn.is-active {
+    background: #e4eadc;
+    color: #56614d;
+  }
+
+  .nav-icon {
+    font-size: 14px;
+  }
+}
+
+/* Mobile keeps the existing fixed bottom navigation. */
+@media (max-width: 680px) {
+  .v2-nav {
+    position: fixed;
+    inset: auto 10px calc(10px + env(safe-area-inset-bottom)) 10px;
+    z-index: 90;
+    width: auto;
+    margin: 0;
+    justify-content: space-around;
+    gap: 6px;
+    padding: 7px 8px;
+    border: 1px solid rgba(210, 217, 198, .86);
+    border-radius: 20px;
+    background: rgba(255, 250, 241, .96);
+    box-shadow: 0 8px 24px rgba(72, 82, 67, .10);
+    backdrop-filter: blur(14px);
+  }
+}
