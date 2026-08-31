@@ -12,7 +12,7 @@ const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
 // 把你自己的 Tiny Progress 網頁網址貼在下面。
 // 例如：https://你的網站網址
-const TINY_PROGRESS_WEB_URL = "請把你的 Tiny Progress 網址貼在這裡";
+const TINY_PROGRESS_WEB_URL = "https://micole-hub.github.io/tiny-progress/";
 
 const pendingActions = new Map();
 const PENDING_ACTION_TTL_MS = 10 * 60 * 1000;
