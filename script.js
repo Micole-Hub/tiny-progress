@@ -94,8 +94,8 @@ function escapeHtml(value) {
 
 function mobiusMarkup(className = "mobius-mark") {
   return `<svg class="${className}" viewBox="0 0 36 24" aria-hidden="true" focusable="false">
-    <path d="M3 12C7 4 13 4 18 12C23 20 29 20 33 12C29 4 23 4 18 12C13 20 7 20 3 12Z"></path>
-    <path class="mobius-cross" d="M18 12C21 7 25 5 29 7"></path>
+    <path d="M18,12 C18,8.134 14.418,5 10,5 C5.582,5 2,8.134 2,12 C2,15.866 5.582,19 10,19 C14.418,19 18,15.866 18,12 C18,8.134 21.582,5 26,5 C30.418,5 34,8.134 34,12 C34,15.866 30.418,19 26,19 C21.582,19 18,15.866 18,12 Z"></path>
+    <path class="mobius-cross" d="M13 9C16 12 20 12 23 9"></path>
   </svg>`;
 }
 
