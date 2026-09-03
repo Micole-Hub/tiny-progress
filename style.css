@@ -157,8 +157,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .v2-cycle-badge,
 .v2-status-badge,
 .v2-mini-badge,
-.v2-category-state,
-.week-chip {
+.v2-category-state {
   display: inline-flex;
   align-items: center;
   width: fit-content;
@@ -267,8 +266,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .dot-pink { background: var(--pink); }
-.spark { font-family: "Nunito", sans-serif; }
-.spark-green { color: var(--green); }
 
 
 .week-tools {
@@ -616,9 +613,6 @@ textarea { resize: vertical; }
   color: var(--muted);
   font-size: 12px;
 }
-
-.review-spark { color: var(--lavender-400); font-size: 20px; }
-.review-spark.is-done { color: var(--gold); }
 
 /* Page heads */
 .simple-page-head {
@@ -1459,9 +1453,7 @@ body.is-busy { cursor: progress; }
 .soft-state-card,
 .settings-card,
 .cycle-path-card,
-.weekly-review-card,
-.v2-history-cycle,
-.v2-history-week {
+.weekly-review-card {
   border-color: #ebe3d7;
   background: rgba(255,250,241,.97);
 }
@@ -1478,7 +1470,6 @@ body.is-busy { cursor: progress; }
 }
 .weekly-divider { background: linear-gradient(90deg, #e8e1d5, transparent); }
 .dot-pink { background: var(--pink); }
-.spark-green { color: #75a081; }
 
 
 .primary-pill {
@@ -1503,8 +1494,7 @@ body.is-busy { cursor: progress; }
 }
 
 .v2-task-card,
-.v2-task-stack .v2-task-card,
-.task-card {
+.v2-task-stack .v2-task-card {
   border-color: #ece5d9;
   background: #fffdf7;
 }
@@ -1621,10 +1611,8 @@ body {
 
 
 /* Cards */
-.task-item,
 .join-card,
 .soft-state-card,
-.reminder-card,
 .history-cycle-card,
 .settings-card,
 .weekly-review-card {
@@ -1634,7 +1622,6 @@ body {
 
 /* Keep pink/green as tiny accents, never large blocks */
 .dot-pink { background: #e7a6b7 !important; }
-.spark-green { color: #8eae90 !important; }
 
 .primary-pill,
 .join-toggle {
@@ -2071,22 +2058,6 @@ button:active,
 }
 
 .mobius-cross { opacity: .52; }
-
-/* Legacy star hooks: keep hidden until matching HTML/JS classes are removed. */
-.star-dust,
-.cycle-theme-spark,
-.state-star,
-.mini-star-row,
-.celebration-stars,
-.cycle-summary-stars,
-.star-progress-wrap,
-.star-progress,
-.star-progress-row,
-.progress-star,
-.v2-complete-star,
-.path-star {
-  display: none !important;
-}
 
 .goal-dot,
 .intro-dot,

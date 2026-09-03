@@ -50,27 +50,18 @@ const POSTPONE_REASONS = [
   "其他",
 ];
 
-const CYCLE_DATE_REASONS = [
-  "個人行程調整",
-  "需要延長休息時間",
-  "前一個 Cycle 還需要收尾",
-  "學習／工作計畫改變",
-  "外部因素影響",
-  "其他",
-];
-
 const els = {};
 
 function cacheElements() {
   [
     "homePage", "historyPage", "settingsPage", "heroTitle", "cycleThemeText", "editCycleThemeBtn",
     "cycleWeekBadge", "weekStatusBadge", "weekRangeWrap", "weekStartText", "weekEndText", "activeWeekPanel",
-    "weekThemeText", "weekGoalText", "workloadCount", "workloadFill", "workloadNote", "starProgress",
+    "weekThemeText", "weekGoalText", "workloadCount", "workloadFill", "starProgress",
     "postponeWeekBtn", "nextWeekPlanBtn", "weekSetupPanel", "weekSetupForm", "weekSetupTheme", "weekSetupGoal",
     "restPanel", "restMessage", "changeCycleStartBtn", "cycleCompletePanel", "cycleCompleteTitle", "openReviewBtn",
     "workArea", "currentTaskList", "currentTaskCount", "overdueCount", "overdueList", "showAllOverdueBtn",
     "rescheduledList", "showAllRescheduledBtn", "addTaskForm", "toggleAddTaskBtn", "taskInput", "taskCategory",
-    "taskSubCategory", "taskDifficulty", "addTaskBtn", "cyclePathCard", "cyclePath", "cyclePathCaption",
+    "taskSubCategory", "taskDifficulty", "cyclePathCard", "cyclePath", "cyclePathCaption",
     "weeklyReviewPanel", "weeklyReviewSpark", "weeklyReviewStatus", "weeklyReviewBtn",
     "historyList", "refreshHistoryBtn", "categorySettingsList", "addCategoryBtn", "toggleInactiveBtn",
     "replayTourBtn", "loadingToast", "bottomSheet", "sheetTitle", "sheetActions", "closeSheetBtn",
@@ -216,24 +207,6 @@ function getSubcategories(categoryId, includeInactive = false) {
   );
 }
 
-function getCategoryName(id, fallback = "未分類") {
-  return state.categories.find((c) => c.id === id)?.name || fallback;
-}
-
-function statusIcon(item) {
-  if (item.status === "completed") return "✓";
-  if (item.status === "overdue") return "🕒";
-  if (item.status === "replanned") return "♻️";
-  if (item.status === "cancelled") return "🗑";
-  return "☐";
-}
-
-function difficultyClass(value) {
-  if (value === "困難") return "hard";
-  if (value === "適中") return "medium";
-  return "easy";
-}
-
 function currentWeek() {
   return state.context?.currentWeek || null;
 }
@@ -257,18 +230,6 @@ function isFutureScheduled(item) {
     week.cycleNumber,
     week.weekNumber
   ) > 0;
-}
-
-function completedDuringWeek(item, week) {
-  if (!week || item.status !== "completed" || !item.completedAt) return false;
-  const date = String(item.completedAt).slice(0, 10);
-  return date >= String(week.weekStart || "") && date <= String(week.weekEnd || "");
-}
-
-function weeklyCompletedCount() {
-  const week = currentWeek();
-  if (!week) return 0;
-  return state.items.filter((item) => item.type === "task" && completedDuringWeek(item, week)).length;
 }
 
 function getSubmittedReview(cycleNumber, weekNumber) {
@@ -777,11 +738,6 @@ function openEditTask(item) {
   });
 }
 
-function startRescheduleFlow(itemId) {
-  const item = state.items.find((x) => x.id === itemId);
-  if (item) openDirectReschedule(item);
-}
-
 function openDirectReschedule(item) {
   const current = currentWeek();
   const availableWeeks = state.weeks.filter((week) =>
@@ -1149,10 +1105,6 @@ function renderHistoryCyclePath(weeks) {
     </div>`).join("");
 }
 
-function historyStat(value, label) {
-  return `<div class="v2-history-stat"><strong>${Number(value || 0)}</strong><span>${label}</span></div>`;
-}
-
 function renderHistoryWeek(wrapper) {
   if (!wrapper) return "";
   const week = wrapper.week;
@@ -1261,10 +1213,6 @@ function focusHistoryTask(itemId) {
   state.historyFocusTaskId = null;
 }
 
-function openRetrospective(cycleNumber, weekNumber) {
-  openWeeklyReview(cycleNumber, weekNumber);
-}
-
 async function openReview(cycleNumber, fromCompletion = false) {
   showLoading("整理這一輪…");
   try {
@@ -1357,29 +1305,6 @@ function openCreateCycle() {
       const achievement = document.getElementById("newCycleGoal").value.trim();
       if (!startDate || !theme || !title || !achievement) throw new Error("開始日期、本輪主題、Week 1 主題與目標都要填");
       await api("/cycles", { method: "POST", body: { startDate, theme, title, achievement } });
-      await loadCore({ quiet: true });
-    },
-  });
-}
-
-function openChangeCycleStart() {
-  const cycle = state.context?.nextCycle;
-  if (!cycle) return;
-  openFormModal({
-    icon: "",
-    title: `Cycle ${cycle.cycleNumber} 開始日期`,
-    confirmText: "儲存",
-    cancelText: "取消",
-    body: `
-      <p class="tp-modal-preformatted">下一輪正式開始前都可以修改；開始日期有變動時，會留一筆時間紀錄。</p>
-      <label class="v2-form-field">開始日期<input id="cycleStartDate" type="date" value="${escapeHtml(cycle.startDate || "")}" min="${todayYmd()}" /></label>`,
-    onConfirm: async () => {
-      await api(`/cycles/${cycle.cycleNumber}/start-date`, {
-        method: "PATCH",
-        body: {
-          startDate: document.getElementById("cycleStartDate").value,
-        },
-      });
       await loadCore({ quiet: true });
     },
   });

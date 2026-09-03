@@ -122,10 +122,6 @@ function sortTasksByCategory(tasks) {
   });
 }
 
-function getDisplayLabel(label) {
-  return label === "完成標準" ? "本週驗收標準" : label;
-}
-
 function buildGoogleSheetsResourceUrl(resource, params = {}) {
   const url = new URL(GOOGLE_SHEETS_API_URL);
   url.searchParams.set("secret", GOOGLE_SHEETS_API_SECRET);
@@ -169,12 +165,6 @@ async function fetchWeekContextFromGoogleSheets() {
     cycleComplete: data.cycleComplete === true,
     completedCycleNumber: data.completedCycleNumber || null,
   };
-}
-
-async function getCurrentWeekNumberFromGoogleSheets() {
-  const context = await fetchWeekContextFromGoogleSheets();
-  if (!context.currentWeek) throw new Error("目前沒有進行中的 Week");
-  return Number(context.currentWeek.weekNumber);
 }
 
 async function fetchItemsFromGoogleSheets() {
@@ -240,10 +230,6 @@ async function updateItemToGoogleSheets(id, updates) {
 async function deleteItemFromGoogleSheets(id) {
   const result = await gasPost("delete", { id });
   return normalizeItem(result);
-}
-
-function getLineSourceKey(event) {
-  return event.source?.userId || event.source?.groupId || event.source?.roomId || "unknown-source";
 }
 
 async function getItemsByType(type) {
