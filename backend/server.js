@@ -448,11 +448,27 @@ function getCategoryFlexStyle(category, valueKey) {
   return { backgroundColor: style.bg, textColor: style.text, borderColor: style.border, accentColor: style.accent };
 }
 
+const LINE_TAG_COLOR_FAMILIES = [
+  "green", "rose", "blue", "orange", "purple", "teal",
+  "yellow", "green", "orange", "blue", "green", "rose",
+];
+
 function getSubCategoryFlexStyle(subCategory, valueKey, parentKey) {
   const label = getLineSubCategoryLabel(subCategory) || "未分類";
   let index = stableLineTagIndex(valueKey || label, "subcategory");
   const parentIndex = stableLineTagIndex(parentKey || "parent", "category");
-  if (index === parentIndex) index = (index + 1) % LINE_TAG_PALETTE.length;
+
+  // 主分類與次分類都沿用 script.js 的 12 色 palette，
+  // 但 LINE 卡片額外避開「同色系」，避免兩顆標籤看起來像同一種顏色。
+  let guard = 0;
+  while (
+    (index === parentIndex || LINE_TAG_COLOR_FAMILIES[index] === LINE_TAG_COLOR_FAMILIES[parentIndex]) &&
+    guard < LINE_TAG_PALETTE.length
+  ) {
+    index = (index + 1) % LINE_TAG_PALETTE.length;
+    guard += 1;
+  }
+
   const style = LINE_TAG_PALETTE[index];
   return { backgroundColor: style.bg, textColor: style.text, borderColor: style.border, accentColor: style.accent };
 }
@@ -567,8 +583,9 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
 
   const style = getSubCategoryFlexStyle(subCategory, options.valueKey, options.parentKey);
 
-  // 次分類 = 第二層資訊：改成紙色底 + 對應色細框，避免和主分類搶戲。
-  return buildFlexTag(label, FLEX_COLORS.paper, style.textColor, {
+  // 次分類保留較輕字重，但使用自己 palette 的柔色底，
+  // 讓它和主分類一眼看得出是兩種不同標籤。
+  return buildFlexTag(label, style.backgroundColor, style.textColor, {
     width: options.width,
     cornerRadius: "999px",
     size: "xxs",
@@ -914,7 +931,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     rowContents.push({
       type: "box",
       layout: "horizontal",
-      spacing: "xs",
+      spacing: "md",
       margin: "xs",
       contents: tagContents,
     });
