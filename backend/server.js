@@ -304,9 +304,9 @@ function formatTaskSectionByCategory(tasks) {
         if (subLabel) lines.push(`  ［${subLabel}］`);
 
         groupTasks.forEach(function (task) {
-          const checkbox = task.done ? "✓" : "•";
+          const checkbox = task.done ? "✓ " : "";
           lines.push(
-            `${taskNumber}. ${checkbox} ${task.title}｜${normalizeSubCategory(task.subCategory, category)}｜${normalizeDifficulty(task.difficulty)}`
+            `${taskNumber}. ${checkbox}${task.title}｜${normalizeSubCategory(task.subCategory, category)}｜${normalizeDifficulty(task.difficulty)}`
           );
           taskNumber += 1;
         });
@@ -315,8 +315,8 @@ function formatTaskSectionByCategory(tasks) {
     }
 
     categoryTasks.forEach(function (task) {
-      const checkbox = task.done ? "✓" : "•";
-      lines.push(`${taskNumber}. ${checkbox} ${task.title}｜${normalizeDifficulty(task.difficulty)}`);
+      const checkbox = task.done ? "✓ " : "";
+      lines.push(`${taskNumber}. ${checkbox}${task.title}｜${normalizeDifficulty(task.difficulty)}`);
       taskNumber += 1;
     });
   });
@@ -891,7 +891,7 @@ function buildTaskTitleLine({ task, prefix = "", showDifficulty = true, size = "
 
 
 function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, showSubCategory = true }) {
-  const checkbox = task.done ? "✓" : "•";
+  const checkbox = task.done ? "✓ " : "";
   const category = normalizeCategory(task.category);
   const tagContents = [];
 
@@ -919,7 +919,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
   const rowContents = [
     buildTaskTitleLine({
       task,
-      prefix: `${taskNumber}. ${checkbox} `,
+      prefix: `${taskNumber}. ${checkbox}`,
       showDifficulty,
       size: "md",
       difficultyWidth: "52px",
@@ -931,7 +931,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     rowContents.push({
       type: "box",
       layout: "horizontal",
-      spacing: "md",
+      spacing: "lg",
       margin: "xs",
       contents: tagContents,
     });
