@@ -771,18 +771,34 @@ function buildFlexInfoCard(contents, options = {}) {
 
 
 function buildSegmentedProgressBar(doneCount, totalCount, color) {
-  const segments = 10;
-  const filled = totalCount > 0 ? Math.round((doneCount / totalCount) * segments) : 0;
+  const segments = Math.max(0, Number(totalCount || 0));
+  const filled = Math.max(0, Math.min(segments, Number(doneCount || 0)));
+
+  // 沒有任務時仍保留一條淡灰底，避免 Flex contents 為空看起來像壞掉。
+  if (segments === 0) {
+    return {
+      type: "box",
+      layout: "vertical",
+      height: "8px",
+      margin: "sm",
+      backgroundColor: "#E7E5DF",
+      cornerRadius: "999px",
+      contents: [],
+    };
+  }
+
   return {
     type: "box",
     layout: "horizontal",
-    spacing: "xs",
+    // 任務多時縮小格子間距，避免被擠得太碎。
+    spacing: segments > 10 ? "none" : "xs",
     margin: "sm",
     contents: Array.from({ length: segments }, (_, index) => ({
       type: "box",
       layout: "vertical",
       height: "8px",
       flex: 1,
+      // 一件任務 = 一格；完成一件就亮一格。
       backgroundColor: index < filled ? (color || FLEX_COLORS.greenFresh) : "#E7E5DF",
       cornerRadius: "999px",
       contents: [],

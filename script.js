@@ -477,8 +477,8 @@ function renderTaskCard(item, options = {}) {
     </div>`;
 
   const completionControl = item.status === "completed"
-    ? `<button class="v2-complete-check is-complete" type="button" disabled aria-label="已完成：${escapeHtml(item.title)}"><span aria-hidden="true">✓</span></button>`
-    : `<button class="v2-complete-check" type="button" data-complete-id="${escapeHtml(item.id)}" aria-label="完成：${escapeHtml(item.title)}"><span aria-hidden="true"></span></button>`;
+    ? `<button class="v2-complete-check is-complete" type="button" disabled aria-label="已完成：${escapeHtml(item.title)}" style="min-width:40px;min-height:40px;touch-action:manipulation;"><span aria-hidden="true">✓</span></button>`
+    : `<button class="v2-complete-check" type="button" data-complete-id="${escapeHtml(item.id)}" aria-label="完成：${escapeHtml(item.title)}" style="min-width:40px;min-height:40px;touch-action:manipulation;"><span aria-hidden="true"></span></button>`;
 
   return `
     <article class="${classes.join(" ")}" data-task-id="${escapeHtml(item.id)}">
@@ -1459,8 +1459,8 @@ function showConfirm({ icon = "", title, text, confirmText = "確認", cancelTex
         ${icon ? `<div class="tp-modal-icon">${icon}</div>` : ""}
         <p class="tp-modal-body"><strong style="display:block;margin-bottom:8px;">${escapeHtml(title)}</strong>${escapeHtml(text).replaceAll("\n", "<br>")}</p>
         <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" id="confirmCancel" type="button">${escapeHtml(cancelText)}</button>
-          <button class="tp-btn ${danger ? "tp-btn-danger" : "tp-btn-primary"}" id="confirmOk" type="button">${escapeHtml(confirmText)}</button>
+          <button class="tp-btn tp-btn-ghost" id="confirmCancel" type="button" style="min-height:48px;touch-action:manipulation;">${escapeHtml(cancelText)}</button>
+          <button class="tp-btn ${danger ? "tp-btn-danger" : "tp-btn-primary"}" id="confirmOk" type="button" style="min-height:48px;touch-action:manipulation;">${escapeHtml(confirmText)}</button>
         </div>
       </div></div>`;
     document.getElementById("confirmCancel").onclick = () => { closeModal(); resolve(false); };
@@ -1477,24 +1477,38 @@ function openFormModal({ icon = "", title, body, confirmText = "確認", cancelT
         <div class="v2-modal-form">${body}</div>
         <p class="v2-modal-error" id="formModalError" hidden></p>
         <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" id="formCancel" type="button">${escapeHtml(cancelText)}</button>
-          <button class="tp-btn ${danger ? "tp-btn-danger" : "tp-btn-primary"}" id="formConfirm" type="button">${escapeHtml(confirmText)}</button>
+          <button class="tp-btn tp-btn-ghost" id="formCancel" type="button" style="min-height:48px;touch-action:manipulation;">${escapeHtml(cancelText)}</button>
+          <button class="tp-btn ${danger ? "tp-btn-danger" : "tp-btn-primary"}" id="formConfirm" type="button" style="min-height:48px;touch-action:manipulation;">${escapeHtml(confirmText)}</button>
         </div>
       </div>
     </div>`;
-  document.getElementById("formCancel").onclick = closeModal;
+  const cancel = document.getElementById("formCancel");
+  cancel.onclick = closeModal;
   const confirm = document.getElementById("formConfirm");
+  const originalConfirmText = confirm.textContent;
   confirm.onclick = async () => {
     const errorBox = document.getElementById("formModalError");
     errorBox.hidden = true;
+
+    // 第一按就給明確回饋，避免 API 較慢時誤以為沒有按到而一直連點。
     confirm.disabled = true;
+    cancel.disabled = true;
+    confirm.textContent = "處理中…";
+
     try {
       const result = await onConfirm();
       if (result !== false) closeModal();
+      else {
+        confirm.disabled = false;
+        cancel.disabled = false;
+        confirm.textContent = originalConfirmText;
+      }
     } catch (error) {
       errorBox.textContent = error.message || "操作失敗";
       errorBox.hidden = false;
       confirm.disabled = false;
+      cancel.disabled = false;
+      confirm.textContent = originalConfirmText;
     }
   };
   if (onReady) onReady();
@@ -1773,16 +1787,44 @@ function openNextCyclePlanner(draft = null) {
     cat.addEventListener("change", refreshSubs);
     refreshSubs();
 
-    document.getElementById("nextCycleTaskAddBtn").onclick = () => {
+    document.getElementById("nextCycleTaskAddBtn").onclick = async () => {
       const taskTitle = document.getElementById("nextCycleTaskTitle").value.trim();
       if (!taskTitle) return;
+
       const nextDraft = collectDraft();
-      nextDraft.pendingTasks.push({
+      const newTask = {
         title: taskTitle,
         categoryId: cat.value,
         subCategoryId: subWrap.hidden ? "" : sub.value,
         difficulty: document.getElementById("nextCycleTaskDifficulty").value,
-      });
+      };
+
+      // 已經有下一個 Cycle（尤其休息日）時，「加入」就是立即寫入資料庫。
+      // 這樣重新整理、隔天回來、換裝置都還在，而且可以立刻編輯。
+      if (existingCycle) {
+        try {
+          showLoading("加入下一輪任務…");
+          await api("/items", {
+            method: "POST",
+            body: {
+              type: "task",
+              ...newTask,
+              scheduledCycleNumber: Number(existingCycle.cycleNumber),
+              scheduledWeekNumber: 1,
+            },
+          });
+          await loadCore({ quiet: true });
+          openNextCyclePlanner(nextDraft);
+        } catch (error) {
+          showAlert("加入失敗", error.message || "下一輪任務沒有成功儲存", "");
+        } finally {
+          hideLoading();
+        }
+        return;
+      }
+
+      // Week 12 尚未建立下一輪時，仍先暫存在畫面；按「儲存下一輪」建立 Cycle 後再一起寫入。
+      nextDraft.pendingTasks.push(newTask);
       openNextCyclePlanner(nextDraft);
     };
   }
