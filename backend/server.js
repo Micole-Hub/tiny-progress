@@ -32,8 +32,6 @@ const DEFAULT_CATEGORY = "程式學習";
 const DEFAULT_SUBCATEGORY = "觀看課程影片";
 const EMPTY_SUBCATEGORY = "未分類";
 const DEFAULT_DIFFICULTY = "適中";
-const TASK_TITLE_MAX_LENGTH = 12;
-const STANDARD_TITLE_MAX_LENGTH = 14;
 
 if (!GOOGLE_SHEETS_API_URL) throw new Error("缺少環境變數 GOOGLE_SHEETS_API_URL");
 if (!GOOGLE_SHEETS_API_SECRET) throw new Error("缺少環境變數 GOOGLE_SHEETS_API_SECRET");
@@ -252,7 +250,7 @@ async function getTaskBoardForLine() {
 }
 
 function getLineCommandHintText() {
-  return ["需要操作說明請輸入：說明", "想看用量請輸入：用量小抄"].join("\n");
+  return "需要操作說明請輸入：說明";
 }
 
 function getTaskMetaText(task, includeDifficulty = true) {
@@ -277,16 +275,16 @@ function getLineSubCategoryLabel(subCategory) {
   return subCategory;
 }
 
-// ── 統一截字：任務 12 字、驗收標準 14 字 ──
-function getLineTaskTitle(title, maxLength = TASK_TITLE_MAX_LENGTH) {
+// ── LINE 任務名稱只做清理，不先用固定字數截斷。
+// 真正的單行省略交給 Flex 的版面寬度處理，避免不同手機被過早截字。 ──
+function getLineTaskTitle(title) {
   const text = String(title || "").trim().replace(/\s+/g, " ");
-  if (!text) return "未命名任務";
-  if (text.length > maxLength) return text.slice(0, maxLength) + "…";
-  return text;
+  return text || "未命名任務";
 }
 
 function getLineStandardTitle(title) {
-  return getLineTaskTitle(title, STANDARD_TITLE_MAX_LENGTH);
+  const text = String(title || "").trim().replace(/\s+/g, " ");
+  return text || "未命名標準";
 }
 
 function formatTaskSectionByCategory(tasks) {
@@ -606,12 +604,12 @@ function buildCategoryFlexTag(category, options = {}) {
     width: options.width || "82px",
     cornerRadius: "999px",
     size: "xxs",
-    weight: "bold",
+    weight: "regular",
     borderColor: style.borderColor,
     paddingTop: "4px",
     paddingBottom: "4px",
-    paddingStart: "4px",
-    paddingEnd: "4px",
+    paddingStart: "6px",
+    paddingEnd: "6px",
   });
 }
 
@@ -626,7 +624,7 @@ function buildSubCategoryFlexTag(subCategory, options = {}) {
     width: options.width || "66px",
     cornerRadius: "999px",
     size: "xxs",
-    weight: "bold",
+    weight: "regular",
     borderColor: style.borderColor,
     paddingTop: "4px",
     paddingBottom: "4px",
@@ -674,7 +672,7 @@ function buildDifficultyFlexTag(difficulty, options = {}) {
         type: "text",
         text: difficulty,
         size: "xxs",
-        weight: "bold",
+        weight: "regular",
         color: style.textColor,
         align: "center",
         flex: 1,
@@ -750,7 +748,23 @@ function buildDrawLotsIcon(accentColor) {
   };
 }
 
-function buildFlexHeader(title, subtitle, headerAccessory) {
+function buildWeekFlexBadge(weekNumber) {
+  const value = Number(weekNumber);
+  if (!Number.isInteger(value) || value <= 0) return null;
+
+  return buildFlexTag(`② Week ${value}`, "#E1F0EF", "#4F7272", {
+    cornerRadius: "999px",
+    size: "xs",
+    weight: "bold",
+    borderColor: "#B9D9D6",
+    paddingTop: "4px",
+    paddingBottom: "4px",
+    paddingStart: "10px",
+    paddingEnd: "10px",
+  });
+}
+
+function buildFlexHeader(title, subtitle, headerAccessory, headerBadge) {
   const titleContents = [
     {
       type: "text",
@@ -776,14 +790,24 @@ function buildFlexHeader(title, subtitle, headerAccessory) {
       color: "#7C8A74",
       wrap: false,
     },
-    {
+  ];
+
+  if (headerBadge) {
+    contents.push({
       type: "box",
       layout: "horizontal",
-      spacing: "sm",
-      alignItems: "center",
-      contents: titleContents,
-    },
-  ];
+      margin: "xs",
+      contents: [headerBadge],
+    });
+  }
+
+  contents.push({
+    type: "box",
+    layout: "horizontal",
+    spacing: "sm",
+    alignItems: "center",
+    contents: titleContents,
+  });
 
   if (subtitle) {
     contents.push({
@@ -819,7 +843,7 @@ function buildFlexInfoCard(contents, options = {}) {
     spacing: "sm",
     backgroundColor: options.backgroundColor || FLEX_COLORS.card,
     cornerRadius: "18px",
-    paddingAll: "16px",
+    paddingAll: "14px",
     borderColor: options.borderColor || "#E8E1D5",
     borderWidth: "1px",
     contents: cardContents.concat(contents),
@@ -865,9 +889,34 @@ function buildProgressBlock(label, doneCount, totalCount, color) {
   };
 }
 
+function buildTaskTitleLine({ task, prefix = "", showDifficulty = true, size = "md", difficultyWidth = "58px" }) {
+  const difficulty = normalizeDifficulty(task.difficulty);
+
+  return {
+    type: "box",
+    layout: "horizontal",
+    spacing: "xs",
+    alignItems: "center",
+    contents: [
+      {
+        type: "text",
+        text: `${prefix}${getLineTaskTitle(task.title)}`,
+        size,
+        color: task.done ? "#8D9589" : FLEX_COLORS.darkGreen,
+        wrap: false,
+        maxLines: 1,
+        weight: task.done ? "regular" : "bold",
+        flex: 1,
+      },
+      ...(showDifficulty
+        ? [buildDifficultyFlexTag(difficulty, { width: difficultyWidth })]
+        : []),
+    ],
+  };
+}
+
 function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, showSubCategory = true }) {
   const checkbox = task.done ? "✓" : "•";
-  const difficulty = normalizeDifficulty(task.difficulty);
   const category = normalizeCategory(task.category);
   const isProgrammingTask = category === "程式學習";
   const tagContents = [];
@@ -891,33 +940,15 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
     if (subTag) tagContents.push(subTag);
   }
 
-  const topRow = {
-    type: "box",
-    layout: "horizontal",
-    spacing: "xs",
-    alignItems: "center",
-    contents: [
-      {
-        type: "text",
-        text: `${taskNumber}. ${checkbox} ${getLineTaskTitle(task.title)}`,
-        size: "md",
-        color: task.done ? "#8D9589" : FLEX_COLORS.darkGreen,
-        wrap: false,
-        maxLines: 1,
-        weight: task.done ? "regular" : "bold",
-        flex: 1,
-      },
-      ...(showDifficulty
-        ? [
-            buildDifficultyFlexTag(difficulty, {
-              width: "58px",
-            }),
-          ]
-        : []),
-    ],
-  };
-
-  const rowContents = [topRow];
+  const rowContents = [
+    buildTaskTitleLine({
+      task,
+      prefix: `${taskNumber}. ${checkbox} `,
+      showDifficulty,
+      size: "md",
+      difficultyWidth: "58px",
+    }),
+  ];
 
   if (tagContents.length > 0) {
     rowContents.push({
@@ -1025,9 +1056,9 @@ function buildFlexFooterHint(lines) {
   };
 }
 
-function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor, headerAccessory }) {
+function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor, headerAccessory, headerBadge }) {
   const innerContents = [
-    buildFlexHeader(title, subtitle, headerAccessory),
+    buildFlexHeader(title, subtitle, headerAccessory, headerBadge),
     { type: "separator", margin: "md", color: FLEX_COLORS.beigeLine },
     ...bodyContents,
   ];
@@ -1077,42 +1108,6 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber, unfinishedCoun
     "",
     
   ].join("\n");
-}
-
-function buildTaskTagBox(task, showDifficulty) {
-  const category = normalizeCategory(task.category);
-  const isProgrammingTask = category === "程式學習";
-  const tags = [];
-
-  tags.push(
-    buildCategoryFlexTag(category, {
-      width: isProgrammingTask ? "100px" : "128px",
-      valueKey: task.categoryId || category,
-    })
-  );
-
-  if (isProgrammingTask) {
-    const subCategory = normalizeSubCategory(task.subCategory, category);
-    const subTag = buildSubCategoryFlexTag(subCategory, { width: getSubCategoryFlexTagWidth(subCategory), valueKey: task.subCategoryId || subCategory, parentKey: task.categoryId || category });
-    if (subTag) tags.push(subTag);
-  }
-
-  if (showDifficulty) {
-    const difficulty = normalizeDifficulty(task.difficulty);
-    tags.push(
-      buildDifficultyFlexTag(difficulty, {
-        width: isProgrammingTask ? "56px" : "84px",
-      })
-    );
-  }
-
-  return {
-    type: "box",
-    layout: "horizontal",
-    spacing: "sm",
-    margin: "sm",
-    contents: tags,
-  };
 }
 
 function buildDrawTaskTagBox(task) {
@@ -1176,46 +1171,30 @@ function buildDrawEmptyFlexMessage() {
 }
 
 function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount }) {
-  const difficulty = normalizeDifficulty(selectedTask.difficulty);
-
   const bubble = buildBaseFlexBubble({
     title: "今天抽到",
-    // ── 剩餘件數帶入副標 ──
-    subtitle: "今天選中的任務",
+    subtitle: `還有 ${unfinishedCount} 件未完成`,
     accentColor: FLEX_ACCENTS.draw,
     headerAccessory: buildDrawLotsIcon(FLEX_ACCENTS.draw),
     bodyContents: [
       buildFlexInfoCard(
         [
           {
-            type: "box",
-            layout: "horizontal",
-            spacing: "sm",
-            alignItems: "center",
-            contents: [
-              {
-                type: "text",
-                text: `第 ${taskNumber} 個任務`,
-                size: "sm",
-                color: FLEX_COLORS.darkGreen,
-                weight: "bold",
-                flex: 1,
-                wrap: false,
-                maxLines: 1,
-              },
-              buildDifficultyFlexTag(difficulty, { width: "54px" }),
-            ],
-          },
-          {
             type: "text",
-            text: getLineTaskTitle(selectedTask.title),
-            size: "lg",
+            text: `第 ${taskNumber} 個任務`,
+            size: "xs",
+            color: FLEX_COLORS.mutedText,
             weight: "bold",
-            color: FLEX_COLORS.darkGreen,
-            margin: "xs",
-            wrap: true,
-            maxLines: 2,
+            wrap: false,
+            maxLines: 1,
           },
+          buildTaskTitleLine({
+            task: selectedTask,
+            prefix: "☐ ",
+            showDifficulty: true,
+            size: "lg",
+            difficultyWidth: "54px",
+          }),
           buildDrawTaskTagBox(selectedTask),
         ],
         {
@@ -1229,7 +1208,6 @@ function buildDrawOneTaskFlexMessage({ selectedTask, taskNumber, unfinishedCount
 
   return {
     type: "flex",
-    // ── altText 帶入週次動態資訊 ──
     altText: `Tiny Progress｜今天抽到：${selectedTask.title}（還有 ${unfinishedCount} 件未完成）`,
     contents: bubble,
   };
@@ -1366,9 +1344,6 @@ async function handleDifficultyTaskFlexCommand(difficulty) {
 
 function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   const taskDoneCount = tasks.filter((task) => task.done).length;
-  const weekTitle = currentWeek
-    ? `第${currentWeek.weekNumber}週｜${currentWeek.title}`
-    : "本週清單";
 
   const taskRows = tasks.slice(0, 8).map((task, index) =>
     buildTaskFlexRow({
@@ -1434,9 +1409,11 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
 
   const bubble = buildBaseFlexBubble({
     title: "本週清單",
-    subtitle: "完整查看本週任務",
+    subtitle: currentWeek?.title ? currentWeek.title : "完整查看本週任務",
+    headerBadge: currentWeek ? buildWeekFlexBadge(currentWeek.weekNumber) : null,
     accentColor: FLEX_ACCENTS.all,
     bodyContents,
+    // 六張卡裡只有本週清單保留前往前端網頁的 CTA。
     footerContents: buildListFooter(),
   });
 
@@ -1528,49 +1505,46 @@ async function replyToLine(replyToken, replyResult) {
 
 function getGuideText() {
   return [
-    "📋 Tiny Progress｜使用方式",
+    "📋 Tiny Progress｜攻略",
     "",
     "【查看】",
-    "清單：看本週任務與驗收標準",
-    "簡單任務 / 適中任務 / 困難任務",
-    "抽一件：從未完成任務裡抽一件",
+    "清單：查看本週任務",
+    "抽一件：從未完成任務中抽一件",
+    "簡單任務 / 適中任務 / 困難任務：依難度查看",
     "",
-    "【新增】",
+    "【加入】",
     "新增任務 練習 CSS",
     "新增任務 練習 CSS｜程式學習｜練習｜適中",
     "新增標準 本週能說明一個學到的觀念",
     "",
-    "分類：程式學習、身心穩定、興趣探索",
-    "子分類：觀看課程影片、練習、寫筆記、W3Schools、freeCodeCamp",
-    "難度：簡單、適中、困難",
+    "【任務操作】",
+    "完成任務3 / 取消任務3",
+    "修改任務3 / 刪除任務3",
+    "取消修改：中止正在等待輸入的新內容",
     "",
-    "【完成】",
-    "完成任務3 / 取消任務3 / 修改任務3 / 刪除任務3",
-    "完成標準2 / 取消標準2 / 修改標準2 / 刪除標準2",
-    "",
-    "【修改中止】",
-    "取消修改",
-    "",
-    "Tiny Progress",
+    "需要查看目前編號時，先輸入：清單",
   ].join("\n");
 }
 
-// ── 攻略 Flex Message ──
+// ── 攻略 Flex Message：常用指令集中顯示，維持柔和標籤視覺 ──
 function buildGuideFlexMessage() {
-  function buildGuideRow(command, desc) {
+  function buildGuideRow(command, desc, options = {}) {
     return {
       type: "box",
       layout: "horizontal",
-      spacing: "md",
+      spacing: "sm",
+      alignItems: "center",
       paddingBottom: "8px",
       contents: [
         {
           type: "box",
           layout: "vertical",
           flex: 0,
-          width: "130px",
-          backgroundColor: FLEX_COLORS.paper,
-          cornerRadius: "8px",
+          width: options.width || "100px",
+          backgroundColor: options.backgroundColor || "#F4EBCF",
+          borderColor: options.borderColor || "#E2D095",
+          borderWidth: "1px",
+          cornerRadius: "999px",
           paddingTop: "4px",
           paddingBottom: "4px",
           paddingStart: "8px",
@@ -1579,9 +1553,10 @@ function buildGuideFlexMessage() {
             {
               type: "text",
               text: command,
-              size: "xs",
+              size: "xxs",
               weight: "bold",
-              color: FLEX_COLORS.darkGreen,
+              color: options.textColor || "#7A693D",
+              align: "center",
               wrap: false,
               maxLines: 1,
             },
@@ -1592,105 +1567,74 @@ function buildGuideFlexMessage() {
           text: desc,
           size: "xs",
           color: FLEX_COLORS.mutedText,
-          flex: 1,
           wrap: true,
+          flex: 1,
         },
       ],
     };
   }
 
-  function buildSectionDivider() {
-    return { type: "separator", margin: "sm", color: FLEX_COLORS.beigeLine };
+  function buildGuideSection(label, emoji, rows, options = {}) {
+    return buildFlexInfoCard(rows, {
+      label,
+      emoji,
+      backgroundColor: options.backgroundColor || FLEX_COLORS.paper,
+      borderColor: options.borderColor || FLEX_COLORS.beigeLine,
+      labelColor: options.labelColor || FLEX_COLORS.mutedText,
+    });
   }
 
-  // 查看區
-  const viewCard = buildFlexInfoCard(
+  const viewCard = buildGuideSection(
+    "查看",
+    "◌",
     [
-      buildGuideRow("清單", "本週任務與驗收標準總覽"),
-      buildGuideRow("簡單任務", "只看簡單任務"),
-      buildGuideRow("適中任務", "只看適中任務"),
-      buildGuideRow("困難任務", "只看困難任務"),
-      buildGuideRow("抽一件", "從未完成任務隨機抽一件"),
+      buildGuideRow("清單", "查看本週完整任務", { backgroundColor: "#E5EEF7", borderColor: "#BDD1E5", textColor: "#526B84" }),
+      buildGuideRow("抽一件", "從未完成任務中隨機抽一件", { backgroundColor: "#E1F0EF", borderColor: "#B9D9D6", textColor: "#4F7272" }),
+      buildGuideRow("簡單任務", "只看簡單任務", { backgroundColor: "#E6F0E4", borderColor: "#BDD5BC", textColor: "#56705A" }),
+      buildGuideRow("適中任務", "只看適中任務", { backgroundColor: "#F7E9D8", borderColor: "#E7C9A8", textColor: "#806349" }),
+      buildGuideRow("困難任務", "只看困難任務", { backgroundColor: "#EEE6F5", borderColor: "#D5C3E5", textColor: "#6C5B7C" }),
     ],
-    {
-      label: "查看",
-      emoji: "🔍",
-      backgroundColor: "#FFFAF1",
-      borderColor: "#DCCB9C",
-      labelColor: "#8A7448",
-    }
+    { backgroundColor: "#FFFAF1", borderColor: "#B7CAD8", labelColor: "#60798B" }
   );
 
-  // 新增區
-  const createCard = buildFlexInfoCard(
+  const createCard = buildGuideSection(
+    "加入",
+    "＋",
     [
-      buildGuideRow("新增任務 xxx", "快速加入，預設程式學習"),
-      buildGuideRow("新增任務 xxx｜分類｜子分類｜難度", "完整格式加入"),
-      buildSectionDivider(),
-      buildGuideRow("新增標準 xxx", "新增本週驗收條件"),
-      {
-        type: "box",
-        layout: "vertical",
-        margin: "sm",
-        paddingAll: "10px",
-        backgroundColor: FLEX_COLORS.paper,
-        cornerRadius: "10px",
-        borderColor: FLEX_COLORS.beigeLine,
-        borderWidth: "1px",
-        contents: [
-          { type: "text", text: "分類", size: "xxs", weight: "bold", color: FLEX_COLORS.mutedText },
-          { type: "text", text: "程式學習・身心穩定・興趣探索", size: "xxs", color: FLEX_COLORS.darkGreen, wrap: true, margin: "xs" },
-          { type: "text", text: "程式學習子分類", size: "xxs", weight: "bold", color: FLEX_COLORS.mutedText, margin: "sm" },
-          { type: "text", text: "觀看課程影片・練習・寫筆記・W3Schools・freeCodeCamp", size: "xxs", color: FLEX_COLORS.darkGreen, wrap: true, margin: "xs" },
-          { type: "text", text: "難度", size: "xxs", weight: "bold", color: FLEX_COLORS.mutedText, margin: "sm" },
-          { type: "text", text: "簡單・適中・困難", size: "xxs", color: FLEX_COLORS.darkGreen, wrap: true, margin: "xs" },
-        ],
-      },
+      buildGuideRow("新增任務", "例：新增任務 練習 CSS", { backgroundColor: "#E8EEE0", borderColor: "#C7D4B9", textColor: "#607052" }),
+      buildGuideRow("完整格式", "新增任務 xxx｜分類｜子分類｜難度", { width: "100px", backgroundColor: "#E5F0E8", borderColor: "#C0D9C6", textColor: "#58705F" }),
+      buildGuideRow("新增標準", "例：新增標準 本週能說明一個學到的觀念", { backgroundColor: "#F4EBCF", borderColor: "#E2D095", textColor: "#7A693D" }),
     ],
-    {
-      label: "新增",
-      emoji: "✏️",
-      backgroundColor: FLEX_COLORS.mint,
-      borderColor: "#D1DAC5",
-      labelColor: "#3D6B38",
-    }
+    { backgroundColor: "#F6FAF3", borderColor: "#CEDCC6", labelColor: "#607052" }
   );
 
-  // 完成區
-  const actionCard = buildFlexInfoCard(
+  const actionCard = buildGuideSection(
+    "任務操作",
+    "✓",
     [
-      buildGuideRow("完成任務3", "將第 3 個任務標為完成"),
-      buildGuideRow("取消任務3", "撤回完成狀態"),
-      buildGuideRow("修改任務3", "修改任務內容（會等待輸入）"),
-      buildGuideRow("刪除任務3", "從清單移除"),
-      buildSectionDivider(),
-      buildGuideRow("完成標準2", "驗收標準同上，數字換掉即可"),
-      buildSectionDivider(),
-      buildGuideRow("取消修改", "放棄進行中的修改"),
+      buildGuideRow("完成任務3", "完成第 3 個任務", { backgroundColor: "#E6F0E4", borderColor: "#BDD5BC", textColor: "#56705A" }),
+      buildGuideRow("取消任務3", "把第 3 個任務恢復成未完成", { backgroundColor: "#E5EEF7", borderColor: "#BDD1E5", textColor: "#526B84" }),
+      buildGuideRow("修改任務3", "Bot 會等待你輸入新的任務內容", { backgroundColor: "#F7E9D8", borderColor: "#E7C9A8", textColor: "#806349" }),
+      buildGuideRow("刪除任務3", "取消第 3 個任務", { backgroundColor: "#F6E5E7", borderColor: "#E5BEC6", textColor: "#805D67" }),
+      buildGuideRow("取消修改", "中止正在等待輸入的修改流程", { backgroundColor: "#EEE6F5", borderColor: "#D5C3E5", textColor: "#6C5B7C" }),
     ],
-    {
-      label: "完成",
-      emoji: "✅",
-      backgroundColor: "#EEF2E8",
-      borderColor: "#DEC9D3",
-      labelColor: "#6C6F64",
-    }
+    { backgroundColor: "#FBF5EA", borderColor: "#DED3C4", labelColor: "#806349" }
   );
 
   const bubble = buildBaseFlexBubble({
-    title: "使用方式",
-    subtitle: "操作方式都在這裡。",
+    title: "攻略",
+    subtitle: "常用指令放在這裡",
     accentColor: FLEX_COLORS.gold,
     bodyContents: [viewCard, createCard, actionCard],
     footerContents: buildFlexFooterHint([
+      "不知道任務編號時，先輸入：清單",
       "Tiny Progress",
-      "想看用量請輸入：用量小抄",
     ]),
   });
 
   return {
     type: "flex",
-    altText: "Tiny Progress｜使用方式：查看、加入、完成三區說明",
+    altText: "Tiny Progress｜攻略：查看、加入、任務操作",
     contents: bubble,
   };
 }
@@ -1699,194 +1643,6 @@ function handleGuideCommand() {
   return {
     replyText: getGuideText(),
     replyMessages: [buildGuideFlexMessage()],
-  };
-}
-
-function getUsageText() {
-  return [
-    "📮 Tiny Progress｜LINE 用量小抄",
-    "",
-    "【你主動傳 → Bot 回覆】不佔額度",
-    "Bot 用 Reply API 回覆，LINE 官方不計入每月 200 則。",
-    "清單、說明、抽一件、新增、完成、修改、取消",
-    "",
-    "【Bot 主動傳給你】佔用額度",
-    "Bot 用 Push API 主動發送，每則都計入每月 200 則免費額度。",
-    "每日提醒、主動補提醒、主動通知",
-    "",
-    "【目前建議】",
-    "每天主動提醒最多 1 則，一個月約 30 則。",
-    "剩下 170 則留給補提醒與通知，不怕超量。",
-    "你主動問，我再回，不會多打擾。",
-  ].join("\n");
-}
-
-// ── 用量小抄 Flex Message ──
-function buildUsageFlexMessage() {
-  function buildUsageRow(emoji, label, desc) {
-    return {
-      type: "box",
-      layout: "horizontal",
-      spacing: "md",
-      paddingBottom: "9px",
-      alignItems: "flex-start",
-      contents: [
-        {
-          type: "box",
-          layout: "horizontal",
-          flex: 0,
-          width: "16px",
-          contents: [
-            { type: "text", text: emoji, size: "sm", flex: 0 },
-          ],
-        },
-        {
-          type: "box",
-          layout: "vertical",
-          flex: 1,
-          contents: [
-            { type: "text", text: label, size: "sm", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true },
-            { type: "text", text: desc, size: "xs", color: FLEX_COLORS.mutedText, wrap: true, margin: "xs" },
-          ],
-        },
-      ],
-    };
-  }
-
-  function buildTagRow(tags) {
-    return {
-      type: "box",
-      layout: "horizontal",
-      spacing: "sm",
-      flexWrap: "wrap",
-      margin: "sm",
-      contents: tags.map((tag) => ({
-        type: "box",
-        layout: "vertical",
-        flex: 0,
-        backgroundColor: FLEX_COLORS.paper,
-        cornerRadius: "999px",
-        paddingTop: "3px",
-        paddingBottom: "3px",
-        paddingStart: "9px",
-        paddingEnd: "9px",
-        contents: [
-          { type: "text", text: tag, size: "xxs", weight: "bold", color: FLEX_COLORS.darkGreen, flex: 0 },
-        ],
-      })),
-    };
-  }
-
-  // 你問 Bot 回
-  const youAskCard = buildFlexInfoCard(
-    [
-      {
-        type: "text",
-        text: "用 Reply API 回覆，不計入每月 200 則額度",
-        size: "xs",
-        color: FLEX_COLORS.mutedText,
-        wrap: true,
-        margin: "xs",
-      },
-      buildTagRow(["清單", "說明", "抽一件", "簡單任務", "適中任務", "困難任務"]),
-      buildTagRow(["新增任務", "新增標準", "完成", "取消", "修改", "刪除"]),
-    ],
-    {
-      label: "你主動傳 → Bot 立刻回（不佔額度）",
-      emoji: "💬",
-      backgroundColor: "#FFFAF1",
-      borderColor: "#DCCB9C",
-      labelColor: "#8A7448",
-    }
-  );
-
-  // Bot 主動傳
-  const botPushCard = buildFlexInfoCard(
-    [
-      {
-        type: "text",
-        text: "用 Push API 主動發送，每則計入每月 200 則額度",
-        size: "xs",
-        color: "#6C6F64",
-        wrap: true,
-        margin: "xs",
-      },
-      buildUsageRow("🌅", "每日提醒", "早上固定發送，提醒你看看今天的任務。"),
-      buildUsageRow("📬", "主動補提醒", "有需要時會適度提醒。"),
-      buildUsageRow("📣", "主動通知", "完成或有重要變化時會主動告知。"),
-    ],
-    {
-      label: "Bot 主動傳給你（佔用額度）",
-      emoji: "📮",
-      backgroundColor: "#EEF2E8",
-      borderColor: "#DEC9D3",
-      labelColor: "#6C6F64",
-    }
-  );
-
-  // 建議用法
-  const tipCard = buildFlexInfoCard(
-    [
-      {
-        type: "box",
-        layout: "horizontal",
-        spacing: "sm",
-        alignItems: "center",
-        contents: [
-          {
-            type: "box",
-            layout: "vertical",
-            flex: 0,
-            width: "4px",
-            height: "56px",
-            backgroundColor: FLEX_COLORS.gold,
-            cornerRadius: "999px",
-            contents: [],
-          },
-          {
-            type: "box",
-            layout: "vertical",
-            flex: 1,
-            contents: [
-              { type: "text", text: "每天主動提醒最多 1 則", size: "sm", weight: "bold", color: FLEX_COLORS.darkGreen },
-              { type: "text", text: "每月約 30 則，剩下 170 則留給補提醒與通知，不怕超出 200 則免費額度。", size: "xs", color: FLEX_COLORS.mutedText, wrap: true, margin: "xs" },
-              { type: "text", text: "你主動問 Bot，不吃額度，放心問。", size: "xs", color: FLEX_COLORS.mutedText, wrap: true, margin: "xs" },
-            ],
-          },
-        ],
-      },
-    ],
-    {
-      label: "目前建議",
-      emoji: "📌",
-      backgroundColor: "#FBF5EA",
-      borderColor: "#DCCB9C",
-      labelColor: "#8A7448",
-    }
-  );
-
-  const bubble = buildBaseFlexBubble({
-    title: "用量小抄",
-    subtitle: "什麼時候 Bot 會傳、什麼時候你來問。",
-    accentColor: FLEX_COLORS.greenFresh,
-    bodyContents: [youAskCard, botPushCard, tipCard],
-    footerContents: buildFlexFooterHint([
-      "需要操作說明請輸入：說明",
-      "Tiny Progress",
-    ]),
-  });
-
-  return {
-    type: "flex",
-    altText: "Tiny Progress｜LINE 用量小抄：你問 Bot 回、Bot 主動推、使用建議",
-    contents: bubble,
-  };
-}
-
-function handleUsageCommand() {
-  return {
-    replyText: getUsageText(),
-    replyMessages: [buildUsageFlexMessage()],
   };
 }
 
@@ -2149,7 +1905,6 @@ async function handleLineTextCommand({ sourceKey, userText }) {
   if (pendingReply) return pendingReply;
 
   if (["攻略", "說明", "help", "Help"].includes(userText)) return handleGuideCommand();
-  if (["用量", "用量小抄", "訊息用量"].includes(userText)) return handleUsageCommand();
   if (["抽一件", "抽任務", "隨機任務", "今天做什麼"].includes(userText)) return handleDrawOneTaskCommand();
 
   if (userText === "清單" || userText === "全部清單") return handleAllListFlexCommand();
