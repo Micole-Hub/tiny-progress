@@ -547,37 +547,35 @@ function buildFlexTag(label, backgroundColor, textColor, options = {}) {
 function buildCategoryFlexTag(category, options = {}) {
   const style = getCategoryFlexStyle(category, options.valueKey);
 
+  // 主分類 = 第一層資訊：保留 script.js 的色票底色，視覺權重最高。
   return buildFlexTag(category, style.backgroundColor, style.textColor, {
-    width: options.width || "82px",
+    width: options.width,
     cornerRadius: "999px",
     size: "xxs",
-    weight: "regular",
-    borderColor: style.borderColor,
+    weight: "bold",
     paddingTop: "4px",
     paddingBottom: "4px",
-    paddingStart: "6px",
-    paddingEnd: "6px",
+    paddingStart: "9px",
+    paddingEnd: "9px",
   });
 }
 
 // ── 子分類標籤：未分類回傳 null，呼叫端需判斷後才放入 contents ──
 function buildSubCategoryFlexTag(subCategory, options = {}) {
-  // LINE 卡片要和前端 script.js 顯示一致：直接使用完整次分類名稱，
-  // 不再把「觀看課程影片」縮成「看課程」之類的簡稱。
   const label = String(subCategory || "").trim();
   if (!label || label === EMPTY_SUBCATEGORY) return null;
 
   const style = getSubCategoryFlexStyle(subCategory, options.valueKey, options.parentKey);
 
-  return buildFlexTag(label, style.backgroundColor, style.textColor, {
-    // 不固定寬度，讓標籤依文字內容自然延伸，避免名稱被擠掉。
+  // 次分類 = 第二層資訊：改成紙色底 + 對應色細框，避免和主分類搶戲。
+  return buildFlexTag(label, FLEX_COLORS.paper, style.textColor, {
     width: options.width,
     cornerRadius: "999px",
     size: "xxs",
     weight: "regular",
     borderColor: style.borderColor,
-    paddingTop: "4px",
-    paddingBottom: "4px",
+    paddingTop: "3px",
+    paddingBottom: "3px",
     paddingStart: "8px",
     paddingEnd: "8px",
   });
@@ -593,46 +591,38 @@ function getSubCategoryFlexTagWidth(subCategory) {
 function buildDifficultyFlexTag(difficulty, options = {}) {
   const style = getDifficultyFlexStyle(difficulty);
 
+  // 難度 = 第三層資訊：只留色點 + 文字，不再做成第三顆膠囊標籤。
   return {
     type: "box",
     layout: "horizontal",
     flex: 0,
-    width: options.width || "58px",
-    backgroundColor: style.backgroundColor,
-    cornerRadius: "7px",
-    borderColor: style.borderColor,
-    borderWidth: "1px",
-    paddingTop: "3px",
-    paddingBottom: "3px",
-    paddingStart: "4px",
-    paddingEnd: "4px",
+    width: options.width || "52px",
     spacing: "xs",
+    alignItems: "center",
+    justifyContent: "flex-end",
     contents: [
       {
         type: "box",
         layout: "vertical",
-        width: "5px",
-        height: "5px",
+        width: "6px",
+        height: "6px",
         backgroundColor: style.accentColor,
         cornerRadius: "999px",
-        margin: "xs",
         contents: [],
       },
       {
         type: "text",
         text: difficulty,
         size: "xxs",
-        weight: "regular",
+        weight: "bold",
         color: style.textColor,
-        align: "center",
-        flex: 1,
+        align: "end",
+        flex: 0,
         maxLines: 1,
       },
     ],
   };
 }
-
-
 
 
 function formatLineShortDate(value) {
@@ -643,10 +633,8 @@ function formatLineShortDate(value) {
 
 function buildCircleWeekMeta(currentWeek) {
   if (!currentWeek) return null;
-  const cycleNumber = Number(currentWeek.cycleNumber || 1);
   const weekNumber = Number(currentWeek.weekNumber || 1);
 
-  // 除了「清單」與「本週回顧」之外，其餘卡片只顯示 circle / Week，不顯示日期。
   return {
     type: "box",
     layout: "horizontal",
@@ -654,8 +642,8 @@ function buildCircleWeekMeta(currentWeek) {
     contents: [
       {
         type: "text",
-        text: `circle ${cycleNumber} · Week ${weekNumber}`,
-        size: "md",
+        text: `Week ${weekNumber}`,
+        size: "sm",
         weight: "bold",
         color: FLEX_COLORS.darkGreen,
         wrap: false,
@@ -667,12 +655,11 @@ function buildCircleWeekMeta(currentWeek) {
 }
 
 
-// 「本週清單」專用：circle / Week 與日期放在同一列，日期和週次同色、同樣粗體。
-// 只有清單與週日「本週回顧」顯示日期；其他卡片只顯示 circle / Week。
+// 「本週清單」專用：Week 與日期放在同一列，日期和週次同色、同樣粗體。
+// Cycle 已放到 Tiny Progress 品牌列；其他卡片只顯示 Week，不顯示日期。
 function buildListCircleWeekMeta(currentWeek) {
   if (!currentWeek) return null;
 
-  const cycleNumber = Number(currentWeek.cycleNumber || 1);
   const weekNumber = Number(currentWeek.weekNumber || 1);
   const start = formatLineShortDate(currentWeek.weekStart);
   const end = formatLineShortDate(currentWeek.weekEnd);
@@ -681,8 +668,8 @@ function buildListCircleWeekMeta(currentWeek) {
   const contents = [
     {
       type: "text",
-      text: `circle ${cycleNumber} · Week ${weekNumber}`,
-      size: "md",
+      text: `Week ${weekNumber}`,
+      size: "sm",
       weight: "bold",
       color: FLEX_COLORS.darkGreen,
       wrap: false,
@@ -714,24 +701,26 @@ function buildListCircleWeekMeta(currentWeek) {
 }
 
 function buildFlexHeader(title, subtitle, headerAccessory, headerBadge, options = {}) {
+  const cycleNumber = Number(options.cycleNumber || 0);
+  const brandLabel = cycleNumber > 0 ? `Tiny Progress · Cycle ${cycleNumber}` : "Tiny Progress";
   const contents = [
     {
       type: "box",
       layout: "horizontal",
       alignItems: "center",
       contents: [
-        { type: "text", text: "Tiny Progress", size: "xs", weight: "bold", color: FLEX_COLORS.brandText, flex: 1, wrap: false },
+        { type: "text", text: brandLabel, size: "xs", weight: "bold", color: FLEX_COLORS.brandText, flex: 1, wrap: false },
         { type: "text", text: "∞", size: "lg", weight: "bold", color: FLEX_COLORS.brand, flex: 0 },
       ],
     },
   ];
 
   if (headerBadge) {
-    contents.push({ type: "box", layout: "horizontal", margin: "sm", contents: [headerBadge] });
+    contents.push({ type: "box", layout: "horizontal", margin: "xs", contents: [headerBadge] });
   }
 
   const titleContents = [
-    { type: "text", text: title, size: options.titleSize || "xl", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true, flex: 1 },
+    { type: "text", text: title, size: options.titleSize || "lg", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true, flex: 1 },
   ];
   if (headerAccessory) titleContents.push(headerAccessory);
 
@@ -745,7 +734,7 @@ function buildFlexHeader(title, subtitle, headerAccessory, headerBadge, options 
   });
 
   if (subtitle) {
-    contents.push({ type: "text", text: subtitle, size: "sm", color: FLEX_COLORS.mutedText, wrap: true });
+    contents.push({ type: "text", text: subtitle, size: "xs", color: FLEX_COLORS.mutedText, wrap: true });
   }
 
   return { type: "box", layout: "vertical", spacing: "xs", contents };
@@ -764,17 +753,20 @@ function buildFlexInfoCard(contents, options = {}) {
       )
     );
   }
-  return {
+  const card = {
     type: "box",
     layout: "vertical",
     spacing: "sm",
     backgroundColor: options.backgroundColor || FLEX_COLORS.paper,
-    cornerRadius: "18px",
-    paddingAll: "14px",
-    borderColor: options.borderColor || FLEX_COLORS.beigeLine,
-    borderWidth: "1px",
+    cornerRadius: "16px",
+    paddingAll: "13px",
     contents: cardContents.concat(contents),
   };
+  if (options.borderColor) {
+    card.borderColor = options.borderColor;
+    card.borderWidth = "1px";
+  }
+  return card;
 }
 
 
@@ -897,7 +889,7 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
       prefix: `${taskNumber}. ${checkbox} `,
       showDifficulty,
       size: "md",
-      difficultyWidth: "58px",
+      difficultyWidth: "52px",
     }),
   ];
 
@@ -1006,9 +998,9 @@ function buildFlexFooterHint(lines) {
   };
 }
 
-function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor, headerAccessory, headerBadge, titleSize }) {
+function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor, headerAccessory, headerBadge, titleSize, cycleNumber }) {
   const innerContents = [
-    buildFlexHeader(title, subtitle, headerAccessory, headerBadge, { titleSize }),
+    buildFlexHeader(title, subtitle, headerAccessory, headerBadge, { titleSize, cycleNumber }),
     { type: "separator", margin: "md", color: FLEX_COLORS.beigeLine },
     ...bodyContents,
   ];
@@ -1064,6 +1056,7 @@ function buildDrawEmptyFlexMessage(currentWeek) {
   const bubble = buildBaseFlexBubble({
     title: "抽一件",
     subtitle: "目前沒有未完成任務",
+    cycleNumber: currentWeek?.cycleNumber,
     headerBadge: buildCircleWeekMeta(currentWeek),
     accentColor: CARD_ACCENTS.draw,
     bodyContents: [
@@ -1081,6 +1074,7 @@ function buildDrawOneTaskFlexMessage({ currentWeek, selectedTask, taskNumber, un
   const bubble = buildBaseFlexBubble({
     title: "抽一件",
     subtitle: `還有 ${unfinishedCount} 件未完成`,
+    cycleNumber: currentWeek?.cycleNumber,
     headerBadge: buildCircleWeekMeta(currentWeek),
     accentColor: CARD_ACCENTS.draw,
     bodyContents: [
@@ -1148,6 +1142,7 @@ function buildDifficultyTaskListFlexMessage({ currentWeek, tasks, difficulty }) 
   const bubble = buildBaseFlexBubble({
     title: `本週${difficulty}任務`,
     subtitle: `共 ${matchedTasks.length} 件`,
+    cycleNumber: currentWeek?.cycleNumber,
     headerBadge: buildCircleWeekMeta(currentWeek),
     accentColor: getDifficultyCardAccent(difficulty),
     bodyContents,
@@ -1185,6 +1180,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   const bubble = buildBaseFlexBubble({
     title: "本週清單",
     subtitle: currentWeek?.title ? currentWeek.title : "完整查看本週任務",
+    cycleNumber: currentWeek?.cycleNumber,
     headerBadge: buildListCircleWeekMeta(currentWeek),
     titleSize: "lg",
     accentColor: CARD_ACCENTS.allList,
@@ -1193,7 +1189,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   });
   return {
     type: "flex",
-    altText: currentWeek ? `Tiny Progress｜circle ${currentWeek.cycleNumber} · Week ${currentWeek.weekNumber}｜任務 ${taskDoneCount}/${tasks.length}` : "Tiny Progress｜本週清單",
+    altText: currentWeek ? `Tiny Progress · Cycle ${currentWeek.cycleNumber}｜Week ${currentWeek.weekNumber}｜任務 ${taskDoneCount}/${tasks.length}` : "Tiny Progress｜本週清單",
     contents: bubble,
   };
 }
@@ -1339,6 +1335,7 @@ function buildGuideFlexMessage(currentWeek) {
   const bubble = buildBaseFlexBubble({
     title: "攻略",
     subtitle: "常用指令",
+    cycleNumber: currentWeek?.cycleNumber,
     headerBadge: buildCircleWeekMeta(currentWeek),
     accentColor: CARD_ACCENTS.guide,
     bodyContents: [viewCard, createCard, actionCard],
