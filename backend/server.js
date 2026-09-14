@@ -282,11 +282,6 @@ function getLineTaskTitle(title) {
   return text || "未命名任務";
 }
 
-function getLineStandardTitle(title) {
-  const text = String(title || "").trim().replace(/\s+/g, " ");
-  return text || "未命名標準";
-}
-
 function formatTaskSectionByCategory(tasks) {
   if (tasks.length === 0) return ["【本週任務】", "本週還沒有任務。加入一件想做的事就好。"].join("\n");
 
@@ -390,8 +385,6 @@ function formatTasksByDifficultyForLine(tasks, difficulty) {
   ].join("\n");
 }
 
-const FLEX_BRAND_NAME = "Tiny Progress";
-const FLEX_FIXED_LINE = "";
 
 const FLEX_COLORS = {
   cream: "#F8F4EA",
@@ -406,10 +399,6 @@ const FLEX_COLORS = {
   gold: "#C9A35F",
   mint: "#E4EADC",
 
-  stampBg: "#E4EADC",
-  stampText: "#56614D",
-  stickerBg: "#EFE2BF",
-  stickerText: "#7A6338",
 };
 
 const FLEX_ACCENTS = {
@@ -496,30 +485,6 @@ function getDifficultyFooterCopy(difficulty, isCompleted) {
   return isCompleted ? "這件完成了，進度又往前一點。" : "需要的話，可以先拆成更小的步驟。";
 }
 
-function buildTinyStamp(text, options = {}) {
-  return {
-    type: "box",
-    layout: "vertical",
-    flex: 0,
-    backgroundColor: options.backgroundColor || FLEX_COLORS.stampBg,
-    cornerRadius: "999px",
-    paddingTop: "3px",
-    paddingBottom: "3px",
-    paddingStart: "8px",
-    paddingEnd: "8px",
-    contents: [
-      {
-        type: "text",
-        text,
-        size: "xxs",
-        weight: "bold",
-        color: options.color || FLEX_COLORS.stampText,
-        align: "center",
-        flex: 0,
-      },
-    ],
-  };
-}
 
 function buildCuteSectionLabel(emoji, text, color, iconColor) {
   const contents = [];
@@ -553,20 +518,6 @@ function buildCuteSectionLabel(emoji, text, color, iconColor) {
   };
 }
 
-function buildCuteEmptyNote(title, note, emoji) {
-  const contents = [];
-
-  if (emoji) {
-    contents.push({ type: "text", text: emoji, size: "lg", align: "center" });
-  }
-
-  contents.push(
-    { type: "text", text: title, size: "md", color: FLEX_COLORS.darkGreen, weight: "bold", wrap: true, align: "center" },
-    { type: "text", text: note, size: "sm", color: FLEX_COLORS.mutedText, wrap: true, align: "center" }
-  );
-
-  return contents;
-}
 
 function buildFlexTag(label, backgroundColor, textColor, options = {}) {
   return {
@@ -682,16 +633,6 @@ function buildDifficultyFlexTag(difficulty, options = {}) {
   };
 }
 
-function buildAccentBar(accentColor) {
-  return {
-    type: "box",
-    layout: "vertical",
-    height: "6px",
-    backgroundColor: accentColor || FLEX_COLORS.greenFresh,
-    cornerRadius: "999px",
-    contents: [],
-  };
-}
 
 function buildDifficultyHeaderNode(accentColor) {
   return {
@@ -970,27 +911,6 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
   };
 }
 
-function buildStandardFlexRow({ standard, standardNumber }) {
-  const checkbox = standard.done ? "☑" : "☐";
-
-  return {
-    type: "box",
-    layout: "vertical",
-    spacing: "xs",
-    paddingBottom: "10px",
-    contents: [
-      {
-        type: "text",
-        text: `${standardNumber}. ${checkbox} ${getLineStandardTitle(standard.title)}`,
-        size: "sm",
-        color: standard.done ? "#92867B" : FLEX_COLORS.darkGreen,
-        wrap: false,
-        maxLines: 1,
-        weight: standard.done ? "regular" : "bold",
-      },
-    ],
-  };
-}
 
 function getTinyProgressWebUrl() {
   const url = String(TINY_PROGRESS_WEB_URL || "").trim();
