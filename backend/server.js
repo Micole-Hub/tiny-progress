@@ -562,21 +562,24 @@ function buildCategoryFlexTag(category, options = {}) {
 
 // ── 子分類標籤：未分類回傳 null，呼叫端需判斷後才放入 contents ──
 function buildSubCategoryFlexTag(subCategory, options = {}) {
-  const label = getLineSubCategoryLabel(subCategory);
-  if (!label) return null;
+  // LINE 卡片要和前端 script.js 顯示一致：直接使用完整次分類名稱，
+  // 不再把「觀看課程影片」縮成「看課程」之類的簡稱。
+  const label = String(subCategory || "").trim();
+  if (!label || label === EMPTY_SUBCATEGORY) return null;
 
   const style = getSubCategoryFlexStyle(subCategory, options.valueKey, options.parentKey);
 
   return buildFlexTag(label, style.backgroundColor, style.textColor, {
-    width: options.width || "66px",
+    // 不固定寬度，讓標籤依文字內容自然延伸，避免名稱被擠掉。
+    width: options.width,
     cornerRadius: "999px",
     size: "xxs",
     weight: "regular",
     borderColor: style.borderColor,
     paddingTop: "4px",
     paddingBottom: "4px",
-    paddingStart: "6px",
-    paddingEnd: "6px",
+    paddingStart: "8px",
+    paddingEnd: "8px",
   });
 }
 
@@ -642,6 +645,35 @@ function buildCircleWeekMeta(currentWeek) {
   if (!currentWeek) return null;
   const cycleNumber = Number(currentWeek.cycleNumber || 1);
   const weekNumber = Number(currentWeek.weekNumber || 1);
+
+  // 除了「清單」與「本週回顧」之外，其餘卡片只顯示 circle / Week，不顯示日期。
+  return {
+    type: "box",
+    layout: "horizontal",
+    alignItems: "center",
+    contents: [
+      {
+        type: "text",
+        text: `circle ${cycleNumber} · Week ${weekNumber}`,
+        size: "md",
+        weight: "bold",
+        color: FLEX_COLORS.darkGreen,
+        wrap: false,
+        maxLines: 1,
+        flex: 0,
+      },
+    ],
+  };
+}
+
+
+// 「本週清單」專用：circle / Week 與日期放在同一列，日期和週次同色、同樣粗體。
+// 只有清單與週日「本週回顧」顯示日期；其他卡片只顯示 circle / Week。
+function buildListCircleWeekMeta(currentWeek) {
+  if (!currentWeek) return null;
+
+  const cycleNumber = Number(currentWeek.cycleNumber || 1);
+  const weekNumber = Number(currentWeek.weekNumber || 1);
   const start = formatLineShortDate(currentWeek.weekStart);
   const end = formatLineShortDate(currentWeek.weekEnd);
   const dateRange = start && end ? `${start} ～ ${end}` : "";
@@ -655,6 +687,7 @@ function buildCircleWeekMeta(currentWeek) {
       color: FLEX_COLORS.darkGreen,
       wrap: false,
       maxLines: 1,
+      flex: 0,
     },
   ];
 
@@ -662,24 +695,25 @@ function buildCircleWeekMeta(currentWeek) {
     contents.push({
       type: "text",
       text: dateRange,
-      size: "xs",
-      weight: "regular",
-      color: FLEX_COLORS.mutedText,
+      size: "sm",
+      weight: "bold",
+      color: FLEX_COLORS.darkGreen,
       wrap: false,
       maxLines: 1,
-      margin: "xs",
+      flex: 0,
     });
   }
 
   return {
     type: "box",
-    layout: "vertical",
-    spacing: "none",
+    layout: "horizontal",
+    spacing: "md",
+    alignItems: "center",
     contents,
   };
 }
 
-function buildFlexHeader(title, subtitle, headerAccessory, headerBadge) {
+function buildFlexHeader(title, subtitle, headerAccessory, headerBadge, options = {}) {
   const contents = [
     {
       type: "box",
@@ -697,7 +731,7 @@ function buildFlexHeader(title, subtitle, headerAccessory, headerBadge) {
   }
 
   const titleContents = [
-    { type: "text", text: title, size: "xl", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true, flex: 1 },
+    { type: "text", text: title, size: options.titleSize || "xl", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true, flex: 1 },
   ];
   if (headerAccessory) titleContents.push(headerAccessory);
 
@@ -783,6 +817,29 @@ function buildProgressBlock(label, doneCount, totalCount, color) {
   };
 }
 
+
+// 「本週清單」專用進度：移除灰色「本週進度」文字，只保留數字與進度條。
+function buildListProgressBlock(doneCount, totalCount, color) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "xs",
+    contents: [
+      {
+        type: "text",
+        text: `${doneCount} / ${totalCount}`,
+        size: "sm",
+        color: FLEX_COLORS.darkGreen,
+        weight: "bold",
+        align: "end",
+        wrap: false,
+        maxLines: 1,
+      },
+      buildSegmentedProgressBar(doneCount, totalCount, color),
+    ],
+  };
+}
+
 function buildTaskTitleLine({ task, prefix = "", showDifficulty = true, size = "md", difficultyWidth = "58px" }) {
   const difficulty = normalizeDifficulty(task.difficulty);
   const title = String(task.title || "").trim() || "未命名任務";
@@ -811,22 +868,23 @@ function buildTaskTitleLine({ task, prefix = "", showDifficulty = true, size = "
 function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, showSubCategory = true }) {
   const checkbox = task.done ? "✓" : "•";
   const category = normalizeCategory(task.category);
-  const isProgrammingTask = category === "程式學習";
   const tagContents = [];
 
+  // 第一個標籤：主題分類。完整保留，例如「前端」或「程式學習」。
   if (showCategory) {
     tagContents.push(
       buildCategoryFlexTag(category, {
-        width: isProgrammingTask ? "82px" : "94px",
+        // 不固定寬度，讓分類名稱完整顯示。
         valueKey: task.categoryId || category,
       })
     );
   }
 
-  if (showSubCategory && isProgrammingTask) {
+  // 第二個標籤：次分類。所有主分類都可以有次分類，不能只限制「程式學習」。
+  // 這正是前端 script.js 會顯示「前端 / 練習 / 簡單」三層資訊的原因。
+  if (showSubCategory) {
     const subCategory = normalizeSubCategory(task.subCategory, category);
     const subTag = buildSubCategoryFlexTag(subCategory, {
-      width: getSubCategoryFlexTagWidth(subCategory),
       valueKey: task.subCategoryId || subCategory,
       parentKey: task.categoryId || category,
     });
@@ -865,8 +923,9 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
 }
 
 
-// 「清單」卡專用任務列：第一行任務＋難度，第二行只顯示子分類。
-// 這個版型刻意不顯示父分類，對齊目前 Tiny Progress 清單卡的視覺。
+// 「清單」卡專用任務列：
+// 第一行 = 任務名稱＋難度；第二行 = 主題分類＋次分類。
+// 難度雖在第一行，但整張任務仍完整保留三層資訊。
 function buildListTaskFlexRow({ task, taskNumber }) {
   return buildTaskFlexRow({ task, taskNumber, showDifficulty: true, showCategory: true, showSubCategory: true });
 }
@@ -947,9 +1006,9 @@ function buildFlexFooterHint(lines) {
   };
 }
 
-function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor, headerAccessory, headerBadge }) {
+function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor, headerAccessory, headerBadge, titleSize }) {
   const innerContents = [
-    buildFlexHeader(title, subtitle, headerAccessory, headerBadge),
+    buildFlexHeader(title, subtitle, headerAccessory, headerBadge, { titleSize }),
     { type: "separator", margin: "md", color: FLEX_COLORS.beigeLine },
     ...bodyContents,
   ];
@@ -1111,7 +1170,7 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   const taskDoneCount = tasks.filter((task) => task.done).length;
   const taskRows = buildListTaskRows(tasks);
   const bodyContents = [
-    buildFlexInfoCard([buildProgressBlock("本週進度", taskDoneCount, tasks.length, CARD_ACCENTS.allList)], { label: "本週概況", emoji: "○" }),
+    buildFlexInfoCard([buildListProgressBlock(taskDoneCount, tasks.length, CARD_ACCENTS.allList)], { label: "本週概況", emoji: "○" }),
   ];
   if (tasks.length === 0) {
     bodyContents.push(
@@ -1126,7 +1185,8 @@ function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
   const bubble = buildBaseFlexBubble({
     title: "本週清單",
     subtitle: currentWeek?.title ? currentWeek.title : "完整查看本週任務",
-    headerBadge: buildCircleWeekMeta(currentWeek),
+    headerBadge: buildListCircleWeekMeta(currentWeek),
+    titleSize: "lg",
     accentColor: CARD_ACCENTS.allList,
     bodyContents,
     footerContents: buildListFooter(),
