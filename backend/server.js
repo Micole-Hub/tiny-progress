@@ -17,6 +17,14 @@ const TINY_PROGRESS_WEB_URL = "https://micole-hub.github.io/tiny-progress/";
 const pendingActions = new Map();
 const PENDING_ACTION_TTL_MS = 10 * 60 * 1000;
 
+// Queue retry 改由 Render 排程，避免 Google Apps Script time trigger 偶發失敗寄信。
+// 正常 LINE 即時流程完全不走這個 timer，所以不會拖慢一般回覆。
+const QUEUE_RETRY_INTERVAL_MS = Math.max(60 * 1000, Number(process.env.QUEUE_RETRY_INTERVAL_MS || 5 * 60 * 1000));
+const QUEUE_RETRY_START_DELAY_MS = Math.max(5 * 1000, Number(process.env.QUEUE_RETRY_START_DELAY_MS || 30 * 1000));
+const QUEUE_RETRY_TIMEOUT_MS = Math.max(10 * 1000, Number(process.env.QUEUE_RETRY_TIMEOUT_MS || 45 * 1000));
+let queueRetryInFlight = false;
+let legacyGasRetryTriggerDisabled = false;
+
 setInterval(() => {
   const now = Date.now();
   for (const [key, val] of pendingActions.entries()) {
@@ -148,6 +156,80 @@ async function gasPost(action, payload = {}) {
   const data = await response.json();
   if (!data.ok) throw new Error(data.message || `Google Apps Script ${action} 失敗`);
   return data.result !== undefined ? data.result : data.item;
+}
+
+async function gasPostWithTimeout(action, payload = {}, timeoutMs = QUEUE_RETRY_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(GOOGLE_SHEETS_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret: GOOGLE_SHEETS_API_SECRET, action, ...payload }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) throw new Error(`呼叫 Google Apps Script ${action} 失敗，狀態碼：${response.status}`);
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.message || `Google Apps Script ${action} 失敗`);
+    return data.result !== undefined ? data.result : data.item;
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw new Error(`Google Apps Script ${action} 超過 ${Math.round(timeoutMs / 1000)} 秒未回應`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function disableLegacyGasRetryTriggerIfReady() {
+  if (legacyGasRetryTriggerDisabled) return;
+
+  try {
+    const result = await gasPostWithTimeout("disable-retry-pending-queue-trigger", {}, QUEUE_RETRY_TIMEOUT_MS);
+    legacyGasRetryTriggerDisabled = true;
+    console.log(`[queue-retry] 舊 GAS retry trigger 已停用；移除 ${Number((result && result.removedCount) || 0)} 個`);
+  } catch (error) {
+    // 停用失敗時保留舊 trigger，寧可暫時雙保險，也不讓 retry 功能出現空窗。
+    console.warn("[queue-retry] 暫時無法停用舊 GAS trigger，會在下次成功 retry 後再試：", error.message);
+  }
+}
+
+async function runQueueRetryTick() {
+  if (queueRetryInFlight) return { ok: true, skipped: true, reason: "retry_in_flight" };
+  queueRetryInFlight = true;
+
+  try {
+    const result = await gasPostWithTimeout("retry-pending-queue", {}, QUEUE_RETRY_TIMEOUT_MS);
+    const retryCount = Array.isArray(result && result.results) ? result.results.length : 0;
+    console.log(`[queue-retry] Render 排程完成；本次處理 ${retryCount} 筆 pending queue`);
+
+    // 只有 Render -> GAS 的新 retry 路徑成功後，才自動刪掉舊的 GAS time trigger。
+    await disableLegacyGasRetryTriggerIfReady();
+    return result;
+  } catch (error) {
+    console.warn("[queue-retry] 本次背景 retry 失敗，正常 LINE 即時功能不受影響：", error.message);
+    return { ok: false, error: error.message };
+  } finally {
+    queueRetryInFlight = false;
+  }
+}
+
+function startQueueRetryScheduler() {
+  const firstTimer = setTimeout(() => {
+    runQueueRetryTick().catch((error) => console.warn("[queue-retry] startup retry error：", error.message));
+  }, QUEUE_RETRY_START_DELAY_MS);
+
+  const interval = setInterval(() => {
+    runQueueRetryTick().catch((error) => console.warn("[queue-retry] interval retry error：", error.message));
+  }, QUEUE_RETRY_INTERVAL_MS);
+
+  if (typeof firstTimer.unref === "function") firstTimer.unref();
+  if (typeof interval.unref === "function") interval.unref();
+
+  console.log(`[queue-retry] Render scheduler 已啟動：${Math.round(QUEUE_RETRY_INTERVAL_MS / 1000)} 秒檢查一次`);
 }
 
 async function fetchWeekContextFromGoogleSheets() {
@@ -1899,4 +1981,5 @@ app.post("/retrospectives", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Tiny Progress V2 後端啟動：http://localhost:${PORT}`);
+  startQueueRetryScheduler();
 });
