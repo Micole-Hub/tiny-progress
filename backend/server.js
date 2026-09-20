@@ -232,8 +232,7 @@ function startQueueRetryScheduler() {
   console.log(`[queue-retry] Render scheduler 已啟動：${Math.round(QUEUE_RETRY_INTERVAL_MS / 1000)} 秒檢查一次`);
 }
 
-async function fetchWeekContextFromGoogleSheets() {
-  const data = await gasGet("week-context");
+function normalizeWeekContextPayload(data = {}) {
   return {
     previousWeek: data.previousWeek || null,
     currentWeek: data.currentWeek || null,
@@ -247,17 +246,35 @@ async function fetchWeekContextFromGoogleSheets() {
   };
 }
 
+async function fetchWeekContextFromGoogleSheets() {
+  const data = await gasGet("week-context");
+  return normalizeWeekContextPayload(data);
+}
+
+async function fetchCoreFromGoogleSheets() {
+  const data = await gasGet("core");
+  return {
+    context: normalizeWeekContextPayload(data.context || {}),
+    items: (data.items || []).map(normalizeItem),
+    weeks: data.weeks || [],
+    cycles: data.cycles || [],
+    categories: data.categories || [],
+    retrospectives: data.retrospectives || [],
+  };
+}
+
 async function fetchItemsFromGoogleSheets() {
   const data = await gasGet("items");
   return (data.items || []).map(normalizeItem);
 }
 
 async function fetchCurrentWeekItemsFromGoogleSheets() {
-  const [items, context] = await Promise.all([fetchItemsFromGoogleSheets(), fetchWeekContextFromGoogleSheets()]);
+  const core = await fetchCoreFromGoogleSheets();
+  const context = core.context;
   if (!context.currentWeek) return [];
   const c = Number(context.currentWeek.cycleNumber);
   const w = Number(context.currentWeek.weekNumber);
-  return items.filter((item) => Number(item.scheduledCycleNumber) === c && Number(item.scheduledWeekNumber) === w && !["cancelled", "replanned"].includes(item.status));
+  return core.items.filter((item) => Number(item.scheduledCycleNumber) === c && Number(item.scheduledWeekNumber) === w && !["cancelled", "replanned"].includes(item.status));
 }
 
 async function createItemToGoogleSheets({
@@ -319,13 +336,21 @@ async function getItemsByType(type) {
 }
 
 async function getTaskBoardForLine() {
-  const [items, weekContext] = await Promise.all([
-    fetchCurrentWeekItemsFromGoogleSheets(),
-    fetchWeekContextFromGoogleSheets(),
-  ]);
+  // v24: 一張 LINE 任務卡只打一個 core snapshot，不再重複抓 context。
+  const core = await fetchCoreFromGoogleSheets();
+  const currentWeek = core.context.currentWeek;
+  if (!currentWeek) return { currentWeek: null, tasks: [], standards: [] };
+
+  const c = Number(currentWeek.cycleNumber);
+  const w = Number(currentWeek.weekNumber);
+  const items = core.items.filter((item) =>
+    Number(item.scheduledCycleNumber) === c &&
+    Number(item.scheduledWeekNumber) === w &&
+    !["cancelled", "replanned"].includes(item.status)
+  );
 
   return {
-    currentWeek: weekContext.currentWeek,
+    currentWeek,
     tasks: sortTasksByCategory(items.filter((item) => item.type === "task")),
     standards: items.filter((item) => item.type === "standard"),
   };
@@ -1408,7 +1433,7 @@ function getGuideText() {
 }
 
 // ── 攻略 Flex Message：常用指令集中顯示，維持柔和標籤視覺 ──
-function buildGuideFlexMessage(currentWeek) {
+function buildGuideFlexMessage() {
   function buildGuideRow(command, desc) {
     return {
       type: "box",
@@ -1450,8 +1475,9 @@ function buildGuideFlexMessage(currentWeek) {
   const bubble = buildBaseFlexBubble({
     title: "攻略",
     subtitle: "常用指令",
-    cycleNumber: currentWeek?.cycleNumber,
-    headerBadge: buildCircleWeekMeta(currentWeek),
+    // 攻略是固定說明卡，不綁 Cycle / Week / 日期。
+    cycleNumber: undefined,
+    headerBadge: null,
     accentColor: CARD_ACCENTS.guide,
     bodyContents: [viewCard, createCard, actionCard],
     footerContents: buildFlexFooterHint(["不知道任務編號時，先輸入：清單", "Tiny Progress"]),
@@ -1461,8 +1487,8 @@ function buildGuideFlexMessage(currentWeek) {
 
 
 async function handleGuideCommand() {
-  const context = await fetchWeekContextFromGoogleSheets();
-  return { replyText: getGuideText(), replyMessages: [buildGuideFlexMessage(context.currentWeek)] };
+  // 固定攻略不需要為了 Week 資訊額外打 Google Apps Script。
+  return { replyText: getGuideText(), replyMessages: [buildGuideFlexMessage()] };
 }
 
 
@@ -1809,6 +1835,11 @@ app.post("/line/webhook", async (req, res) => {
   res.status(200).send("OK");
 });
 
+app.get("/core", async (req, res) => {
+  try { res.json(await fetchCoreFromGoogleSheets()); }
+  catch (error) { res.status(500).json({ message: "讀取核心資料失敗", error: error.message }); }
+});
+
 app.get("/week-context", async (req, res) => {
   try { res.json(await fetchWeekContextFromGoogleSheets()); }
   catch (error) { res.status(500).json({ message: "讀取週次資料失敗", error: error.message }); }
@@ -1931,8 +1962,15 @@ app.post("/items/:id/reschedule", async (req, res) => {
 });
 
 app.post("/items/:id/replan", async (req, res) => {
-  try { res.json(await gasPost("replan-task", { id: req.params.id, ...(req.body || {}) })); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "重新整理失敗", error: error.message }); }
+  try {
+    const result = await gasPost("replan-task", { id: req.params.id, ...(req.body || {}) });
+    res.json({
+      original: normalizeItem(result?.original || {}),
+      newTasks: (result?.newTasks || []).map(normalizeItem),
+    });
+  } catch (error) {
+    res.status(getApiErrorStatus(error)).json({ message: "重新整理失敗", error: error.message });
+  }
 });
 
 app.delete("/items/:id", async (req, res) => {

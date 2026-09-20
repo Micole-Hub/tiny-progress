@@ -52,6 +52,14 @@ const POSTPONE_REASONS = [
 
 const els = {};
 
+// v24.1：操作成功先局部更新畫面，再用背景 /core 靜默校正。
+// 使用者不用等完整同步；如果 LINE / 另一台裝置剛好有更新，也會在背景合併回來。
+let quietCoreSyncTimer = null;
+let quietCoreMutationVersion = 0;
+let lastQuietCoreSyncAt = 0;
+const QUIET_CORE_SYNC_DELAY_MS = 1600;
+const QUIET_CORE_SYNC_FOCUS_THROTTLE_MS = 30000;
+
 function cacheElements() {
   [
     "homePage", "historyPage", "settingsPage", "heroTitle", "cycleThemeText", "editCycleThemeBtn",
@@ -163,38 +171,125 @@ async function api(path, options = {}) {
 async function loadCore({ quiet = false } = {}) {
   if (!quiet) showLoading("同步 Tiny Progress…");
   try {
-    const [context, items, weeks, cycles, categories] = await Promise.all([
-      api("/week-context"),
-      api("/items"),
-      api("/weeks"),
-      api("/cycles"),
-      api("/categories"),
-    ]);
-    state.context = context;
-    state.items = items;
-    state.weeks = weeks;
-    state.cycles = cycles;
-    state.categories = categories;
-
-    if (context?.currentWeek?.cycleNumber >= 2) {
-      try {
-        state.retrospectives = await api("/retrospectives");
-      } catch (error) {
-        console.warn("Weekly Review 暫時讀取失敗：", error);
-        state.retrospectives = [];
-      }
-    } else {
-      state.retrospectives = [];
-    }
-
-    renderAll();
-    maybeShowCycleCelebration();
+    const core = await api("/core");
+    applyCoreSnapshot(core, { celebrate: !quiet });
   } catch (error) {
     console.error(error);
-    showAlert("讀取資料失敗", error.message, "");
+    if (!quiet) showAlert("讀取資料失敗", error.message, "");
   } finally {
-    hideLoading();
+    if (!quiet) hideLoading();
   }
+}
+
+function applyCoreSnapshot(core, { celebrate = false } = {}) {
+  state.context = core?.context || {};
+  state.items = core?.items || [];
+  state.weeks = core?.weeks || [];
+  state.cycles = core?.cycles || [];
+  state.categories = core?.categories || [];
+  state.retrospectives = core?.retrospectives || [];
+  renderAll();
+  if (celebrate) maybeShowCycleCelebration();
+}
+
+function noteLocalMutation() {
+  quietCoreMutationVersion += 1;
+  scheduleQuietCoreSync(QUIET_CORE_SYNC_DELAY_MS, quietCoreMutationVersion);
+}
+
+function scheduleQuietCoreSync(delay = QUIET_CORE_SYNC_DELAY_MS, version = quietCoreMutationVersion) {
+  if (quietCoreSyncTimer) clearTimeout(quietCoreSyncTimer);
+  quietCoreSyncTimer = setTimeout(() => runQuietCoreSync(version), Math.max(0, Number(delay) || 0));
+}
+
+async function runQuietCoreSync(version = quietCoreMutationVersion) {
+  quietCoreSyncTimer = null;
+  if (document.hidden) {
+    scheduleQuietCoreSync(2500, version);
+    return;
+  }
+
+  try {
+    const core = await api("/core");
+    // 如果這次背景讀取期間又完成了新的寫入，不套用舊快照。
+    // 新的 mutation 已經安排下一次 quiet sync。
+    if (version !== quietCoreMutationVersion) return;
+    applyCoreSnapshot(core, { celebrate: false });
+    lastQuietCoreSyncAt = Date.now();
+  } catch (error) {
+    // 背景校正失敗不打斷使用者；下一次操作、切回分頁或重新整理會再同步。
+    console.warn("Tiny Progress 背景同步暫時失敗：", error);
+  }
+}
+
+function schedulePassiveCoreSync() {
+  if (document.hidden || quietCoreSyncTimer) return;
+  if (Date.now() - lastQuietCoreSyncAt < QUIET_CORE_SYNC_FOCUS_THROTTLE_MS) return;
+  scheduleQuietCoreSync(250, quietCoreMutationVersion);
+}
+
+function upsertStateItem(item) {
+  if (!item || !item.id) return;
+  const index = state.items.findIndex((row) => row.id === item.id);
+  if (index === -1) state.items.push(item);
+  else state.items[index] = item;
+}
+
+function removeStateItem(itemId) {
+  state.items = state.items.filter((item) => item.id !== itemId);
+}
+
+function applyItemMutation(item) {
+  upsertStateItem(item);
+  renderAll();
+  noteLocalMutation();
+}
+
+function applyReplanMutation(result) {
+  if (result?.original) upsertStateItem(result.original);
+  (result?.newTasks || []).forEach(upsertStateItem);
+  renderAll();
+  noteLocalMutation();
+}
+
+function applyWeekMutation(week) {
+  if (!week?.cycleNumber || !week?.weekNumber) return;
+  const index = state.weeks.findIndex((row) =>
+    Number(row.cycleNumber) === Number(week.cycleNumber) &&
+    Number(row.weekNumber) === Number(week.weekNumber)
+  );
+  if (index === -1) state.weeks.push(week);
+  else state.weeks[index] = { ...state.weeks[index], ...week };
+
+  if (
+    state.context?.currentWeek &&
+    Number(state.context.currentWeek.cycleNumber) === Number(week.cycleNumber) &&
+    Number(state.context.currentWeek.weekNumber) === Number(week.weekNumber)
+  ) {
+    state.context.currentWeek = { ...state.context.currentWeek, ...week };
+  }
+  if (
+    state.context?.nextWeek &&
+    Number(state.context.nextWeek.cycleNumber) === Number(week.cycleNumber) &&
+    Number(state.context.nextWeek.weekNumber) === Number(week.weekNumber)
+  ) {
+    state.context.nextWeek = { ...state.context.nextWeek, ...week };
+  }
+  renderAll();
+  noteLocalMutation();
+}
+
+function applyCycleMutation(cycle) {
+  if (!cycle?.cycleNumber) return;
+  const index = state.cycles.findIndex((row) => Number(row.cycleNumber) === Number(cycle.cycleNumber));
+  if (index === -1) state.cycles.push(cycle);
+  else state.cycles[index] = { ...state.cycles[index], ...cycle };
+
+  if (state.context?.nextCycle && Number(state.context.nextCycle.cycleNumber) === Number(cycle.cycleNumber)) {
+    state.context.nextCycle = { ...state.context.nextCycle, ...cycle };
+  }
+  renderAll();
+  noteLocalMutation();
 }
 
 function getActiveCategories() {
@@ -572,14 +667,16 @@ async function addTask(event) {
 
   showLoading("加入中…");
   try {
-    await api("/items", { method: "POST", body: payload });
+    const created = await api("/items", { method: "POST", body: payload });
+    upsertStateItem(created);
     els.taskInput.value = "";
     els.taskDifficulty.value = "適中";
     els.addTaskForm.hidden = true;
     els.toggleAddTaskBtn.textContent = "＋ 加入";
     els.toggleAddTaskBtn.classList.add("just-added");
     setTimeout(() => els.toggleAddTaskBtn.classList.remove("just-added"), 800);
-    await loadCore({ quiet: true });
+    renderAll();
+    noteLocalMutation();
   } catch (error) {
     showAlert("加入失敗", error.message, "");
   } finally { hideLoading(); }
@@ -597,8 +694,8 @@ async function confirmComplete(item) {
 
   showLoading("更新進度中…");
   try {
-    await api(`/items/${encodeURIComponent(item.id)}/complete`, { method: "POST", body: {} });
-    await loadCore({ quiet: true });
+    const updated = await api(`/items/${encodeURIComponent(item.id)}/complete`, { method: "POST", body: {} });
+    applyItemMutation(updated);
   } catch (error) {
     showAlert("完成失敗", error.message, "");
   } finally { hideLoading(); }
@@ -724,7 +821,7 @@ function openEditTask(item) {
       if (!title) throw new Error("任務名稱不可空白");
       const cat = document.getElementById("editCategory");
       const subWrap = document.getElementById("editSubWrap");
-      await api(`/items/${encodeURIComponent(item.id)}`, {
+      const updated = await api(`/items/${encodeURIComponent(item.id)}`, {
         method: "PATCH",
         body: {
           title,
@@ -733,7 +830,7 @@ function openEditTask(item) {
           difficulty: document.getElementById("editDifficulty").value,
         },
       });
-      await loadCore({ quiet: true });
+      applyItemMutation(updated);
     },
   });
 }
@@ -761,7 +858,7 @@ function openDirectReschedule(item) {
       <label class="v2-form-field">想補充的話（選填）<textarea id="rescheduleNote" rows="3"></textarea></label>`,
     onConfirm: async () => {
       const [cycleNumber, weekNumber] = document.getElementById("rescheduleTarget").value.split("|").map(Number);
-      await api(`/items/${encodeURIComponent(item.id)}/reschedule`, {
+      const updated = await api(`/items/${encodeURIComponent(item.id)}/reschedule`, {
         method: "POST",
         body: {
           target: { cycleNumber, weekNumber },
@@ -769,7 +866,7 @@ function openDirectReschedule(item) {
           note: document.getElementById("rescheduleNote").value.trim(),
         },
       });
-      await loadCore({ quiet: true });
+      applyItemMutation(updated);
     },
   });
 }
@@ -818,8 +915,8 @@ function openReplanTask(item) {
         difficulty: row.querySelector("[data-r-diff]").value,
       })).filter((task) => task.title);
       if (!tasks.length) throw new Error("至少加入一個整理後的任務");
-      await api(`/items/${encodeURIComponent(item.id)}/replan`, { method: "POST", body: { tasks } });
-      await loadCore({ quiet: true });
+      const result = await api(`/items/${encodeURIComponent(item.id)}/replan`, { method: "POST", body: { tasks } });
+      applyReplanMutation(result);
     },
   });
 }
@@ -854,7 +951,9 @@ async function openDeleteTask(item) {
     showLoading("刪除中…");
     try {
       await api(`/items/${encodeURIComponent(item.id)}/draft`, { method: "DELETE" });
-      await loadCore({ quiet: true });
+      removeStateItem(item.id);
+      renderAll();
+      noteLocalMutation();
     } catch (error) {
       showAlert("刪除失敗", error.message, "");
     } finally { hideLoading(); }
@@ -873,14 +972,14 @@ async function openDeleteTask(item) {
       <label class="v2-form-field">原因<select id="deleteReason">${DELETE_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
       <label class="v2-form-field">想補充的話（選填）<textarea id="deleteNote" rows="3"></textarea></label>`,
     onConfirm: async () => {
-      await api(`/items/${encodeURIComponent(item.id)}/delete`, {
+      const updated = await api(`/items/${encodeURIComponent(item.id)}/delete`, {
         method: "POST",
         body: {
           reason: document.getElementById("deleteReason").value,
           note: document.getElementById("deleteNote").value.trim(),
         },
       });
-      await loadCore({ quiet: true });
+      applyItemMutation(updated);
     },
   });
 }
@@ -896,8 +995,8 @@ async function correctCompletion(item) {
   if (!ok) return;
   showLoading("更正中…");
   try {
-    await api(`/items/${encodeURIComponent(item.id)}/correct-completion`, { method: "POST", body: {} });
-    await loadCore({ quiet: true });
+    const updated = await api(`/items/${encodeURIComponent(item.id)}/correct-completion`, { method: "POST", body: {} });
+    applyItemMutation(updated);
   } catch (error) {
     showAlert("更正失敗", error.message, "");
   } finally { hideLoading(); }
@@ -915,8 +1014,8 @@ function openWeekPlanEditor() {
       const title = document.getElementById("weekPlanTheme").value.trim();
       const achievement = document.getElementById("weekPlanGoal").value.trim();
       if (!title || !achievement) throw new Error("本週主題與目標都要填");
-      await api("/weeks/current-plan", { method: "PATCH", body: { title, achievement } });
-      await loadCore({ quiet: true });
+      const updatedWeek = await api("/weeks/current-plan", { method: "PATCH", body: { title, achievement } });
+      applyWeekMutation(updatedWeek);
     },
   });
 }
@@ -928,8 +1027,8 @@ async function saveWeekSetup(event) {
   if (!title || !achievement) return;
   showLoading("準備這一週…");
   try {
-    await api("/weeks/current-plan", { method: "PATCH", body: { title, achievement } });
-    await loadCore({ quiet: true });
+    const updatedWeek = await api("/weeks/current-plan", { method: "PATCH", body: { title, achievement } });
+    applyWeekMutation(updatedWeek);
   } catch (error) {
     showAlert("儲存失敗", error.message, "");
   } finally { hideLoading(); }
@@ -1611,8 +1710,8 @@ function openCycleThemeEditor() {
     onConfirm: async () => {
       const theme = document.getElementById("cycleThemeInput").value.trim();
       if (!theme) throw new Error("本輪主題不可空白");
-      await api(`/cycles/${week.cycleNumber}/theme`, { method: "PATCH", body: { theme } });
-      await loadCore({ quiet: true });
+      const updatedCycle = await api(`/cycles/${week.cycleNumber}/theme`, { method: "PATCH", body: { theme } });
+      applyCycleMutation(updatedCycle);
     },
   });
 }
@@ -1746,7 +1845,9 @@ function openNextCyclePlanner(draft = null) {
       try {
         showLoading("刪除中…");
         await api(`/items/${encodeURIComponent(id)}/draft`, { method: "DELETE" });
-        await loadCore({ quiet: true });
+        removeStateItem(id);
+        renderAll();
+        noteLocalMutation();
         openNextCyclePlanner(draftSnapshot);
       } catch (e) {
         showAlert("刪除失敗", e.message || "草稿任務刪除失敗", "");
@@ -1804,7 +1905,7 @@ function openNextCyclePlanner(draft = null) {
       if (existingCycle) {
         try {
           showLoading("加入下一輪任務…");
-          await api("/items", {
+          const created = await api("/items", {
             method: "POST",
             body: {
               type: "task",
@@ -1813,7 +1914,9 @@ function openNextCyclePlanner(draft = null) {
               scheduledWeekNumber: 1,
             },
           });
-          await loadCore({ quiet: true });
+          upsertStateItem(created);
+          renderAll();
+          noteLocalMutation();
           openNextCyclePlanner(nextDraft);
         } catch (error) {
           showAlert("加入失敗", error.message || "下一輪任務沒有成功儲存", "");
@@ -1991,7 +2094,7 @@ function openNextWeekPlanner(draft = null) {
 
     try {
       showLoading("加入中…");
-      await api("/items", {
+      const created = await api("/items", {
         method: "POST",
         body: {
           type: "task",
@@ -2007,7 +2110,9 @@ function openNextWeekPlanner(draft = null) {
         title: document.getElementById("nextWeekTheme")?.value.trim() || "",
         achievement: document.getElementById("nextWeekGoal")?.value.trim() || "",
       };
-      await loadCore({ quiet: true });
+      upsertStateItem(created);
+      renderAll();
+      noteLocalMutation();
       openNextWeekPlanner(plannerDraft);
     } catch (e) {
       error.textContent = e.message || "加入失敗";
@@ -2029,12 +2134,12 @@ function openNextWeekPlanner(draft = null) {
     }
     try {
       showLoading("儲存安排…");
-      await api(`/weeks/${next.cycleNumber}/${next.weekNumber}/plan`, {
+      const updatedWeek = await api(`/weeks/${next.cycleNumber}/${next.weekNumber}/plan`, {
         method: "PATCH",
         body: { title, achievement },
       });
+      applyWeekMutation(updatedWeek);
       closeModal();
-      await loadCore({ quiet: true });
     } catch (e) {
       error.textContent = e.message || "儲存失敗";
       error.hidden = false;
@@ -2182,6 +2287,13 @@ function bindGlobalEvents() {
       if (!els.tourPopover.hidden) finishTour();
     }
   });
+
+  // 從 LINE、另一台裝置或別的分頁回來時，低頻率靜默校正一次。
+  // 不顯示 loading，也不阻塞目前操作。
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) schedulePassiveCoreSync();
+  });
+  window.addEventListener("focus", schedulePassiveCoreSync);
 }
 
 async function init() {
