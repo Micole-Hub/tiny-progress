@@ -1,2306 +1,1018 @@
-const API_BASE_URL = "https://no-effort-time-bureau.onrender.com";
-const WORKLOAD_RECOMMENDED = 5;
-const DIFFICULTIES = ["簡單", "適中", "困難"];
+const STORAGE_KEY = "tiny-progress-v25-6-state";
+const PRODUCT_CYCLE_START_YMD = "2026-10-19";
+const DAY_KEYS = ["mon","tue","wed","thu","fri","sat","sun"];
+const DAY_LABELS = {mon:"一",tue:"二",wed:"三",thu:"四",fri:"五",sat:"六",sun:"日"};
+const PALETTE = ["#9fc3de","#efb8cf","#e7ce72","#e3b48a","#a9cb9f","#c8b9e6","#d4a99c","#91b4a2","#aeb8d3","#d5c09c","#b5a3c9","#bec9b2"];
+const NEUTRAL_LEAF = "#9eb29a";
+const REASONS = ["時間不夠","事情太大","忘記了","不想做了"];
 
-const state = {
-  context: null,
-  items: [],
-  weeks: [],
-  cycles: [],
-  categories: [],
-  history: null,
-  historyFocusTaskId: null,
-  showAllOverdue: false,
-  showAllRescheduled: false,
-  showInactiveCategories: false,
-  currentPage: "home",
-  activeTaskForSheet: null,
-  tourIndex: 0,
-  retrospectives: [],
-  historyOpenCycles: new Set(),
-  historySelectedWeeks: {},
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = v => String(v ?? "").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
+function localIso(d=new Date()){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return `${y}-${m}-${day}`}
+function dateFromIso(iso){const [y,m,d]=String(iso).slice(0,10).split("-").map(Number);return new Date(y,m-1,d,12,0,0,0)}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+const TODAY = localIso();
+function mondayOfIso(iso){
+  const d=dateFromIso(iso),day=d.getDay(),diff=day===0?-6:1-day;
+  return localIso(addDays(d,diff));
+}
+// 模擬資料在正式 10/19 Cycle 開始前，統一使用真實當週作為 Week 1。
+// 日期列、完成日期與「今天」共用同一個時間基準。
+const SIMULATION_MODE = TODAY < PRODUCT_CYCLE_START_YMD;
+const CYCLE_START_YMD = SIMULATION_MODE ? mondayOfIso(TODAY) : PRODUCT_CYCLE_START_YMD;
+function calendarWeekFor(iso=TODAY){
+  const start=dateFromIso(CYCLE_START_YMD),day=dateFromIso(iso);
+  if(day<start)return 1;
+  const diff=Math.floor((day-start)/86400000);
+  return Math.max(1,Math.min(12,Math.floor(diff/7)+1));
+}
+const CURRENT_WEEK = calendarWeekFor(TODAY);
+function weekDateMap(week){
+  const start=addDays(dateFromIso(CYCLE_START_YMD),(Number(week)-1)*7);
+  return Object.fromEntries(DAY_KEYS.map((k,i)=>[k,localIso(addDays(start,i))]));
+}
+function treeWeek(){return state.selectedWeek||CURRENT_WEEK}
+
+function occurrence(id,date=""){return {id,date,done:false,doneDate:""}}
+function recurringTask(id,title,categoryId,frequency,targetCount,week=CURRENT_WEEK,assignedDates=[]){
+  const dates=weekDateMap(week);
+  const occ = Array.from({length:targetCount},(_,i)=>occurrence(`${id}-o${i+1}`, frequency==="daily" ? (dates[DAY_KEYS[i]]||"") : (assignedDates[i]||"")));
+  return {id,week,title,categoryId,goal:"",status:"active",focusDate:"",done:false,doneDate:"",note:"",recurringRuleId:`rr-${id}`,frequency,targetCount,occurrences:occ};
+}
+const SEED_WEEK1_DATES = weekDateMap(1);
+const seedState = {
+  simulationWeekStart:CYCLE_START_YMD,
+  mode:"week",selectedWeek:CURRENT_WEEK,selectedDate:TODAY,
+  cycle:{number:2,locked:true,direction:"以獨立開發為主，一邊把技能學到夠用",directions:[{id:"d1",name:"獨立開發",outcome:"完成 Flex Board 的靜態介面",target:30,color:"#9fc3de"},{id:"d2",name:"學技能",outcome:"CSS 學到夠用，再開始 JavaScript",target:18,color:"#a9cb9f"}],goals:["獨立開發","學技能"]},
+  preferences:{completionNote:false,weeklyReflection:true,lineEnabled:true,lineTime:"08:00"},
+  categories:[
+    {id:"learn",name:"學習",color:"#9fc3de"},{id:"life",name:"生活",color:"#e3b48a"},{id:"health",name:"健康",color:"#a9cb9f"},{id:"create",name:"創作",color:"#efb8cf"}
+  ],
+  recurringRules:[
+    {id:"rr-8",title:"閱讀 15 分鐘",frequency:"weekly",timesPerWeek:2,categoryId:"learn",active:true},
+    {id:"rr-11",title:"散步 30 分鐘",frequency:"daily",timesPerWeek:7,categoryId:"health",active:true}
+  ],
+  tasks:[
+    {id:1,week:1,title:"整理 HTML 語意筆記",done:false,doneDate:"",focusDate:SEED_WEEK1_DATES.mon,goal:"學技能",categoryId:"learn",status:"active",note:""},
+    {id:2,week:1,title:"練習 DOM 操作",done:false,doneDate:"",focusDate:SEED_WEEK1_DATES.wed,goal:"學技能",categoryId:"learn",status:"active",note:"事件監聽終於比較順了"},
+    {id:3,week:1,title:"Tiny Progress 新版首頁草圖",done:false,doneDate:"",focusDate:TODAY,goal:"獨立開發",categoryId:"create",status:"active",note:""},
+    {id:4,week:1,title:"整理 Tiny Progress 的 Week 流程",done:false,doneDate:"",focusDate:SEED_WEEK1_DATES.sun,goal:"獨立開發",categoryId:"create",status:"active",note:""},
+    recurringTask(8,"閱讀 15 分鐘","learn","weekly",2,1),
+    recurringTask(11,"散步 30 分鐘","health","daily",7,2),
+    {id:20,week:2,title:"讀完 JavaScript 函式章節",done:false,doneDate:"",focusDate:"",goal:"學技能",categoryId:"learn",status:"active",note:""},
+    {id:21,week:2,title:"Tiny Progress 接上真資料",done:false,doneDate:"",focusDate:"",goal:"獨立開發",categoryId:"create",status:"active",note:""}
+  ],
+  archivedWeeks:[],
+  weekMeta:{},footprintDeferred:{},
+  reflections:{},events:[],leafSlots:{},onboarded:false,tankReviewed:{}
 };
 
+let state = loadState();
+state.unfinishedReasons=state.unfinishedReasons||{};state.tankReviewed=state.tankReviewed||{};state.weekMeta=state.weekMeta||{};state.footprintDeferred=state.footprintDeferred||{};
+function syncGoals(){state.cycle.goals=state.cycle.directions.map(d=>d.name)}
+syncGoals();
 
-const RESCHEDULE_REASONS = [
-  "低估工作量",
-  "任務太大",
-  "技術卡住",
-  "優先順序改變",
-  "個人狀態",
-  "原計畫需要調整",
-  "其他",
-];
+let lastListKey=null,prevDone=null,justToggled=null,justAdded=null,treeIntro=true,activeFalls=[];
+const flyingKeys=new Set(),growKeys=new Set();
+let actionOccIds=[],dupAllowed=false,pendingNoteOccId="",historySelected=null,footprintWeek=null;
+let actionTaskId=null,actionOccurrenceId=null,pendingNoteTaskId=null,editingTaskId=null,editingTaskOccurrenceId=null,editingRecurringId=null,editingCategoryId=null,categoryPickColor=PALETTE[0];
 
-const DELETE_REASONS = [
-  "任務已不需要",
-  "任務內容重複",
-  "當初規劃錯誤",
-  "已整合到其他任務",
-  "優先順序改變",
-  "其他",
-];
-
-const POSTPONE_REASONS = [
-  "個人狀況",
-  "臨時重大事項",
-  "原排程估算錯誤",
-  "外部因素導致無法進行",
-  "計畫需要重新調整",
-  "其他",
-];
-
-const els = {};
-
-// v24.1：操作成功先局部更新畫面，再用背景 /core 靜默校正。
-// 使用者不用等完整同步；如果 LINE / 另一台裝置剛好有更新，也會在背景合併回來。
-let quietCoreSyncTimer = null;
-let quietCoreMutationVersion = 0;
-let lastQuietCoreSyncAt = 0;
-const QUIET_CORE_SYNC_DELAY_MS = 1600;
-const QUIET_CORE_SYNC_FOCUS_THROTTLE_MS = 30000;
-
-function cacheElements() {
-  [
-    "homePage", "historyPage", "settingsPage", "heroTitle", "cycleThemeText", "editCycleThemeBtn",
-    "cycleWeekBadge", "weekStatusBadge", "weekRangeWrap", "weekStartText", "weekEndText", "activeWeekPanel",
-    "weekThemeText", "weekGoalText", "workloadCount", "workloadFill", "starProgress",
-    "postponeWeekBtn", "nextWeekPlanBtn", "weekSetupPanel", "weekSetupForm", "weekSetupTheme", "weekSetupGoal",
-    "restPanel", "restMessage", "changeCycleStartBtn", "cycleCompletePanel", "cycleCompleteTitle", "openReviewBtn",
-    "workArea", "currentTaskList", "currentTaskCount", "overdueCount", "overdueList", "showAllOverdueBtn",
-    "rescheduledList", "showAllRescheduledBtn", "addTaskForm", "toggleAddTaskBtn", "taskInput", "taskCategory",
-    "taskSubCategory", "taskDifficulty", "cyclePathCard", "cyclePath", "cyclePathCaption",
-    "weeklyReviewPanel", "weeklyReviewSpark", "weeklyReviewStatus", "weeklyReviewBtn",
-    "historyList", "refreshHistoryBtn", "categorySettingsList", "addCategoryBtn", "toggleInactiveBtn",
-    "replayTourBtn", "loadingToast", "bottomSheet", "sheetTitle", "sheetActions", "closeSheetBtn",
-    "cycleCelebration", "celebrationTitle", "skipCelebrationBtn", "tourPopover", "tourStepLabel",
-    "tourTitle", "tourText", "tourSkipBtn", "tourNextBtn", "editWeekPlanBtn"
-  ].forEach((id) => { els[id] = document.getElementById(id); });
-  els.modalRoot = document.getElementById("tp-modal-root");
-  els.taskMenuRoot = document.getElementById("taskMenuRoot");
-  els.navButtons = [...document.querySelectorAll(".v2-nav-btn")];
-  els.pages = [...document.querySelectorAll("[data-page-panel]")];
+function cloneSeed(){return JSON.parse(JSON.stringify(seedState))}
+function loadState(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw)return cloneSeed();
+    const saved=JSON.parse(raw);
+    if(SIMULATION_MODE&&saved.simulationWeekStart!==CYCLE_START_YMD)return cloneSeed();
+    return {...cloneSeed(),...saved};
+  }catch{return cloneSeed()}
 }
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function mobiusMarkup(className = "mobius-mark") {
-  return `<svg class="${className}" viewBox="0 0 36 24" aria-hidden="true" focusable="false">
-    <path d="M18,12 C18,8.134 14.418,5 10,5 C5.582,5 2,8.134 2,12 C2,15.866 5.582,19 10,19 C14.418,19 18,15.866 18,12 C18,8.134 21.582,5 26,5 C30.418,5 34,8.134 34,12 C34,15.866 30.418,19 26,19 C21.582,19 18,15.866 18,12 Z"></path>
-    <path class="mobius-cross" d="M13 9C16 12 20 12 23 9"></path>
-  </svg>`;
-}
-
-function safeId(value) {
-  return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "_");
-}
-
-function formatDate(value) {
-  if (!value) return "—";
-  return String(value).slice(0, 10).replaceAll("-", "/");
-}
-
-function formatDateTime(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("zh-TW", {
-    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
-  }).format(date);
-}
-
-function todayYmd() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function addDaysYmd(value, days) {
-  const raw = String(value || "").slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
-  const date = new Date(`${raw}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return "";
-  date.setDate(date.getDate() + Number(days || 0));
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function isMobile() {
-  return window.matchMedia("(max-width: 680px)").matches;
-}
-
-function showLoading(text = "處理中…") {
-  els.loadingToast.textContent = text;
-  els.loadingToast.classList.add("is-show");
-  document.body.classList.add("is-busy");
-}
-
-function hideLoading() {
-  els.loadingToast.classList.remove("is-show");
-  document.body.classList.remove("is-busy");
-}
-
-async function api(path, options = {}) {
-  const config = {
-    method: options.method || "GET",
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-  };
-  if (options.body !== undefined) config.body = JSON.stringify(options.body);
-
-  const response = await fetch(`${API_BASE_URL}${path}`, config);
-  let data = null;
-  try { data = await response.json(); }
-  catch { data = null; }
-  if (!response.ok) {
-    throw new Error((data && (data.error || data.message)) || `API ${response.status}`);
-  }
-  return data;
-}
-
-async function loadCore({ quiet = false } = {}) {
-  if (!quiet) showLoading("同步 Tiny Progress…");
-  try {
-    const core = await api("/core");
-    applyCoreSnapshot(core, { celebrate: !quiet });
-  } catch (error) {
-    console.error(error);
-    if (!quiet) showAlert("讀取資料失敗", error.message, "");
-  } finally {
-    if (!quiet) hideLoading();
-  }
-}
-
-function applyCoreSnapshot(core, { celebrate = false } = {}) {
-  state.context = core?.context || {};
-  state.items = core?.items || [];
-  state.weeks = core?.weeks || [];
-  state.cycles = core?.cycles || [];
-  state.categories = core?.categories || [];
-  state.retrospectives = core?.retrospectives || [];
-  renderAll();
-  if (celebrate) maybeShowCycleCelebration();
-}
-
-function noteLocalMutation() {
-  quietCoreMutationVersion += 1;
-  scheduleQuietCoreSync(QUIET_CORE_SYNC_DELAY_MS, quietCoreMutationVersion);
-}
-
-function scheduleQuietCoreSync(delay = QUIET_CORE_SYNC_DELAY_MS, version = quietCoreMutationVersion) {
-  if (quietCoreSyncTimer) clearTimeout(quietCoreSyncTimer);
-  quietCoreSyncTimer = setTimeout(() => runQuietCoreSync(version), Math.max(0, Number(delay) || 0));
-}
-
-async function runQuietCoreSync(version = quietCoreMutationVersion) {
-  quietCoreSyncTimer = null;
-  if (document.hidden) {
-    scheduleQuietCoreSync(2500, version);
-    return;
-  }
-
-  try {
-    const core = await api("/core");
-    // 如果這次背景讀取期間又完成了新的寫入，不套用舊快照。
-    // 新的 mutation 已經安排下一次 quiet sync。
-    if (version !== quietCoreMutationVersion) return;
-    applyCoreSnapshot(core, { celebrate: false });
-    lastQuietCoreSyncAt = Date.now();
-  } catch (error) {
-    // 背景校正失敗不打斷使用者；下一次操作、切回分頁或重新整理會再同步。
-    console.warn("Tiny Progress 背景同步暫時失敗：", error);
-  }
-}
-
-function schedulePassiveCoreSync() {
-  if (document.hidden || quietCoreSyncTimer) return;
-  if (Date.now() - lastQuietCoreSyncAt < QUIET_CORE_SYNC_FOCUS_THROTTLE_MS) return;
-  scheduleQuietCoreSync(250, quietCoreMutationVersion);
-}
-
-function upsertStateItem(item) {
-  if (!item || !item.id) return;
-  const index = state.items.findIndex((row) => row.id === item.id);
-  if (index === -1) state.items.push(item);
-  else state.items[index] = item;
-}
-
-function removeStateItem(itemId) {
-  state.items = state.items.filter((item) => item.id !== itemId);
-}
-
-function applyItemMutation(item) {
-  upsertStateItem(item);
-  renderAll();
-  noteLocalMutation();
-}
-
-function applyReplanMutation(result) {
-  if (result?.original) upsertStateItem(result.original);
-  (result?.newTasks || []).forEach(upsertStateItem);
-  renderAll();
-  noteLocalMutation();
-}
-
-function applyWeekMutation(week) {
-  if (!week?.cycleNumber || !week?.weekNumber) return;
-  const index = state.weeks.findIndex((row) =>
-    Number(row.cycleNumber) === Number(week.cycleNumber) &&
-    Number(row.weekNumber) === Number(week.weekNumber)
-  );
-  if (index === -1) state.weeks.push(week);
-  else state.weeks[index] = { ...state.weeks[index], ...week };
-
-  if (
-    state.context?.currentWeek &&
-    Number(state.context.currentWeek.cycleNumber) === Number(week.cycleNumber) &&
-    Number(state.context.currentWeek.weekNumber) === Number(week.weekNumber)
-  ) {
-    state.context.currentWeek = { ...state.context.currentWeek, ...week };
-  }
-  if (
-    state.context?.nextWeek &&
-    Number(state.context.nextWeek.cycleNumber) === Number(week.cycleNumber) &&
-    Number(state.context.nextWeek.weekNumber) === Number(week.weekNumber)
-  ) {
-    state.context.nextWeek = { ...state.context.nextWeek, ...week };
-  }
-  renderAll();
-  noteLocalMutation();
-}
-
-function applyCycleMutation(cycle) {
-  if (!cycle?.cycleNumber) return;
-  const index = state.cycles.findIndex((row) => Number(row.cycleNumber) === Number(cycle.cycleNumber));
-  if (index === -1) state.cycles.push(cycle);
-  else state.cycles[index] = { ...state.cycles[index], ...cycle };
-
-  if (state.context?.nextCycle && Number(state.context.nextCycle.cycleNumber) === Number(cycle.cycleNumber)) {
-    state.context.nextCycle = { ...state.context.nextCycle, ...cycle };
-  }
-  renderAll();
-  noteLocalMutation();
-}
-
-function getActiveCategories() {
-  return state.categories.filter((c) => c.type === "category" && c.active === true);
-}
-
-function getSubcategories(categoryId, includeInactive = false) {
-  return state.categories.filter((c) =>
-    c.type === "subcategory" && c.parentId === categoryId && (includeInactive || c.active === true)
-  );
-}
-
-function currentWeek() {
-  return state.context?.currentWeek || null;
-}
-
-function currentCycle() {
-  const week = currentWeek();
-  if (!week) return state.context?.nextCycle || null;
-  return state.cycles.find((cycle) => Number(cycle.cycleNumber) === Number(week.cycleNumber)) || null;
-}
-
-function compareWeekIdentity(aCycle, aWeek, bCycle, bWeek) {
-  return (Number(aCycle) - Number(bCycle)) || (Number(aWeek) - Number(bWeek));
-}
-
-function isFutureScheduled(item) {
-  const week = currentWeek();
-  if (!week || item.status !== "active") return false;
-  return compareWeekIdentity(
-    item.scheduledCycleNumber || item.cycleNumber,
-    item.scheduledWeekNumber || item.weekNumber,
-    week.cycleNumber,
-    week.weekNumber
-  ) > 0;
-}
-
-function getSubmittedReview(cycleNumber, weekNumber) {
-  return (state.retrospectives || []).find((retro) =>
-    Number(retro.cycleNumber) === Number(cycleNumber) &&
-    Number(retro.weekNumber) === Number(weekNumber) &&
-    !!retro.submittedAt
-  ) || null;
-}
-
-function isSameWeek(item, week) {
-  if (!week) return false;
-  return Number(item.scheduledCycleNumber) === Number(week.cycleNumber) &&
-    Number(item.scheduledWeekNumber) === Number(week.weekNumber);
-}
-
-function isRescheduled(item) {
-  return Number(item.originalCycleNumber) !== Number(item.scheduledCycleNumber) ||
-    Number(item.originalWeekNumber) !== Number(item.scheduledWeekNumber);
-}
-
-function activeWorkloadItems() {
-  return state.items.filter((item) =>
-    item.type === "task" && ["active", "overdue"].includes(item.status)
-  );
-}
-
-function renderAll() {
-  renderHome();
-  renderCategorySelects();
-  renderSettings();
-  if (state.currentPage === "history" && state.history) renderHistory();
-}
-
-function renderHome() {
-  const context = state.context || {};
-  const week = context.currentWeek;
-  const cycle = currentCycle();
-
-  els.activeWeekPanel.hidden = !week;
-  els.workArea.hidden = !week;
-  els.weekSetupPanel.hidden = true;
-  els.restPanel.hidden = true;
-  els.cycleCompletePanel.hidden = true;
-  els.cyclePathCard.hidden = true;
-  els.weeklyReviewPanel.hidden = true;
-  els.editCycleThemeBtn.hidden = !week;
-
-  if (week) {
-    els.heroTitle.textContent = "Tiny Progress";
-    els.cycleThemeText.textContent = cycle?.theme || "尚未設定";
-    els.editCycleThemeBtn.textContent = cycle?.theme ? "編輯" : "設定";
-    els.cycleWeekBadge.textContent = `Cycle ${week.cycleNumber}`;
-    els.weekStatusBadge.textContent = `Week ${week.weekNumber}`;
-    els.weekStartText.textContent = formatDate(week.weekStart);
-    els.weekEndText.textContent = formatDate(week.weekEnd);
-    els.weekRangeWrap.hidden = false;
-
-    els.weekThemeText.textContent = week.title || "尚未設定";
-    els.weekGoalText.textContent = week.achievement || "尚未設定";
-    els.postponeWeekBtn.disabled = week.postponed === true;
-    els.postponeWeekBtn.textContent = week.postponed ? `本週已順延 ${week.postponeDays || 7} 天` : "本週需要順延";
-    const canOpenPlanner = context.canPlanNextWeek || context.canPlanNextCycle;
-    els.nextWeekPlanBtn.hidden = !canOpenPlanner;
-    els.nextWeekPlanBtn.textContent = context.canPlanNextCycle ? "下一輪安排" : "下週安排";
-
-    const needsSetup = !String(week.title || "").trim() || !String(week.achievement || "").trim();
-    els.weekSetupPanel.hidden = !needsSetup;
-    els.workArea.hidden = needsSetup;
-    els.activeWeekPanel.hidden = needsSetup;
-    if (needsSetup) {
-      els.weekSetupTheme.value = week.title || "";
-      els.weekSetupGoal.value = week.achievement || "";
-    }
-
-    renderWorkload();
-    renderCurrentTasks();
-    renderOverdue();
-    renderRescheduled();
-    renderCyclePath();
-    renderWeeklyReview();
-    return;
-  }
-
-  els.weekRangeWrap.hidden = true;
-  els.cycleThemeText.textContent = context.nextCycle?.theme || "";
-  els.cycleWeekBadge.textContent = context.restPeriod && context.nextCycle ? `Cycle ${context.nextCycle.cycleNumber}` : "Cycle";
-  els.weekStatusBadge.textContent = context.restPeriod ? "休息" : "12 Weeks";
-
-  const completedCycleKey = context.completedCycleNumber
-    ? `tp-star-cycle-archived-${context.completedCycleNumber}`
-    : "";
-  const completionArchived = completedCycleKey ? localStorage.getItem(completedCycleKey) === "1" : false;
-
-  if (context.cycleComplete && context.completedCycleNumber && !completionArchived) {
-    els.cycleCompletePanel.hidden = false;
-    els.cycleCompleteTitle.textContent = `Cycle ${context.completedCycleNumber}`;
-    return;
-  }
-
-  if (context.restPeriod && context.nextCycle) {
-    els.restPanel.hidden = false;
-    els.restMessage.textContent = `下一個 Cycle 會在 ${formatDate(context.nextCycle.startDate)} 開始。`;
-    return;
-  }
-}
-
-function weeklyProgressStats() {
-  const week = currentWeek();
-  if (!week) return { done: 0, total: 0, percent: 0 };
-  const tasks = state.items.filter((item) =>
-    item.type === "task" &&
-    isSameWeek(item, week) &&
-    !["cancelled", "replanned"].includes(item.status)
-  );
-  const done = tasks.filter((item) => item.status === "completed").length;
-  const total = tasks.length;
-  return { done, total, percent: total ? Math.round((done / total) * 100) : 0 };
-}
-
-function renderWorkload() {
-  const progress = weeklyProgressStats();
-  els.workloadCount.textContent = `${progress.done} / ${progress.total}`;
-  els.workloadFill.hidden = false;
-  els.workloadFill.style.width = `${progress.percent}%`;
-  els.starProgress.setAttribute("aria-valuemin", "0");
-  els.starProgress.setAttribute("aria-valuemax", String(progress.total));
-  els.starProgress.setAttribute("aria-valuenow", String(progress.done));
-  els.starProgress.setAttribute("aria-label", `本週進度 ${progress.done} / ${progress.total}`);
-}
-
-function renderCurrentTasks() {
-  const week = currentWeek();
-  if (!week) return;
-  const items = state.items
-    .filter((item) => item.type === "task" && isSameWeek(item, week) && !["cancelled", "replanned"].includes(item.status))
-    .sort((a, b) => Number(a.status === "completed") - Number(b.status === "completed") || String(a.createdAt).localeCompare(String(b.createdAt)));
-
-  els.currentTaskCount.textContent = `${items.length} 件`;
-  els.currentTaskList.innerHTML = items.length
-    ? items.map((item) => `<li>${renderTaskCard(item, { list: "current" })}</li>`).join("")
-    : `<li class="v2-empty">這週還是空白的。想放一件事情進來時，按「加入」就好。</li>`;
-  bindTaskCardEvents(els.currentTaskList);
-}
-
-function renderOverdue() {
-  const all = state.items
-    .filter((item) => item.type === "task" && item.status === "overdue")
-    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
-
-  els.overdueCount.textContent = String(all.length);
-  const visible = state.showAllOverdue ? all : all.slice(0, 3);
-  els.overdueList.innerHTML = visible.length
-    ? visible.map((item) => renderTaskCard(item, { compact: true, list: "overdue" })).join("")
-    : "";
-  els.showAllOverdueBtn.hidden = all.length <= 3;
-  els.showAllOverdueBtn.textContent = state.showAllOverdue ? "收合" : `查看全部 ${all.length} 件`;
-  bindTaskCardEvents(els.overdueList);
-}
-
-function renderRescheduled() {
-  const all = state.items
-    .filter((item) => item.type === "task" && isFutureScheduled(item))
-    .sort((a, b) =>
-      compareWeekIdentity(a.scheduledCycleNumber, a.scheduledWeekNumber, b.scheduledCycleNumber, b.scheduledWeekNumber) ||
-      String(a.createdAt).localeCompare(String(b.createdAt))
-    );
-
-  const visible = state.showAllRescheduled ? all : all.slice(0, 3);
-  els.rescheduledList.innerHTML = visible.length
-    ? visible.map((item) => renderTaskCard(item, { compact: true, list: "future" })).join("")
-    : "";
-  els.showAllRescheduledBtn.hidden = all.length <= 3;
-  els.showAllRescheduledBtn.textContent = state.showAllRescheduled ? "收合" : `查看全部 ${all.length} 件`;
-  bindTaskCardEvents(els.rescheduledList);
-}
-
-const TAG_COLOR_PALETTE = [
-  { bg: "#E6F0E4", text: "#56705A", border: "#BDD5BC" },
-  { bg: "#F6E5E7", text: "#805D67", border: "#E5BEC6" },
-  { bg: "#E5EEF7", text: "#526B84", border: "#BDD1E5" },
-  { bg: "#F7E9D8", text: "#806349", border: "#E7C9A8" },
-  { bg: "#EEE6F5", text: "#6C5B7C", border: "#D5C3E5" },
-  { bg: "#E1F0EF", text: "#4F7272", border: "#B9D9D6" },
-  { bg: "#F4EBCF", text: "#7A693D", border: "#E2D095" },
-  { bg: "#E8EEE0", text: "#607052", border: "#C7D4B9" },
-  { bg: "#F5E4DD", text: "#7D5F54", border: "#E4C0B2" },
-  { bg: "#E6EAF5", text: "#5B647D", border: "#C7CFE5" },
-  { bg: "#E5F0E8", text: "#58705F", border: "#C0D9C6" },
-  { bg: "#F2E4EF", text: "#755E72", border: "#DFC0D7" },
-];
-
-function stableTagIndex(value, salt = "") {
-  const text = `${salt}|${String(value || "未分類")}`;
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i += 1) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return Math.abs(hash >>> 0) % TAG_COLOR_PALETTE.length;
-}
-
-function getTagColors(value, type = "category", parentValue = "") {
-  let index = stableTagIndex(value, type);
-  if (type === "subcategory") {
-    const parentIndex = stableTagIndex(parentValue || "parent", "category");
-    if (index === parentIndex) index = (index + 1) % TAG_COLOR_PALETTE.length;
-  }
-  return TAG_COLOR_PALETTE[index];
-}
-
-function tagStyle(value, type = "category", parentValue = "") {
-  const c = getTagColors(value, type, parentValue);
-  return `--tag-bg:${c.bg};--tag-text:${c.text};--tag-border:${c.border};`;
-}
-
-function renderTaskCard(item, options = {}) {
-  const compact = options.compact === true;
-  const classes = ["v2-task-card"];
-  if (item.status === "completed") classes.push("is-done");
-  if (item.status === "overdue") classes.push("is-overdue");
-  if (isRescheduled(item) && item.status !== "completed") classes.push("is-rescheduled");
-
-  let route = "";
-  let statusLine = "";
-
-  if (options.list === "overdue") {
-    route = `原本安排：Week ${item.originalWeekNumber}`;
-    statusLine = "未完待續";
-  } else if (options.list === "future") {
-    const targetWeek = state.weeks.find((week) =>
-      Number(week.cycleNumber) === Number(item.scheduledCycleNumber) &&
-      Number(week.weekNumber) === Number(item.scheduledWeekNumber)
-    );
-    route = targetWeek
-      ? `Week ${item.scheduledWeekNumber} · ${formatDate(targetWeek.weekStart)} ～ ${formatDate(targetWeek.weekEnd)}`
-      : `Week ${item.scheduledWeekNumber}`;
-  }
-
-  const meta = compact ? "" : `
-    <div class="v2-task-meta">
-      <span class="chip chip-category" style="${tagStyle(item.categoryId || item.category || "未分類", "category")}">${escapeHtml(item.category || "未分類")}</span>
-      ${item.subCategory && item.subCategory !== "未分類" ? `<span class="chip chip-subcategory" style="${tagStyle(item.subCategoryId || item.subCategory, "subcategory", item.categoryId || item.category)}">${escapeHtml(item.subCategory)}</span>` : ""}
-      <span class="chip chip-difficulty">${escapeHtml(item.difficulty)}</span>
-    </div>`;
-
-  const completionControl = item.status === "completed"
-    ? `<button class="v2-complete-check is-complete" type="button" disabled aria-label="已完成：${escapeHtml(item.title)}" style="min-width:40px;min-height:40px;touch-action:manipulation;"><span aria-hidden="true">✓</span></button>`
-    : `<button class="v2-complete-check" type="button" data-complete-id="${escapeHtml(item.id)}" aria-label="完成：${escapeHtml(item.title)}" style="min-width:40px;min-height:40px;touch-action:manipulation;"><span aria-hidden="true"></span></button>`;
-
-  return `
-    <article class="${classes.join(" ")}" data-task-id="${escapeHtml(item.id)}">
-      ${completionControl}
-      <div class="v2-task-main">
-        <p class="v2-task-title">${escapeHtml(item.title)}</p>
-        ${route ? `<p class="v2-task-route">${escapeHtml(route)}</p>` : ""}
-        ${statusLine ? `<p class="v2-task-status-line continue">${escapeHtml(statusLine)}</p>` : ""}
-        ${meta}
-      </div>
-      <button class="v2-more-btn" type="button" data-more-id="${escapeHtml(item.id)}" aria-label="更多">⋯</button>
-    </article>`;
-}
-
-function bindTaskCardEvents(root) {
-  if (!root) return;
-  root.querySelectorAll("[data-complete-id]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const item = state.items.find((x) => x.id === button.dataset.completeId);
-      if (item) await confirmComplete(item);
-    });
+function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
+function categoryById(id){return state.categories.find(c=>c.id===id)}
+function taskColor(t){return categoryById(t.categoryId)?.color||NEUTRAL_LEAF}
+function activeTasks(week=state.selectedWeek){return state.tasks.filter(t=>t.week===week&&t.status==="active")}
+function rowIds(row){return row?.dataset?.occurrenceIds?row.dataset.occurrenceIds.split(",").filter(Boolean):[]}
+function isRecurring(t){return Boolean(t.recurringRuleId&&Array.isArray(t.occurrences))}
+function occurrenceDoneCount(t){return isRecurring(t)?t.occurrences.filter(o=>o.done).length:(t.done?1:0)}
+function taskTarget(t){return isRecurring(t)?t.targetCount:1}
+function taskDone(t){return occurrenceDoneCount(t)>=taskTarget(t)}
+function syncTaskDone(t){t.done=taskDone(t);t.doneDate=t.done?(t.occurrences?.filter(o=>o.done).map(o=>o.doneDate).filter(Boolean).sort().at(-1)||t.doneDate||TODAY):""}
+function currentLeafRecords(week=CURRENT_WEEK){
+  const out=[];
+  activeTasks(week).forEach(t=>{
+    if(isRecurring(t))t.occurrences.filter(o=>o.done).forEach(o=>out.push({key:`${t.id}:${o.id}`,color:taskColor(t),title:t.title,date:o.doneDate,taskId:t.id,rec:true,target:t.targetCount,note:o.note||"",noteEnabled:o.noteEnabledAtCompletion}));
+    else if(t.done)out.push({key:`${t.id}`,color:taskColor(t),title:t.title,date:t.doneDate,taskId:t.id,note:t.note,noteEnabled:t.noteEnabledAtCompletion});
   });
-  root.querySelectorAll("[data-more-id]").forEach((button) => {
-    button.addEventListener("click", (event) => openTaskActions(button.dataset.moreId, event.currentTarget));
+  return out;
+}
+function currentCompletedUnits(week=CURRENT_WEEK){return currentLeafRecords(week).length}
+function currentTotalUnits(week=CURRENT_WEEK){return activeTasks(week).reduce((n,t)=>n+taskTarget(t),0)}
+function isWeekComplete(week){
+  const tasks=activeTasks(week);
+  return tasks.length>0&&tasks.every(taskDone);
+}
+function weekMetaFor(week){
+  const key=String(Number(week));
+  state.weekMeta[key]=state.weekMeta[key]||{archivedAt:"",archiveReason:"",autoArchived:false};
+  return state.weekMeta[key];
+}
+function isWeekArchived(week){return Boolean(weekMetaFor(week).archivedAt)}
+function archiveWeek(week,reason="review"){
+  week=Number(week);if(isWeekArchived(week))return weekMetaFor(week);
+  const meta=weekMetaFor(week),now=new Date().toISOString();
+  meta.archivedAt=now;meta.archiveReason=reason;meta.autoArchived=reason==="date";
+  const completed=currentLeafRecords(week).map(x=>({...x}));
+  const replanned=state.events.filter(e=>e.type==="replan"&&e.fromWeek===week).map(e=>`${e.title} → Week ${e.toWeek}｜${e.reason||""}`);
+  const deleted=state.events.filter(e=>e.type==="delete"&&e.week===week).map(e=>`${e.title}｜${e.reason||""}`);
+  const snapshot={week,completed,replanned,deleted,reflection:state.reflections[week]||null,archivedAt:now,archiveReason:reason};
+  state.archivedWeeks=state.archivedWeeks.filter(x=>Number(x.week)!==week).concat(snapshot).sort((a,b)=>a.week-b.week);
+  state.footprintDeferred[week]=false;
+  return meta;
+}
+function autoArchivePastWeeks(){
+  for(let w=1;w<CURRENT_WEEK;w++)if(!isWeekArchived(w))archiveWeek(w,"date");
+  const lastDates=weekDateMap(12),cycleEnd=lastDates.sun;
+  if(compareIsoDate(TODAY,cycleEnd)>0&&!isWeekArchived(12))archiveWeek(12,"date");
+}
+function compareIsoDate(a,b){return String(a).slice(0,10).localeCompare(String(b).slice(0,10))}
+function highestUnlockedWeek(){
+  let week=CURRENT_WEEK;
+  while(week<12&&isWeekComplete(week))week++;
+  return week;
+}
+function isWeekUnlocked(week){return Number(week)<=highestUnlockedWeek()}
+function defaultDateForWeek(week){
+  const dates=Object.values(weekDateMap(week));
+  return Number(week)===CURRENT_WEEK&&dates.includes(TODAY)?TODAY:dates[0];
+}
+function currentWeekDefaultDate(){return defaultDateForWeek(CURRENT_WEEK)}
+function normalizeSelectedWeek(){
+  state.selectedWeek=Number(state.selectedWeek)||CURRENT_WEEK;
+  if(state.selectedWeek<1||state.selectedWeek>12||!isWeekUnlocked(state.selectedWeek)||(isWeekArchived(state.selectedWeek)&&state.selectedWeek!==CURRENT_WEEK))state.selectedWeek=CURRENT_WEEK;
+  const dates=Object.values(weekDateMap(state.selectedWeek));
+  if(!dates.includes(state.selectedDate))state.selectedDate=defaultDateForWeek(state.selectedWeek);
+}
+function weekLifecycle(week){
+  week=Number(week);
+  if(isWeekArchived(week))return "archived";
+  if(week>CURRENT_WEEK)return isWeekUnlocked(week)?"planning":"locked";
+  if(week<CURRENT_WEEK)return "archived";
+  if(compareIsoDate(TODAY,CYCLE_START_YMD)<0)return "planning";
+  return isWeekComplete(week)?"review":"active";
+}
+function guardWeekEditable(week,message="這一週已封存，只能在 History 查看"){
+  if(isWeekArchived(week)){showToast(message);return false}
+  return true;
+}
+function renderAll(){syncRecurringTasks();autoArchivePastWeeks();normalizeSelectedWeek();syncFootprintState();renderHeader();renderDirection();renderHome();renderHistory();renderSettings();saveState()}
+function renderHeader(){$("#homeEyebrow").textContent=`Cycle ${state.cycle.number} · Week ${CURRENT_WEEK} / 12`}
+function directionLeafCounts(){
+  const counts={};state.cycle.directions.forEach(d=>counts[d.name]=0);
+  state.tasks.forEach(t=>{if(t.status==="active"&&Object.prototype.hasOwnProperty.call(counts,t.goal))counts[t.goal]+=occurrenceDoneCount(t)});
+  flyingKeys.forEach(k=>{
+    const [tid,oid]=k.split(":"),t=state.tasks.find(x=>String(x.id)===tid);
+    if(!t||t.status!=="active"||!Object.prototype.hasOwnProperty.call(counts,t.goal))return;
+    const done=oid?t.occurrences?.find(o=>o.id===oid)?.done:t.done;if(done)counts[t.goal]--;
   });
+  return counts;
 }
-
-function renderCategorySelects() {
-  const active = getActiveCategories();
-  if (!active.length) {
-    els.taskCategory.innerHTML = `<option value="">請先到 Settings 加入分類</option>`;
-    els.taskSubCategory.hidden = true;
-    return;
-  }
-  const previous = els.taskCategory.value;
-  els.taskCategory.innerHTML = active.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join("");
-  if (active.some((c) => c.id === previous)) els.taskCategory.value = previous;
-  updateSubcategorySelect(els.taskSubCategory, els.taskCategory.value);
-}
-
-function updateSubcategorySelect(select, categoryId, selectedId = "") {
-  const subs = getSubcategories(categoryId);
-  if (!subs.length) {
-    select.innerHTML = "";
-    select.hidden = true;
-    select.disabled = true;
-    return;
-  }
-  select.hidden = false;
-  select.disabled = false;
-  select.innerHTML = subs.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join("");
-  if (selectedId && subs.some((s) => s.id === selectedId)) select.value = selectedId;
-}
-
-function getTaskPayloadFromForm() {
-  return {
-    type: "task",
-    title: els.taskInput.value.trim(),
-    categoryId: els.taskCategory.value,
-    subCategoryId: els.taskSubCategory.hidden ? "" : els.taskSubCategory.value,
-    difficulty: els.taskDifficulty.value,
-  };
-}
-
-async function addTask(event) {
-  event.preventDefault();
-  const payload = getTaskPayloadFromForm();
-  if (!payload.title) return;
-  if (!payload.categoryId) return showAlert("還缺一個分類", "先到 Settings 加入至少一個分類。", "");
-
-  const category = state.categories.find((c) => c.id === payload.categoryId);
-  const subCategory = state.categories.find((c) => c.id === payload.subCategoryId);
-  const workload = activeWorkloadItems().length;
-  const detailBits = [
-    category?.name || "未分類",
-    subCategory?.name || "",
-    payload.difficulty,
-  ].filter(Boolean);
-  const workloadLine = workload >= WORKLOAD_RECOMMENDED
-    ? `\n\n目前還有 ${workload} 件事情在進行中。`
-    : "";
-
-  const ok = await showConfirm({
-    icon: "",
-    title: "要加入這件事嗎？",
-    text: `「${payload.title}」\n\n${detailBits.join(" · ")}${workloadLine}`,
-    confirmText: "加入",
-    cancelText: "取消",
+function renderDirection(){
+  syncGoals();
+  $("#directionText").textContent=state.cycle.direction;
+  const ds=state.cycle.directions,counts=directionLeafCounts(),el=$("#directionTags");
+  if(el.children.length!==ds.length||[...el.children].some((c,i)=>c.dataset.id!==ds[i].id))
+    el.innerHTML=ds.map(d=>`<div class="tank" data-id="${d.id}"><div class="tank-fill"></div><span class="tank-name"></span><span class="tank-count"></span></div>`).join("");
+  ds.forEach((d,i)=>{
+    const c=el.children[i],n=counts[d.name]||0,pct=d.target>0?Math.min(100,Math.round(n/d.target*100)):0;
+    c.style.setProperty("--c",d.color);c.title=d.outcome||"";
+    c.querySelector(".tank-name").textContent=d.name;
+    const cnt=c.querySelector(".tank-count"),prev=Number(cnt.dataset.n||0);
+    cnt.dataset.n=n;cnt.textContent=d.target>0?`${n} / ${d.target}`:`${n}`;
+    c.querySelector(".tank-fill").style.width=pct+"%";
+    if(n>prev&&el.dataset.ready){c.classList.remove("tank-bump");void c.offsetWidth;c.classList.add("tank-bump")}
   });
-  if (!ok) return;
-
-  showLoading("加入中…");
-  try {
-    const created = await api("/items", { method: "POST", body: payload });
-    upsertStateItem(created);
-    els.taskInput.value = "";
-    els.taskDifficulty.value = "適中";
-    els.addTaskForm.hidden = true;
-    els.toggleAddTaskBtn.textContent = "＋ 加入";
-    els.toggleAddTaskBtn.classList.add("just-added");
-    setTimeout(() => els.toggleAddTaskBtn.classList.remove("just-added"), 800);
-    renderAll();
-    noteLocalMutation();
-  } catch (error) {
-    showAlert("加入失敗", error.message, "");
-  } finally { hideLoading(); }
+  el.dataset.ready="1";
+  const box=$("#tankHint"),wk=CURRENT_WEEK,show=(wk===4||wk===8)&&!state.tankReviewed[wk];
+  box.hidden=!show;
+  if(show)box.innerHTML=`<span>走到第 ${wk} 週了，要回頭看看水缸的目標嗎？</span><button type="button" class="text-button" data-tank-adjust>去看看</button><button type="button" class="text-button" data-tank-later>先不用</button>`;
 }
-
-async function confirmComplete(item) {
-  const ok = await showConfirm({
-    icon: "✓",
-    title: "要完成這件事嗎？",
-    text: `「${item.title}」\n\n完成後會更新本週進度；如果是不小心按到，之後仍可更正。`,
-    confirmText: "完成",
-    cancelText: "取消",
-  });
-  if (!ok) return;
-
-  showLoading("更新進度中…");
-  try {
-    const updated = await api(`/items/${encodeURIComponent(item.id)}/complete`, { method: "POST", body: {} });
-    applyItemMutation(updated);
-  } catch (error) {
-    showAlert("完成失敗", error.message, "");
-  } finally { hideLoading(); }
+function commitDirections(list){
+  const old=state.cycle.directions;
+  list.forEach(d=>{const o=old.find(x=>x.id===d.id);if(o&&o.name!==d.name)state.tasks.forEach(t=>{if(t.goal===o.name)t.goal=d.name})});
+  old.filter(o=>!list.some(d=>d.id===o.id)).forEach(o=>state.tasks.forEach(t=>{if(t.goal===o.name)t.goal=""}));
+  state.cycle.directions=list;syncGoals();
 }
-
-function isUnstartedCycleTask(item) {
-  const cycleNumber = Number(item?.scheduledCycleNumber || item?.cycleNumber || 0);
-  const cycle = state.cycles.find((row) => Number(row.cycleNumber) === cycleNumber);
-  const startDate = String(cycle?.startDate || "").slice(0, 10);
-  return !!(startDate && startDate > todayYmd());
+function renderDirectionList(){
+  const el=$("#directionList");
+  el.innerHTML=state.cycle.directions.map(d=>`<div class="manage-row"><span class="color-dot" style="--c:${d.color}"></span><div><strong>${esc(d.name)}</strong><small>${esc(d.outcome||"")}${d.outcome?" · ":""}目標 ${d.target} 片</small></div><span></span><button class="text-button" type="button" data-edit-direction="${d.id}">編輯</button></div>`).join("");
+  $("#addDirectionBtn").hidden=state.cycle.directions.length>=3;
+  $$("[data-edit-direction]").forEach(b=>b.addEventListener("click",()=>openDirectionDialog(b.dataset.editDirection)));
 }
-
-function getTaskActions(item) {
-  if (item.status === "completed") {
-    return [
-      { key: "correct", label: "↩ 誤操作更正" },
-      { key: "history", label: "查看紀錄" },
-    ];
-  }
-  if (["cancelled", "replanned"].includes(item.status)) {
-    return [{ key: "history", label: "查看紀錄" }];
-  }
-  return [
-    { key: "edit", label: "編輯" },
-    { key: "reschedule", label: "調整時間" },
-    { key: "replan", label: "重新整理" },
-    { key: "history", label: "查看紀錄" },
-    { key: "delete", label: "刪除", danger: true },
-  ];
+let editingDirectionId=null,directionPickColor=PALETTE[0];
+function renderDirectionPalette(){
+  $("#directionPalette").innerHTML=PALETTE.map(c=>`<button type="button" class="palette-dot ${c===directionPickColor?"on":""}" style="--c:${c}" data-color="${c}" aria-label="選擇顏色"></button>`).join("");
+  $$("#directionPalette [data-color]").forEach(b=>b.addEventListener("click",()=>{directionPickColor=b.dataset.color;renderDirectionPalette()}));
 }
-
-function openTaskActions(itemId, anchor) {
-  const item = state.items.find((x) => x.id === itemId);
-  if (!item) return;
-  const actions = getTaskActions(item);
-  if (isMobile()) {
-    state.activeTaskForSheet = item;
-    els.sheetTitle.textContent = item.title;
-    els.sheetActions.innerHTML = actions.map((a) =>
-      `<button class="v2-sheet-action ${a.danger ? "danger" : ""}" type="button" data-sheet-action="${a.key}">${a.label}</button>`
-    ).join("");
-    els.sheetActions.querySelectorAll("[data-sheet-action]").forEach((button) => {
-      button.addEventListener("click", () => {
-        closeBottomSheet();
-        handleTaskAction(item, button.dataset.sheetAction);
-      });
-    });
-    els.bottomSheet.classList.add("is-open");
-    els.bottomSheet.setAttribute("aria-hidden", "false");
-    return;
-  }
-
-  closeTaskMenu();
-  const rect = anchor.getBoundingClientRect();
-  const menu = document.createElement("div");
-  menu.className = "v2-task-menu";
-  menu.style.left = `${Math.min(window.innerWidth - 210, Math.max(12, rect.right - 190))}px`;
-  menu.style.top = `${rect.bottom + 6}px`;
-  menu.innerHTML = actions.map((a) =>
-    `<button class="${a.danger ? "danger" : ""}" type="button" data-menu-action="${a.key}">${a.label}</button>`
-  ).join("");
-  els.taskMenuRoot.appendChild(menu);
-  menu.querySelectorAll("[data-menu-action]").forEach((button) => {
-    button.addEventListener("click", () => {
-      closeTaskMenu();
-      handleTaskAction(item, button.dataset.menuAction);
-    });
-  });
+function openDirectionDialog(id=null){
+  editingDirectionId=id;const d=id?state.cycle.directions.find(x=>x.id===id):null;
+  $("#directionDialogTitle").textContent=d?"編輯方向":"新增方向";
+  $("#directionNameInput").value=d?.name||"";$("#directionOutcomeInput").value=d?.outcome||"";$("#directionTargetInput").value=d?.target||12;
+  directionPickColor=d?.color||PALETTE[(state.cycle.directions.length*3)%PALETTE.length];renderDirectionPalette();
+  $("#deleteDirectionBtn").hidden=!d||state.cycle.directions.length<=1;$("#directionDialog").showModal();
 }
-
-function closeTaskMenu() { els.taskMenuRoot.innerHTML = ""; }
-function closeBottomSheet() {
-  els.bottomSheet.classList.remove("is-open");
-  els.bottomSheet.setAttribute("aria-hidden", "true");
-  state.activeTaskForSheet = null;
-}
-
-async function handleTaskAction(item, action) {
-  if (action === "edit") return openEditTask(item);
-  if (action === "reschedule") return openDirectReschedule(item);
-  if (action === "replan") return openReplanTask(item);
-  if (action === "history") return goToTaskHistory(item.id);
-  if (action === "delete") return openDeleteTask(item);
-  if (action === "correct") return correctCompletion(item);
-}
-
-function categoryOptionsHtml(selectedId = "") {
-  return getActiveCategories().map((c) => `<option value="${escapeHtml(c.id)}" ${c.id === selectedId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("");
-}
-
-function subcategoryOptionsHtml(categoryId, selectedId = "") {
-  return getSubcategories(categoryId).map((s) => `<option value="${escapeHtml(s.id)}" ${s.id === selectedId ? "selected" : ""}>${escapeHtml(s.name)}</option>`).join("");
-}
-
-function difficultyOptionsHtml(selected = "適中") {
-  return DIFFICULTIES.map((d) => `<option value="${d}" ${d === selected ? "selected" : ""}>${d}</option>`).join("");
-}
-
-function openEditTask(item) {
-  openFormModal({
-    icon: "✏️", title: "編輯任務", confirmText: "儲存",
-    body: `
-      <label class="v2-form-field">任務名稱<input id="editTitle" value="${escapeHtml(item.title)}" maxlength="120" /></label>
-      <div class="v2-modal-grid">
-        <label class="v2-form-field">分類<select id="editCategory">${categoryOptionsHtml(item.categoryId)}</select></label>
-        <label class="v2-form-field" id="editSubWrap">子分類<select id="editSubCategory"></select></label>
-      </div>
-      <label class="v2-form-field">難度<select id="editDifficulty">${difficultyOptionsHtml(item.difficulty)}</select></label>`,
-    onReady: () => {
-      const cat = document.getElementById("editCategory");
-      const sub = document.getElementById("editSubCategory");
-      const wrap = document.getElementById("editSubWrap");
-      const refresh = (selected = "") => {
-        const subs = getSubcategories(cat.value);
-        wrap.hidden = !subs.length;
-        sub.innerHTML = subcategoryOptionsHtml(cat.value, selected);
-      };
-      refresh(item.subCategoryId);
-      cat.addEventListener("change", () => refresh(""));
-    },
-    onConfirm: async () => {
-      const title = document.getElementById("editTitle").value.trim();
-      if (!title) throw new Error("任務名稱不可空白");
-      const cat = document.getElementById("editCategory");
-      const subWrap = document.getElementById("editSubWrap");
-      const updated = await api(`/items/${encodeURIComponent(item.id)}`, {
-        method: "PATCH",
-        body: {
-          title,
-          categoryId: cat.value,
-          subCategoryId: subWrap.hidden ? "" : document.getElementById("editSubCategory").value,
-          difficulty: document.getElementById("editDifficulty").value,
-        },
-      });
-      applyItemMutation(updated);
-    },
-  });
-}
-
-function openDirectReschedule(item) {
-  const current = currentWeek();
-  const availableWeeks = state.weeks.filter((week) =>
-    current &&
-    compareWeekIdentity(week.cycleNumber, week.weekNumber, current.cycleNumber, current.weekNumber) > 0
-  );
-  if (!availableWeeks.length) return showAlert("還沒有之後的 Week", "如果要放到下一個 Cycle，先建立下一個 Cycle。", "");
-
-  const weekOptions = availableWeeks.map((week) =>
-    `<option value="${week.cycleNumber}|${week.weekNumber}">Cycle ${week.cycleNumber} · Week ${week.weekNumber}（${formatDate(week.weekStart)}～${formatDate(week.weekEnd)}）</option>`
-  ).join("");
-
-  openFormModal({
-    icon: "",
-    title: "調整時間",
-    confirmText: "確定",
-    cancelText: "取消",
-    body: `
-      <label class="v2-form-field">放到哪一週<select id="rescheduleTarget">${weekOptions}</select></label>
-      <label class="v2-form-field">原因<select id="rescheduleReason">${RESCHEDULE_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
-      <label class="v2-form-field">想補充的話（選填）<textarea id="rescheduleNote" rows="3"></textarea></label>`,
-    onConfirm: async () => {
-      const [cycleNumber, weekNumber] = document.getElementById("rescheduleTarget").value.split("|").map(Number);
-      const updated = await api(`/items/${encodeURIComponent(item.id)}/reschedule`, {
-        method: "POST",
-        body: {
-          target: { cycleNumber, weekNumber },
-          reason: document.getElementById("rescheduleReason").value,
-          note: document.getElementById("rescheduleNote").value.trim(),
-        },
-      });
-      applyItemMutation(updated);
-    },
-  });
-}
-
-function openReplanTask(item) {
-  const activeCats = getActiveCategories();
-  if (!activeCats.length) return showAlert("還沒有分類", "先到 Settings 加入分類，再重新整理這件事。", "");
-  let rowCount = 0;
-
-  openFormModal({
-    icon: "", title: "重新整理", confirmText: "確定", cancelText: "取消", wide: true,
-    body: `
-      <div class="tp-modal-preformatted">原本：${escapeHtml(item.title)}\n整理後的新任務會放在目前 Week。</div>
-      <div id="replanRows" class="v2-replan-rows"></div>
-      <button class="v2-soft-btn" id="addReplanRowBtn" type="button">＋ 加入一個</button>`,
-    onReady: () => {
-      const container = document.getElementById("replanRows");
-      const addRow = () => {
-        const index = rowCount++;
-        const firstCat = activeCats[0];
-        const wrapper = document.createElement("div");
-        wrapper.className = "v2-replan-row";
-        wrapper.dataset.index = index;
-        wrapper.innerHTML = `
-          <div class="v2-replan-row-head"><strong>新的下一步 ${index + 1}</strong>${index > 0 ? `<button type="button" class="text-btn danger" data-remove-row>移除</button>` : ""}</div>
-          <label class="v2-form-field">內容<input data-r-title maxlength="120" placeholder="把它整理得更小一點…" /></label>
-          <div class="v2-modal-grid">
-            <label class="v2-form-field">分類<select data-r-cat>${categoryOptionsHtml(firstCat.id)}</select></label>
-            <label class="v2-form-field" data-r-sub-wrap>子分類<select data-r-sub></select></label>
-          </div>
-          <label class="v2-form-field">難度<select data-r-diff>${difficultyOptionsHtml("適中")}</select></label>`;
-        container.appendChild(wrapper);
-        setupReplanRow(wrapper);
-        wrapper.querySelector("[data-remove-row]")?.addEventListener("click", () => wrapper.remove());
-      };
-      document.getElementById("addReplanRowBtn").onclick = addRow;
-      addRow();
-      addRow();
-    },
-    onConfirm: async () => {
-      const rows = [...document.querySelectorAll(".v2-replan-row")];
-      const tasks = rows.map((row) => ({
-        title: row.querySelector("[data-r-title]").value.trim(),
-        categoryId: row.querySelector("[data-r-cat]").value,
-        subCategoryId: row.querySelector("[data-r-sub-wrap]").hidden ? "" : row.querySelector("[data-r-sub]").value,
-        difficulty: row.querySelector("[data-r-diff]").value,
-      })).filter((task) => task.title);
-      if (!tasks.length) throw new Error("至少加入一個整理後的任務");
-      const result = await api(`/items/${encodeURIComponent(item.id)}/replan`, { method: "POST", body: { tasks } });
-      applyReplanMutation(result);
-    },
-  });
-}
-
-function setupReplanRow(row) {
-  const cat = row.querySelector("[data-r-cat]");
-  const sub = row.querySelector("[data-r-sub]");
-  const wrap = row.querySelector("[data-r-sub-wrap]");
-  const refresh = () => {
-    const subs = getSubcategories(cat.value);
-    wrap.hidden = !subs.length;
-    sub.innerHTML = subs.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join("");
-  };
-  cat.addEventListener("change", refresh);
-  refresh();
-}
-
-async function openDeleteTask(item) {
-  const isDraft = isUnstartedCycleTask(item);
-
-  if (isDraft) {
-    const ok = await showConfirm({
-      icon: "",
-      title: "確定刪除這件草稿任務嗎？",
-      text: `「${item.title}」\n\n下一輪還沒開始，刪除後不會留下 History 紀錄。`,
-      confirmText: "刪除",
-      cancelText: "取消",
-      danger: true,
-    });
-    if (!ok) return;
-
-    showLoading("刪除中…");
-    try {
-      await api(`/items/${encodeURIComponent(item.id)}/draft`, { method: "DELETE" });
-      removeStateItem(item.id);
-      renderAll();
-      noteLocalMutation();
-    } catch (error) {
-      showAlert("刪除失敗", error.message, "");
-    } finally { hideLoading(); }
-    return;
-  }
-
-  openFormModal({
-    icon: "",
-    title: "確定刪除這件事嗎？",
-    confirmText: "刪除",
-    cancelText: "取消",
-    danger: true,
-    body: `
-      <div class="tp-modal-preformatted">${escapeHtml(item.title)}</div>
-      <p class="section-note">刪除後仍會保留在 History。</p>
-      <label class="v2-form-field">原因<select id="deleteReason">${DELETE_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
-      <label class="v2-form-field">想補充的話（選填）<textarea id="deleteNote" rows="3"></textarea></label>`,
-    onConfirm: async () => {
-      const updated = await api(`/items/${encodeURIComponent(item.id)}/delete`, {
-        method: "POST",
-        body: {
-          reason: document.getElementById("deleteReason").value,
-          note: document.getElementById("deleteNote").value.trim(),
-        },
-      });
-      applyItemMutation(updated);
-    },
-  });
-}
-
-async function correctCompletion(item) {
-  const ok = await showConfirm({
-    icon: "↩",
-    title: "這件任務是不是按早了？",
-    text: "會恢復成進行中的狀態，History 只留一筆「誤操作更正」。",
-    confirmText: "恢復",
-    cancelText: "取消",
-  });
-  if (!ok) return;
-  showLoading("更正中…");
-  try {
-    const updated = await api(`/items/${encodeURIComponent(item.id)}/correct-completion`, { method: "POST", body: {} });
-    applyItemMutation(updated);
-  } catch (error) {
-    showAlert("更正失敗", error.message, "");
-  } finally { hideLoading(); }
-}
-
-function openWeekPlanEditor() {
-  const week = currentWeek();
-  if (!week) return;
-  openFormModal({
-    icon: "", title: `Week ${week.weekNumber}`, confirmText: "儲存", cancelText: "取消",
-    body: `
-      <label class="v2-form-field">本週主題<input id="weekPlanTheme" maxlength="80" value="${escapeHtml(week.title || "")}" /></label>
-      <label class="v2-form-field">本週目標<textarea id="weekPlanGoal" rows="3" maxlength="240">${escapeHtml(week.achievement || "")}</textarea></label>`,
-    onConfirm: async () => {
-      const title = document.getElementById("weekPlanTheme").value.trim();
-      const achievement = document.getElementById("weekPlanGoal").value.trim();
-      if (!title || !achievement) throw new Error("本週主題與目標都要填");
-      const updatedWeek = await api("/weeks/current-plan", { method: "PATCH", body: { title, achievement } });
-      applyWeekMutation(updatedWeek);
-    },
-  });
-}
-
-async function saveWeekSetup(event) {
-  event.preventDefault();
-  const title = els.weekSetupTheme.value.trim();
-  const achievement = els.weekSetupGoal.value.trim();
-  if (!title || !achievement) return;
-  showLoading("準備這一週…");
-  try {
-    const updatedWeek = await api("/weeks/current-plan", { method: "PATCH", body: { title, achievement } });
-    applyWeekMutation(updatedWeek);
-  } catch (error) {
-    showAlert("儲存失敗", error.message, "");
-  } finally { hideLoading(); }
-}
-
-function openPostponeWeek() {
-  const week = currentWeek();
-  if (!week || week.postponed) return;
-  openFormModal({
-    icon: "", title: "本週需要多一點時間？", confirmText: "確定順延", cancelText: "取消",
-    body: `
-      <label class="v2-form-field">順延天數<select id="postponeDays">${[1,2,3,4,5,6,7].map((d) => `<option value="${d}" ${d === 7 ? "selected" : ""}>${d} 天</option>`).join("")}</select></label>
-      <label class="v2-form-field">原因<select id="postponeReason">${POSTPONE_REASONS.map((r) => `<option>${r}</option>`).join("")}</select></label>
-      <label class="v2-form-field">想補充的話（選填）<textarea id="postponeNote" rows="3"></textarea></label>`,
-    onConfirm: async () => {
-      await api("/weeks/postpone-current", {
-        method: "POST",
-        body: {
-          days: Number(document.getElementById("postponeDays").value),
-          reason: document.getElementById("postponeReason").value,
-          note: document.getElementById("postponeNote").value.trim(),
-        },
-      });
-      await loadCore({ quiet: true });
-    },
-  });
-}
-
-async function switchPage(page) {
-  state.currentPage = page;
-  els.pages.forEach((panel) => { panel.hidden = panel.dataset.pagePanel !== page; });
-  els.navButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.page === page));
-  closeTaskMenu();
-  closeBottomSheet();
-  if (page === "history") await loadHistory();
-  if (page === "settings") renderSettings();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-async function loadHistory() {
-  showLoading("整理 History…");
-  try {
-    state.history = await api("/history");
-    if (!state.historyOpenCycles.size && state.history?.length) {
-      const latest = state.history[0]?.cycle?.cycleNumber;
-      if (latest) state.historyOpenCycles.add(Number(latest));
-    }
-    renderHistory();
-    if (state.historyFocusTaskId) {
-      requestAnimationFrame(() => focusHistoryTask(state.historyFocusTaskId));
-    }
-  } catch (error) {
-    showAlert("History 讀取失敗", error.message, "");
-  } finally { hideLoading(); }
-}
-
-function renderHistory() {
-  const history = Array.isArray(state.history) ? state.history : [];
-  if (!history.length) {
-    els.historyList.innerHTML = `<div class="v2-empty">History 還是空白的。</div>`;
-    return;
-  }
-
-  els.historyList.innerHTML = history.map((wrapper) => {
-    const cycle = wrapper.cycle;
-    const open = state.historyOpenCycles.has(Number(cycle.cycleNumber));
-    const summary = wrapper.summary || {};
-    const weeks = wrapper.weeks || [];
-    const firstWeek = weeks[0]?.week;
-    const lastWeek = weeks[weeks.length - 1]?.week;
-    const dateText = firstWeek && lastWeek ? `${formatDate(firstWeek.weekStart)} ～ ${formatDate(lastWeek.weekEnd)}` : "";
-    const selected = state.historySelectedWeeks[cycle.cycleNumber];
-
-    const summaryBits = [
-      `完成 ${summary.onTimeCompleted || 0}`,
-      `後來完成 ${summary.lateCompleted || 0}`,
-      `未完待續 ${summary.incomplete || 0}`,
-      `重新整理 ${summary.replanned || 0}`,
-      `刪除 ${summary.cancelled || 0}`,
-    ];
-    if (Number(cycle.cycleNumber) >= 2) summaryBits.push(`Weekly Review ${summary.retrospectiveCount || 0}/12`);
-
-    return `
-      <article class="history-cycle-card" data-history-cycle-card="${cycle.cycleNumber}">
-        <button class="history-cycle-toggle" type="button" data-history-cycle-toggle="${cycle.cycleNumber}">
-          <span class="history-cycle-title">
-            <strong>Cycle ${cycle.cycleNumber}</strong>
-            <span>${escapeHtml(cycle.theme || "")}${cycle.theme && dateText ? " · " : ""}${dateText}</span>
-          </span>
-          <span class="history-cycle-chevron">${open ? "⌄" : "›"}</span>
-        </button>
-        ${open ? `
-          <div class="history-cycle-body">
-            <div class="history-path">${renderHistoryCyclePath(weeks)}</div>
-            <div class="history-summary-line">${summaryBits.map((bit) => `<span>${escapeHtml(bit)}</span>`).join("")}</div>
-            ${renderCycleHistoryEvents(wrapper.events || [])}
-            <div class="history-week-grid">
-              ${weeks.map((weekWrap) => `
-                <button class="history-week-btn ${Number(selected) === Number(weekWrap.week.weekNumber) ? "is-selected" : ""}" type="button"
-                  data-history-week-cycle="${cycle.cycleNumber}" data-history-week="${weekWrap.week.weekNumber}">
-                  W${weekWrap.week.weekNumber}
-                </button>`).join("")}
-            </div>
-            ${selected ? renderHistoryWeek(weeks.find((w) => Number(w.week.weekNumber) === Number(selected))) : ""}
-          </div>` : ""}
-      </article>`;
+function renderHistoryTanks(){
+  const ds=state.cycle.directions,counts=directionLeafCounts(),box=$("#historyTanks");
+  box.hidden=!ds.length;
+  box.innerHTML=`<p class="field-label">方向水缸</p>`+ds.map(d=>{
+    const n=counts[d.name]||0,pct=d.target>0?Math.min(100,Math.round(n/d.target*100)):0;
+    return `<div class="htank" style="--c:${d.color}"><div class="htank-head"><strong>${esc(d.name)}</strong><span>${n}${d.target?` / ${d.target}`:""} 片</span></div>${d.outcome?`<small>${esc(d.outcome)}</small>`:""}<div class="tank big"><div class="tank-fill" style="width:${pct}%"></div></div></div>`;
   }).join("");
+}
 
-  els.historyList.querySelectorAll("[data-history-cycle-toggle]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const cycleNumber = Number(button.dataset.historyCycleToggle);
-      if (state.historyOpenCycles.has(cycleNumber)) state.historyOpenCycles.delete(cycleNumber);
-      else state.historyOpenCycles.add(cycleNumber);
-      renderHistory();
+function renderHome(){
+  if(!state.selectedWeek)state.selectedWeek=CURRENT_WEEK;
+  const viewWeek=state.selectedWeek,dates=weekDateMap(viewWeek);
+  if(!Object.values(dates).includes(state.selectedDate))state.selectedDate=defaultDateForWeek(viewWeek);
+  const dayMode=state.mode==="day",isToday=viewWeek===CURRENT_WEEK&&state.selectedDate===TODAY;
+  const preview=viewWeek!==CURRENT_WEEK;
+  $("#previewBar").hidden=!preview;
+  if(preview)$("#previewLabel").textContent=`預習中 · Week ${viewWeek}`;
+  const life=weekLifecycle(viewWeek),archived=life==="archived";
+  const entry=$("#footprintEntry");entry.hidden=!(life==="review"&&footprintWeek!==viewWeek);
+  $("#homeTitle").textContent=dayMode?(isToday?"今天也長一點":`${formatShortDate(state.selectedDate)} 也長一點`):"這週慢慢長大";
+  $("#homeLede").textContent=dayMode?"今天完成的每一件，都會長進這週的樹":"一件一件完成，讓這週留下自己的樣子";
+  $("#workTitle").textContent=dayMode?(isToday?"今天想完成什麼":`${formatShortDate(state.selectedDate)} 想完成什麼`):(viewWeek===CURRENT_WEEK?"這週想完成什麼":`Week ${viewWeek}`);
+  $("#workHint").textContent=archived?"這週已封存，完整紀錄留在 History":(dayMode?"只是安排哪天做，還是算這一週":"事情以 Week 為主，完成一次就長一片葉子");
+  $("#quickTitle").placeholder=dayMode?"今天想加入什麼":"這週想加入什麼";
+  $("#weekStrip").hidden=dayMode;$("#dayStrip").hidden=!dayMode;
+  dayMode?renderDayStrip():renderWeekStrip();
+  renderTreeHome();
+
+  let html="";
+  if(dayMode){
+    const rows=[],daily=[];
+    activeTasks(viewWeek).forEach(t=>{
+      if(isRecurring(t)){
+        if(t.frequency==="daily"){
+          const g=t.occurrences.filter(o=>o.date===state.selectedDate);
+          if(g.length)daily.push({t,g});
+        }else{
+          // 每週 N 次不是先建立 N 張日期任務。日模式永遠只顯示同一張日常小事卡，
+          // 尚未完成的下一次會在這張卡上直接記錄，因此同一天也可以完成兩次。
+          const dated=t.occurrences.filter(o=>o.date===state.selectedDate);
+          const free=!taskDone(t)?t.occurrences.find(o=>!o.done&&!o.date):null;
+          const g=free?[...dated,free]:dated;
+          if(g.length)rows.push(taskRow(t,g));
+        }
+      }else if(t.focusDate===state.selectedDate)rows.push(taskRow(t,null));
     });
-  });
-
-  els.historyList.querySelectorAll("[data-history-week]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const cycleNumber = Number(button.dataset.historyWeekCycle);
-      const weekNumber = Number(button.dataset.historyWeek);
-      state.historySelectedWeeks[cycleNumber] =
-        Number(state.historySelectedWeeks[cycleNumber]) === weekNumber ? null : weekNumber;
-      renderHistory();
-    });
-  });
-
-  els.historyList.querySelectorAll("[data-history-task-toggle]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const details = document.getElementById(button.dataset.historyTaskToggle);
-      if (details) details.open = !details.open;
-    });
-  });
-
-  els.historyList.querySelectorAll("[data-retro-cycle]").forEach((button) => {
-    button.addEventListener("click", () => openWeeklyReview(Number(button.dataset.retroCycle), Number(button.dataset.retroWeek)));
-  });
-}
-
-function renderCycleHistoryEvents(events) {
-  const relevant = (Array.isArray(events) ? events : []).filter((event) =>
-    ["cycle_start_changed"].includes(event.eventType)
-  );
-  if (!relevant.length) return "";
-
-  return `
-    <div class="history-cycle-events">
-      ${relevant.map((event) => {
-        const beforeDate = event.before?.startDate || "";
-        const afterDate = event.after?.startDate || "";
-        return `
-          <div class="history-cycle-event">
-            <strong>開始日期調整</strong>
-            <span>${beforeDate && afterDate ? `${formatDate(beforeDate)} → ${formatDate(afterDate)}` : escapeHtml(event.summary || "")}</span>
-            <small>${formatDateTime(event.occurredAt)}</small>
-          </div>`;
-      }).join("")}
-    </div>`;
-}
-
-function renderHistoryCyclePath(weeks) {
-  const rows = [weeks.slice(0, 6), weeks.slice(6, 12)];
-  return rows.map((row) => `
-    <div class="cycle-path-row">
-      ${row.map((wrapper) => {
-        const week = wrapper.week;
-        const stateClass = week.status === "current" ? "is-current" : (week.status === "completed" ? "is-past" : "is-future");
-        const marker = week.status === "current"
-          ? mobiusMarkup("path-mobius")
-          : `<span class="path-dot" aria-hidden="true"></span>`;
-        return `<div class="path-node ${stateClass}">${marker}<span>W${week.weekNumber}</span></div>`;
-      }).join("")}
-    </div>`).join("");
-}
-
-function renderHistoryWeek(wrapper) {
-  if (!wrapper) return "";
-  const week = wrapper.week;
-  const retro = wrapper.retrospective;
-  const tasks = wrapper.tasks || [];
-  const showReview = Number(week.cycleNumber) >= 2;
-
-  return `
-    <div class="history-week-detail">
-      <div class="history-week-head">
-        <h3>Week ${week.weekNumber}</h3>
-        <p>${formatDate(week.weekStart)} ～ ${formatDate(week.weekEnd)}</p>
-      </div>
-
-      <div class="history-plan">
-        <div><span>本週主題</span><br><strong>${escapeHtml(week.title || "—")}</strong></div>
-        <div><span>本週目標</span><br><strong>${escapeHtml(week.achievement || "—")}</strong></div>
-      </div>
-
-      <div class="history-task-list">
-        ${tasks.length ? tasks.map((taskWrap) => renderHistoryTask(taskWrap)).join("") : `<div class="v2-empty">這週沒有任務。</div>`}
-      </div>
-
-      ${showReview ? `
-        <div class="history-review-line">
-          <span>Weekly Review</span>
-          <button class="v2-retro-button" type="button" data-retro-cycle="${week.cycleNumber}" data-retro-week="${week.weekNumber}">
-            ${retro?.submittedAt ? "查看" : "寫下回顧"}
-          </button>
-        </div>` : ""}
-    </div>`;
-}
-
-function renderHistoryTask(wrapper) {
-  const item = wrapper.item;
-  const events = wrapper.events || [];
-  return `
-    <details class="v2-history-task" id="history-task-${safeId(item.id)}">
-      <summary>
-        <span>${escapeHtml(item.title)}</span>
-        <span class="v2-mini-badge">${statusLabel(item.status)}</span>
-      </summary>
-      <div class="v2-history-task-detail">
-        <div class="v2-history-week-meta">
-          <span>原本安排：Cycle ${item.originalCycleNumber} · Week ${item.originalWeekNumber}</span>
-          ${isRescheduled(item) ? `<span>後來安排：Cycle ${item.scheduledCycleNumber} · Week ${item.scheduledWeekNumber}</span>` : ""}
-        </div>
-        <ul class="v2-event-list">
-          ${events.length ? events.map((event) => `
-            <li class="v2-event-item">
-              <strong>${escapeHtml(eventLabel(event))}</strong>
-              <span>${formatDateTime(event.occurredAt)}${event.reason ? ` · ${escapeHtml(event.reason)}` : ""}${event.note ? `<br>${escapeHtml(event.note)}` : ""}</span>
-            </li>`).join("") : `<li class="v2-empty">沒有其他紀錄。</li>`}
-        </ul>
-      </div>
-    </details>`;
-}
-
-function eventLabel(event) {
-  return ({
-    task_created: "加入",
-    task_overdue: "未完待續",
-    task_rescheduled: "調整時間",
-    task_replanned: "重新整理",
-    task_completed: "完成",
-    task_cancelled: "刪除",
-    task_deleted: "刪除",
-    completion_corrected: "誤操作更正",
-  })[event.eventType] || event.summary || event.eventType;
-}
-
-function statusLabel(status) {
-  return ({
-    active: "進行中",
-    overdue: "未完待續",
-    completed: "已完成",
-    replanned: "已重新整理",
-    cancelled: "已刪除",
-  })[status] || status;
-}
-
-async function goToTaskHistory(itemId) {
-  const item = state.items.find((x) => x.id === itemId);
-  if (item) {
-    const cycleNumber = Number(item.originalCycleNumber || item.cycleNumber);
-    const weekNumber = Number(item.originalWeekNumber || item.weekNumber);
-    if (cycleNumber) state.historyOpenCycles.add(cycleNumber);
-    if (cycleNumber && weekNumber) state.historySelectedWeeks[cycleNumber] = weekNumber;
+    html=(daily.length?dailyStripHtml(daily):"")+(rows.join("")||(daily.length?"":`<div class="empty-note">今天還沒有放進事情</div>`));
+  }else{
+    const tasks=activeTasks(viewWeek);html=tasks.map(t=>taskRow(t,null)).join("")||`<div class="empty-note">這一週還沒有放進事情</div>`;
   }
-  state.historyFocusTaskId = itemId;
-  await switchPage("history");
+  const list=$("#taskList");
+  list.innerHTML=html;
+  [...list.querySelectorAll("[data-task-id]")].forEach((el,i)=>el.style.setProperty("--i",i));
+  const listKey=`${state.mode}|${viewWeek}|${state.selectedDate}`;
+  if(listKey!==lastListKey){lastListKey=listKey;list.classList.remove("enter");void list.offsetWidth;list.classList.add("enter")}
+  bindTaskRows();renderFocusPool();applyRowFeedback();
+
+  const done=currentCompletedUnits(viewWeek),total=currentTotalUnits(viewWeek);
+  const dc=$("#doneCount");
+  if(prevDone!==null&&prevDone!==done){dc.classList.remove("bump");void dc.offsetWidth;dc.classList.add("bump")}
+  prevDone=done;
+  dc.textContent=done;$("#totalCount").textContent=total;$("#progressFill").style.width=total?`${Math.round(done/total*100)}%`:"0%";
+  $("#quickAddForm").hidden=archived;
+  renderQuickOptions();
+}function applyRowFeedback(){
+  const rows=id=>$$(`#taskList [data-task-id="${id}"]`);
+  if(justToggled){const {id,occId,done}=justToggled;justToggled=null;rows(id).filter(r=>!occId||!r.dataset.occurrenceIds||r.dataset.occurrenceIds.split(",").includes(occId)).forEach(r=>r.classList.add(done?"just-done":"just-undone"))}
+  if(justAdded){const id=justAdded;justAdded=null;rows(id).forEach(r=>r.classList.add("row-new"))}
 }
 
-function focusHistoryTask(itemId) {
-  const target = document.getElementById(`history-task-${safeId(itemId)}`);
-  if (!target) return;
-  let parent = target.parentElement;
-  while (parent) {
-    if (parent.tagName === "DETAILS") parent.open = true;
-    parent = parent.parentElement;
+function renderWeekStrip(){
+  const el=$("#weekStrip");
+  if(!el.children.length)el.innerHTML=Array.from({length:12},(_,i)=>`<button type="button" class="wk" data-week="${i+1}"><span class="week-number">${i+1}</span></button>`).join("");
+  [...el.children].forEach(b=>{
+    const n=Number(b.dataset.week),unlocked=isWeekUnlocked(n),archived=isWeekArchived(n),enterable=unlocked&&(!archived||n===CURRENT_WEEK);
+    b.disabled=!enterable;
+    b.setAttribute("aria-disabled",enterable?"false":"true");
+    b.classList.toggle("locked",!unlocked);b.classList.toggle("archived",archived);
+    b.classList.toggle("now",n===CURRENT_WEEK);b.classList.toggle("sel",n===state.selectedWeek);b.classList.toggle("past",n<CURRENT_WEEK);
+  });
+}function renderDayStrip(){
+  const el=$("#dayStrip"),dates=weekDateMap(state.selectedWeek);
+  el.innerHTML=`<div class="day-strip-row">${DAY_KEYS.map(k=>{const date=dates[k];return `<button type="button" class="dy ${date===TODAY?"today":""}" data-date="${date}"><span>${DAY_LABELS[k]}</span><strong>${Number(date.slice(8))}</strong></button>`}).join("")}</div>`;
+  $$("#dayStrip .dy").forEach(b=>b.classList.toggle("sel",b.dataset.date===state.selectedDate));
+}function taskRow(t,occ){
+  const group=Array.isArray(occ)?occ:null;
+  const cat=categoryById(t.categoryId),color=taskColor(t);const completed=group?group.every(o=>o.done):taskDone(t);
+  const meta=[];if(t.goal)meta.push(`<span>${esc(t.goal)}</span>`);if(cat)meta.push(`<span class="chip" style="--c:${color}">${esc(cat.name)}</span>`);
+  if(isRecurring(t)&&!group){const count=occurrenceDoneCount(t);meta.push(`<span class="repeat-dots"><span>↻ ${t.frequency==="daily"?"每天":`每週 ${t.targetCount} 次`}</span><span class="dots">${Array.from({length:t.targetCount},(_,i)=>`<i class="${i<count?"on":""}"></i>`).join("")}</span></span>`)}
+  else if(isRecurring(t)&&group&&t.frequency==="weekly"){const count=occurrenceDoneCount(t);meta.push(`<span class="repeat-dots"><span>↻ 每週 ${t.targetCount} 次 · 本週 ${count}/${t.targetCount}</span><span class="dots">${Array.from({length:t.targetCount},(_,i)=>`<i class="${i<count?"on":""}"></i>`).join("")}</span></span>`)}
+  else if(group&&group.length>1)meta.push(`<span class="repeat-dots"><span class="dots">${group.map(o=>`<i class="${o.done?"on":""}"></i>`).join("")}</span></span>`);
+  const checkLabel=completed?"改回未完成":(isRecurring(t)&&state.mode==="day"&&occurrenceDoneCount(t)>0?"再完成一次":"完成");
+  return `<article class="task-row ${completed?"done":""}" data-task-id="${t.id}" ${group?`data-occurrence-ids="${group.map(o=>o.id).join(",")}"`:""} style="--c:${color}" tabindex="0" aria-label="${completed?"查看完成紀錄":"編輯"}：${esc(t.title)}">
+    <button class="task-check" type="button" aria-label="${checkLabel}">${completed?"✓":""}</button>
+    <div class="task-main"><p class="task-title">${esc(t.title)}</p>${meta.length?`<div class="task-meta">${meta.join("")}</div>`:""}</div>
+    <button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button>
+  </article>`;
+}function dailyStripHtml(items){
+  return `<div class="daily-strip"><p class="daily-label">每天要做</p><div class="daily-card-list">${items.map(({t,g})=>{const done=g.every(o=>o.done),color=taskColor(t);return `<article class="task-row daily-fixed-row ${done?"done":""}" data-task-id="${t.id}" data-occurrence-ids="${g.map(o=>o.id).join(",")}" style="--c:${color}" tabindex="0" aria-label="${done?"查看完成紀錄":"編輯"}：${esc(t.title)}"><button class="task-check" type="button" aria-label="${done?"改回未完成":"完成"}">${done?"✓":""}</button><div class="task-main"><p class="task-title">${esc(t.title)}</p><div class="task-meta"><span>每天</span></div></div><button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button></article>`}).join("")}</div></div>`;
+}function setTaskActionContext(t,row){
+  actionTaskId=t.id;
+  actionOccIds=rowIds(row);
+  actionOccurrenceId=actionOccIds[0]||null;
+}
+function openTaskActions(t,row){
+  if(!t)return;
+  setTaskActionContext(t,row);
+  const archived=isWeekArchived(t.week);
+  $("#actionTaskTitle").textContent=t.title;
+  $("#replanTaskBtn").hidden=archived||isRecurring(t)||taskDone(t)||t.week>=12;
+  const pool=isRecurring(t)?(actionOccIds.length?t.occurrences.filter(o=>actionOccIds.includes(o.id)):t.occurrences):[t];
+  $("#undoLastBtn").hidden=archived||!pool.some(o=>o.done);
+  $("#editTaskBtn").hidden=archived||taskDone(t)||isRecurring(t);
+  $("#deleteTaskBtn").hidden=archived;
+  $("#completionRecordBtn").hidden=occurrenceDoneCount(t)===0&&!t.note&&!t.occurrences?.some(o=>o.note);
+  $("#taskActionDialog").showModal();
+}
+function openTaskCard(t,row){
+  if(!t)return;
+  setTaskActionContext(t,row);
+  const rowDone=isRecurring(t)&&actionOccIds.length
+    ? t.occurrences.filter(o=>actionOccIds.includes(o.id)).every(o=>o.done)
+    : taskDone(t);
+  if(isWeekArchived(t.week)){
+    if(occurrenceDoneCount(t)>0||t.note||t.occurrences?.some(o=>o.note))openCompletionRecord(t);
+    else showToast("這週已封存，可以到 History 查看");
+    return;
   }
-  target.open = true;
-  target.scrollIntoView({ behavior: "smooth", block: "center" });
-  target.classList.add("v2-tour-highlight");
-  setTimeout(() => target.classList.remove("v2-tour-highlight"), 1600);
-  state.historyFocusTaskId = null;
+  if(rowDone){
+    openCompletionRecord(t);
+    return;
+  }
+  if(isRecurring(t)&&t.recurringRuleId){
+    openRecurringDialog(t.recurringRuleId);
+    return;
+  }
+  openEditTask(t);
 }
-
-async function openReview(cycleNumber, fromCompletion = false) {
-  showLoading("整理這一輪…");
-  try {
-    const review = await api(`/reviews/${cycleNumber}`);
-    closeModal();
-
-    const stat = (value, label) => `<div class="v2-review-stat"><strong>${value}</strong><span>${label}</span></div>`;
-    const bars = (review.trend || []).map((point) => {
-      const empty = point.rate === null;
-      const height = empty ? 3 : Math.max(5, point.rate);
-      return `<div class="v2-review-bar-col">
-        <div class="v2-review-bar-wrap"><div class="v2-review-bar ${empty ? "is-empty" : ""}" style="height:${height}%"></div></div>
-        <b>${empty ? "—" : `${point.rate}%`}</b><small>W${point.weekNumber}</small>
-      </div>`;
-    }).join("");
-
-    els.modalRoot.innerHTML = `
-      <div class="tp-modal-overlay tp-modal-open">
-        <div class="tp-modal tp-modal-review" role="dialog" aria-modal="true">
-          <div class="cycle-summary-mobius">${mobiusMarkup("summary-mobius")}</div>
-          <p class="tp-modal-body"><strong style="display:block;text-align:center;font-size:22px;">Cycle ${cycleNumber}</strong>
-          <span style="display:block;text-align:center;color:var(--muted);">這一輪走完了</span></p>
-          <div class="v2-review-grid">
-            ${stat(review.totalTasks, "總任務")}
-            ${stat(review.onTimeCompleted, "按期完成")}
-            ${stat(review.lateCompleted, "後來完成")}
-            ${stat(review.incomplete, "未完待續")}
-            ${stat(review.replanned, "重新整理")}
-            ${stat(review.cancelled, "刪除")}
-            ${stat(`${review.onTimeRate}%`, "按期完成率")}
-            ${stat(review.postponedWeeks, "Week 順延")}
-            ${Number(cycleNumber) >= 2 ? stat(`${review.retrospectiveCount}/12`, "Weekly Review") : ""}
-          </div>
-          <div class="v2-chart">
-            <p class="v2-chart-title">Week 1～12 · 按期完成趨勢</p>
-            <div class="v2-review-chart">${bars}</div>
-          </div>
-          <div class="tp-modal-actions">
-            <button class="tp-btn tp-btn-ghost" id="reviewCloseBtn" type="button">${fromCompletion ? "先看看" : "關閉"}</button>
-            ${fromCompletion ? `<button class="tp-btn tp-btn-primary" id="reviewNextCycleBtn" type="button">收進 History</button>` : ""}
-          </div>
-        </div>
-      </div>`;
-
-    document.getElementById("reviewCloseBtn").onclick = closeModal;
-    if (fromCompletion) {
-      document.getElementById("reviewNextCycleBtn").onclick = () => {
-        localStorage.setItem(`tp-star-cycle-archived-${cycleNumber}`, "1");
-        closeModal();
-        if (state.context?.nextCycle) {
-          renderHome();
-        } else {
-          openCreateCycle();
+function bindTaskRows(){
+  $$("#taskList .task-check").forEach(b=>b.addEventListener("click",e=>{
+    e.stopPropagation();
+    const row=b.closest("[data-task-id]"),t=state.tasks.find(x=>x.id===Number(row.dataset.taskId));
+    toggleTaskCompletion(t,rowIds(row),b.getBoundingClientRect());
+  }));
+  $$('[data-more]').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();
+    const row=b.closest("[data-task-id]"),t=state.tasks.find(x=>x.id===Number(b.dataset.more));
+    openTaskActions(t,row);
+  }));
+  $$("#taskList .task-row").forEach(row=>{
+    const open=()=>{
+      const t=state.tasks.find(x=>x.id===Number(row.dataset.taskId));
+      openTaskCard(t,row);
+    };
+    row.addEventListener("click",e=>{
+      if(e.target.closest("button,a,input,select,textarea,label"))return;
+      open();
+    });
+    row.addEventListener("keydown",e=>{
+      if(e.target!==row||!(e.key==="Enter"||e.key===" "))return;
+      e.preventDefault();
+      open();
+    });
+  });
+}function toggleTaskCompletion(t,occIds,fromRect){
+  if(!t||!guardWeekEditable(t.week))return;
+  let becameComplete=false,leafKey="",leafOccId="",bulkLeafKeys=[];
+  const inTree=t.week===treeWeek();
+  if(isRecurring(t)){
+    const weekBulk=state.mode==="week"&&(!occIds||!occIds.length);
+    if(weekBulk){
+      if(taskDone(t)){
+        const doneOccs=t.occurrences.filter(o=>o.done);
+        doneOccs.forEach((occ,index)=>{
+          const key=`${t.id}:${occ.id}`;
+          if(inTree)queueFall(t.week,key,taskColor(t),index*45);
+          occ.done=false;occ.doneDate="";occ.note="";occ.noteEnabledAtCompletion=undefined;
+          if(t.frequency==="weekly")occ.date="";
+          state.events.push({type:"uncomplete",taskId:t.id,title:t.title,week:t.week,date:TODAY,occurrenceId:occ.id,bulk:true});
+        });
+        state.footprintDeferred[t.week]=false;
+      }else{
+        const remaining=t.occurrences.filter(o=>!o.done);
+        remaining.forEach(occ=>{
+          occ.done=true;
+          // Week mode confirms the weekly total. Do not invent an exact completion day for each unit.
+          occ.doneDate="";
+          occ.noteEnabledAtCompletion=Boolean(state.preferences.completionNote);
+          bulkLeafKeys.push(`${t.id}:${occ.id}`);
+          state.events.push({type:"complete",taskId:t.id,title:t.title,week:t.week,date:TODAY,occurrenceId:occ.id,color:taskColor(t),bulk:true});
+        });
+        becameComplete=remaining.length>0;
+        leafOccId=remaining.at(-1)?.id||"";
+      }
+      syncTaskDone(t);
+      justToggled={id:t.id,occId:"",done:becameComplete};
+      const finish=()=>{
+        if(becameComplete&&state.preferences.completionNote){
+          pendingNoteTaskId=t.id;pendingNoteOccId=leafOccId;$("#noteTaskTitle").textContent=t.title;$("#completionNoteInput").value="";$("#completionNoteDialog").showModal();
+        }else{
+          showToast(becameComplete?(inTree?`一次收下 ${bulkLeafKeys.length} 片葉子`:`完成 ${bulkLeafKeys.length} 次`):"已改回未完成");
+          if(becameComplete)maybeOpenFootprint(t.week,650);
         }
       };
+      if(becameComplete&&inTree){bulkLeafKeys.forEach(k=>growKeys.add(k));renderAll();finish()}
+      else{renderAll();finish()}
+      return;
     }
-  } catch (error) {
-    showAlert("總結讀取失敗", error.message, "");
-  } finally { hideLoading(); }
-}
 
-function maybeShowCycleCelebration() {
-  const context = state.context;
-  if (!context?.cycleComplete || !context.completedCycleNumber) return;
-  const key = `tp-star-cycle-celebration-${context.completedCycleNumber}`;
-  if (localStorage.getItem(key)) return;
-  localStorage.setItem(key, "1");
-  els.celebrationTitle.textContent = `Cycle ${context.completedCycleNumber}`;
-  els.cycleCelebration.hidden = false;
-}
-
-function closeCelebrationAndReview() {
-  els.cycleCelebration.hidden = true;
-  if (state.context?.completedCycleNumber) openReview(Number(state.context.completedCycleNumber), true);
-}
-
-function openCreateCycle() {
-  const latest = state.cycles.length ? Math.max(...state.cycles.map((c) => Number(c.cycleNumber))) : 0;
-  openFormModal({
-    icon: "", title: `Cycle ${latest + 1}`, confirmText: "開始下一輪", cancelText: "取消", wide: true,
-    body: `
-      <label class="v2-form-field">開始日期<input id="newCycleStart" type="date" min="${todayYmd()}" /></label>
-      <label class="v2-form-field">本輪主題<input id="newCycleMainTheme" maxlength="80" placeholder="例如：CSS" /></label>
-      <label class="v2-form-field">Week 1 主題<input id="newCycleTheme" maxlength="80" /></label>
-      <label class="v2-form-field">Week 1 目標<textarea id="newCycleGoal" rows="3" maxlength="240"></textarea></label>`,
-    onConfirm: async () => {
-      const startDate = document.getElementById("newCycleStart").value;
-      const theme = document.getElementById("newCycleMainTheme").value.trim();
-      const title = document.getElementById("newCycleTheme").value.trim();
-      const achievement = document.getElementById("newCycleGoal").value.trim();
-      if (!startDate || !theme || !title || !achievement) throw new Error("開始日期、本輪主題、Week 1 主題與目標都要填");
-      await api("/cycles", { method: "POST", body: { startDate, theme, title, achievement } });
-      await loadCore({ quiet: true });
-    },
-  });
-}
-
-function renderSettings() {
-  if (!els.categorySettingsList) return;
-  const categories = state.categories.filter((c) => c.type === "category");
-  const visible = categories.filter((c) => c.active || state.showInactiveCategories);
-
-  els.categorySettingsList.innerHTML = visible.length ? visible.map((cat) => {
-    const subs = getSubcategories(cat.id, true).filter((sub) => sub.active || state.showInactiveCategories);
-    return `
-      <article class="v2-setting-row" style="--category-dot:${getTagColors(cat.id || cat.name, "category").border};">
-        <div class="v2-setting-row-top">
-          <div>
-            <strong class="v2-category-name-chip" style="${tagStyle(cat.id || cat.name, "category")}">${escapeHtml(cat.name)}</strong>
-            ${!cat.active ? `<span class="v2-category-state">已停用</span>` : ""}
-          </div>
-          <div class="v2-setting-actions">
-            ${cat.active ? `<button class="text-btn" type="button" data-add-sub="${cat.id}">＋ 子分類</button>` : ""}
-            <button class="v2-more-btn" type="button" data-category-more="${cat.id}">⋯</button>
-          </div>
-        </div>
-        ${subs.length ? `<div class="v2-subcategory-list">${subs.map((sub) => `
-          <button class="v2-subcategory-chip ${!sub.active ? "is-inactive" : ""}" style="${tagStyle(sub.id || sub.name, "subcategory", cat.id || cat.name)}" type="button" data-sub-actions="${sub.id}">
-            ${escapeHtml(sub.name)}${!sub.active ? " · 已停用" : ""}
-          </button>`).join("")}</div>` : ""}
-      </article>`;
-  }).join("") : `<div class="v2-empty">還沒有分類。</div>`;
-
-  els.toggleInactiveBtn.textContent = state.showInactiveCategories ? "隱藏已停用" : "顯示已停用";
-
-  els.categorySettingsList.querySelectorAll("[data-add-sub]").forEach((button) => {
-    button.addEventListener("click", () => openAddCategory("subcategory", button.dataset.addSub));
-  });
-  els.categorySettingsList.querySelectorAll("[data-sub-actions]").forEach((button) => {
-    button.addEventListener("click", () => openSubcategoryActions(button.dataset.subActions));
-  });
-  els.categorySettingsList.querySelectorAll("[data-category-more]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const cat = state.categories.find((c) => c.id === button.dataset.categoryMore);
-      if (!cat) return;
-      els.modalRoot.innerHTML = `
-        <div class="tp-modal-overlay tp-modal-open"><div class="tp-modal" role="dialog" aria-modal="true">
-          
-          <p class="tp-modal-body"><strong>${escapeHtml(cat.name)}</strong></p>
-          <div class="tp-modal-actions">
-            <button class="tp-btn tp-btn-ghost" id="catClose" type="button">取消</button>
-            <button class="tp-btn tp-btn-primary" id="catRename" type="button">改名</button>
-            <button class="tp-btn ${cat.active ? "tp-btn-danger" : "tp-btn-primary"}" id="catToggle" type="button">${cat.active ? "停用" : "重新啟用"}</button>
-          </div>
-        </div></div>`;
-      document.getElementById("catClose").onclick = closeModal;
-      document.getElementById("catRename").onclick = () => { closeModal(); openRenameCategory(cat.id); };
-      document.getElementById("catToggle").onclick = async () => { closeModal(); await toggleCategory(cat.id); };
-    });
-  });
-}
-
-function openAddCategory(type = "category", parentId = "") {
-  const label = type === "subcategory" ? "子分類" : "分類";
-  openFormModal({
-    icon: "", title: `加入${label}`, confirmText: "加入", cancelText: "取消",
-    body: `<label class="v2-form-field">名稱<input id="newCategoryName" maxlength="50" /></label>`,
-    onConfirm: async () => {
-      const name = document.getElementById("newCategoryName").value.trim();
-      if (!name) throw new Error("名稱不可空白");
-      await api("/categories", { method: "POST", body: { name, type, parentId } });
-      await reloadCategories();
-    },
-  });
-}
-
-function openRenameCategory(id) {
-  const cat = state.categories.find((c) => c.id === id);
-  if (!cat) return;
-  openFormModal({
-    icon: "✏️", title: `改名：${cat.name}`, confirmText: "儲存",
-    body: `<label class="v2-form-field">新名稱<input id="renameCategoryInput" value="${escapeHtml(cat.name)}" maxlength="50" /></label>`,
-    onConfirm: async () => {
-      const name = document.getElementById("renameCategoryInput").value.trim();
-      if (!name) throw new Error("名稱不可空白");
-      await api(`/categories/${encodeURIComponent(id)}`, { method: "PATCH", body: { name } });
-      await reloadCategories();
-    },
-  });
-}
-
-async function toggleCategory(id) {
-  const cat = state.categories.find((c) => c.id === id);
-  if (!cat) return;
-  const action = cat.active ? "停用" : "重新啟用";
-  const ok = await showConfirm({
-    icon: "",
-    title: `${action}「${cat.name}」？`,
-    text: cat.active ? "停用後不會出現在新的任務裡，但舊紀錄會保留。" : "重新啟用後會再次出現在加入表單。",
-    confirmText: action,
-    cancelText: "取消",
-    danger: cat.active,
-  });
-  if (!ok) return;
-  await setCategoryActive(id, !cat.active);
-}
-
-async function setCategoryActive(id, active) {
-  showLoading(active ? "重新啟用中…" : "停用中…");
-  try {
-    await api(`/categories/${encodeURIComponent(id)}`, { method: "PATCH", body: { active } });
-    await reloadCategories();
-  } catch (error) { showAlert("分類更新失敗", error.message, "⚠️"); }
-  finally { hideLoading(); }
-}
-
-function openSubcategoryActions(id) {
-  const sub = state.categories.find((c) => c.id === id);
-  if (!sub) return;
-  els.modalRoot.innerHTML = `
-    <div class="tp-modal-overlay tp-modal-open"><div class="tp-modal" role="dialog" aria-modal="true">
-      <p class="tp-modal-body"><strong>${escapeHtml(sub.name)}</strong></p>
-      <div class="tp-modal-actions">
-        <button class="tp-btn tp-btn-ghost" id="subCancel" type="button">取消</button>
-        <button class="tp-btn tp-btn-primary" id="subRename" type="button">改名</button>
-        <button class="tp-btn ${sub.active ? "tp-btn-danger" : "tp-btn-primary"}" id="subToggle" type="button">${sub.active ? "停用" : "重新啟用"}</button>
-      </div></div></div>`;
-  document.getElementById("subCancel").onclick = closeModal;
-  document.getElementById("subRename").onclick = () => { closeModal(); openRenameCategory(id); };
-  document.getElementById("subToggle").onclick = async () => { closeModal(); await setCategoryActive(id, !sub.active); };
-}
-
-async function reloadCategories() {
-  state.categories = await api("/categories");
-  renderCategorySelects();
-  renderSettings();
-  closeModal();
-}
-
-function showAlert(title, text, icon = "") {
-  els.modalRoot.innerHTML = `
-    <div class="tp-modal-overlay tp-modal-open"><div class="tp-modal" role="dialog" aria-modal="true">
-      ${icon ? `<div class="tp-modal-icon">${icon}</div>` : ""}
-      <p class="tp-modal-body"><strong style="display:block;margin-bottom:8px;">${escapeHtml(title)}</strong>${escapeHtml(text).replaceAll("\n", "<br>")}</p>
-      <div class="tp-modal-actions"><button class="tp-btn tp-btn-primary" id="alertOk" type="button">知道了</button></div>
-    </div></div>`;
-  document.getElementById("alertOk").onclick = closeModal;
-}
-
-function showConfirm({ icon = "", title, text, confirmText = "確認", cancelText = "取消", danger = false }) {
-  return new Promise((resolve) => {
-    els.modalRoot.innerHTML = `
-      <div class="tp-modal-overlay tp-modal-open"><div class="tp-modal" role="dialog" aria-modal="true">
-        ${icon ? `<div class="tp-modal-icon">${icon}</div>` : ""}
-        <p class="tp-modal-body"><strong style="display:block;margin-bottom:8px;">${escapeHtml(title)}</strong>${escapeHtml(text).replaceAll("\n", "<br>")}</p>
-        <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" id="confirmCancel" type="button" style="min-height:48px;touch-action:manipulation;">${escapeHtml(cancelText)}</button>
-          <button class="tp-btn ${danger ? "tp-btn-danger" : "tp-btn-primary"}" id="confirmOk" type="button" style="min-height:48px;touch-action:manipulation;">${escapeHtml(confirmText)}</button>
-        </div>
-      </div></div>`;
-    document.getElementById("confirmCancel").onclick = () => { closeModal(); resolve(false); };
-    document.getElementById("confirmOk").onclick = () => { closeModal(); resolve(true); };
-  });
-}
-
-function openFormModal({ icon = "", title, body, confirmText = "確認", cancelText = "取消", danger = false, wide = false, onReady, onConfirm }) {
-  els.modalRoot.innerHTML = `
-    <div class="tp-modal-overlay tp-modal-open">
-      <div class="tp-modal ${wide ? "tp-modal-wide" : ""}" role="dialog" aria-modal="true">
-        ${icon ? `<div class="tp-modal-icon">${icon}</div>` : ""}
-        <p class="tp-modal-body"><strong>${escapeHtml(title)}</strong></p>
-        <div class="v2-modal-form">${body}</div>
-        <p class="v2-modal-error" id="formModalError" hidden></p>
-        <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" id="formCancel" type="button" style="min-height:48px;touch-action:manipulation;">${escapeHtml(cancelText)}</button>
-          <button class="tp-btn ${danger ? "tp-btn-danger" : "tp-btn-primary"}" id="formConfirm" type="button" style="min-height:48px;touch-action:manipulation;">${escapeHtml(confirmText)}</button>
-        </div>
-      </div>
-    </div>`;
-  const cancel = document.getElementById("formCancel");
-  cancel.onclick = closeModal;
-  const confirm = document.getElementById("formConfirm");
-  const originalConfirmText = confirm.textContent;
-  confirm.onclick = async () => {
-    const errorBox = document.getElementById("formModalError");
-    errorBox.hidden = true;
-
-    // 第一按就給明確回饋，避免 API 較慢時誤以為沒有按到而一直連點。
-    confirm.disabled = true;
-    cancel.disabled = true;
-    confirm.textContent = "處理中…";
-
-    try {
-      const result = await onConfirm();
-      if (result !== false) closeModal();
-      else {
-        confirm.disabled = false;
-        cancel.disabled = false;
-        confirm.textContent = originalConfirmText;
-      }
-    } catch (error) {
-      errorBox.textContent = error.message || "操作失敗";
-      errorBox.hidden = false;
-      confirm.disabled = false;
-      cancel.disabled = false;
-      confirm.textContent = originalConfirmText;
+    const pool=occIds&&occIds.length?t.occurrences.filter(o=>occIds.includes(o.id)):t.occurrences;
+    const occ=pool.find(o=>!o.done)||[...pool].reverse().find(o=>o.done);
+    if(!occ)return;
+    leafKey=`${t.id}:${occ.id}`;leafOccId=occ.id;
+    if(occ.done){
+      if(inTree)queueFall(t.week,leafKey,taskColor(t));
+      occ.done=false;occ.doneDate="";occ.note="";occ.noteEnabledAtCompletion=undefined;
+      if(t.frequency==="weekly")occ.date="";
+      state.events.push({type:"uncomplete",taskId:t.id,title:t.title,week:t.week,date:TODAY,occurrenceId:occ.id});state.footprintDeferred[t.week]=false
+    }
+    else{
+      if(t.frequency==="weekly"&&!occ.date&&state.mode==="day")occ.date=state.selectedDate;
+      occ.done=true;occ.doneDate=TODAY;occ.noteEnabledAtCompletion=Boolean(state.preferences.completionNote);becameComplete=true;state.events.push({type:"complete",taskId:t.id,title:t.title,week:t.week,date:TODAY,occurrenceId:occ.id,color:taskColor(t)})
+    }
+    syncTaskDone(t);
+  }else{
+    leafKey=String(t.id);
+    if(t.done){if(inTree)queueFall(t.week,leafKey,taskColor(t));t.done=false;t.doneDate="";t.note="";t.noteEnabledAtCompletion=undefined;state.events.push({type:"uncomplete",taskId:t.id,title:t.title,week:t.week,date:TODAY});state.footprintDeferred[t.week]=false}
+    else{t.done=true;t.doneDate=TODAY;t.noteEnabledAtCompletion=Boolean(state.preferences.completionNote);becameComplete=true;state.events.push({type:"complete",taskId:t.id,title:t.title,week:t.week,date:TODAY,color:taskColor(t)})}
+  }
+  justToggled={id:t.id,occId:leafOccId,done:becameComplete};
+  const finish=()=>{
+    if(becameComplete&&state.preferences.completionNote){pendingNoteTaskId=t.id;pendingNoteOccId=leafOccId;$("#noteTaskTitle").textContent=t.title;$("#completionNoteInput").value="";$("#completionNoteDialog").showModal()}
+    else{
+      showToast(becameComplete?(inTree?"又長出一片了":"完成了"):"已改回未完成");
+      if(becameComplete)maybeOpenFootprint(t.week,650);
     }
   };
-  if (onReady) onReady();
+  if(becameComplete&&inTree){
+    const fly=Boolean(fromRect)&&motionOk();
+    if(fly)flyingKeys.add(leafKey);else growKeys.add(leafKey);
+    renderAll();
+    if(fly)launchLeaf(leafKey,taskColor(t),fromRect,finish);else finish();
+  }else{renderAll();finish()}
+}
+function undoLastCompletion(t){
+  if(isRecurring(t)){
+    const pool=actionOccIds.length?t.occurrences.filter(o=>actionOccIds.includes(o.id)):t.occurrences;
+    const last=[...pool].reverse().find(o=>o.done);if(last)toggleTaskCompletion(t,[last.id],null);
+  }else if(t.done)toggleTaskCompletion(t,[],null);
+}
+function renderFocusPool(){
+  const pool=$("#focusPool"),week=state.selectedWeek;
+  if(state.mode!=="day"||isWeekArchived(week)){pool.hidden=true;return}pool.hidden=false;
+  const choices=[];
+  activeTasks(week).forEach(t=>{
+    if(!isRecurring(t)&&!t.done&&t.focusDate!==state.selectedDate)choices.push({t,occ:null,label:"放進這天",meta:""});
+  });
+  pool.innerHTML=`<div class="focus-pool-head"><span>這週還有</span><small>只是安排哪天做，還是算這一週</small></div>`+(choices.length?choices.map(({t,occ,label,meta})=>`<div class="focus-choice" style="--c:${taskColor(t)}"><i></i><span>${esc(t.title)}${meta?`<small> · ${esc(meta)}</small>`:""}</span><button class="text-button" type="button" data-focus-task="${t.id}" ${occ?`data-focus-occ="${occ.id}"`:""}>${label}</button></div>`).join(""):`<div class="empty-note">這週目前沒有其他還沒安排日期的事情</div>`);
+  $$('[data-focus-task]').forEach(b=>b.addEventListener('click',()=>{const t=state.tasks.find(x=>x.id===Number(b.dataset.focusTask));if(!guardWeekEditable(t.week))return;if(b.dataset.focusOcc){const o=t.occurrences.find(x=>x.id===b.dataset.focusOcc);if(o)o.date=state.selectedDate}else t.focusDate=state.selectedDate;state.events.push({type:"focus",taskId:t.id,title:t.title,week,date:state.selectedDate});justAdded=t.id;renderAll();showToast("放進這天了")}));
+}function renderQuickOptions(){
+  $("#quickGoal").innerHTML=`<option value="">不連結方向</option>`+state.cycle.goals.map(g=>`<option>${esc(g)}</option>`).join("");
+  $("#quickCategory").innerHTML=categoryOptions();
+  $("#quickTimes").innerHTML=timesOptions(2);
+}
+function categoryOptions(selected=""){return `<option value="">不分類</option>`+state.categories.map(c=>`<option value="${c.id}" ${c.id===selected?"selected":""}>${esc(c.name)}</option>`).join("")}
+function timesOptions(selected=2){return Array.from({length:7},(_,i)=>`<option value="${i+1}" ${i+1===Number(selected)?"selected":""}>${i+1} 次</option>`).join("")}
+
+const TREE_BASE=156,TREE_X=125;
+const treeGeoCache={};
+const motionOk=()=>!window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function qPoint(p0,c,p1,t){const u=1-t;return{x:u*u*p0.x+2*u*t*c.x+t*t*p1.x,y:u*u*p0.y+2*u*t*c.y+t*t*p1.y}}
+function qTangent(p0,c,p1,t){return Math.atan2(2*(1-t)*(c.y-p0.y)+2*t*(p1.y-c.y),2*(1-t)*(c.x-p0.x)+2*t*(p1.x-c.x))}
+function leafD(len){const W=(len*.36).toFixed(1),a=(len*.3).toFixed(1),b=(len*.78).toFixed(1),L=len.toFixed(1);return `M0 0C${a} -${W} ${b} -${W} ${L} 0C${b} ${W} ${a} ${W} 0 0Z`}
+function treeGeo(week){
+  if(treeGeoCache[week])return treeGeoCache[week];
+  const g=(week-1)/11,trunkTop=100-g*42,leafLen=12+g*4.5;
+  const T={p0:{x:TREE_X,y:TREE_BASE},c:{x:TREE_X-6-g*3,y:(TREE_BASE+trunkTop)/2+4},p1:{x:TREE_X+1,y:trunkTop}};
+  const paths=[],nb=3+Math.round(g*5);
+  for(let i=0;i<nb;i++){
+    const h=nb>1?i/(nb-1):1,side=i%2?-1:1,s=qPoint(T.p0,T.c,T.p1,.36+h*.56);
+    const reach=(30+g*38)*(1-.4*h)+(i%3)*3,rise=(14+g*14)*(1-.28*h)+9;
+    const e={x:s.x+side*reach,y:s.y-rise},c={x:s.x+side*reach*.6,y:s.y-rise*.08};
+    const w=(2+g*1.6)*(1-.3*h);
+    paths.push({p0:s,c,p1:e,w,kind:"branch",pairs:3+Math.round(g*2)});
+    if(g>.2&&(i%2===0||g>.6)){
+      const m=qPoint(s,c,e,.55),L=13+g*14;
+      paths.push({p0:m,c:{x:m.x+side*L*.12,y:m.y-L*.5},p1:{x:m.x+side*L*.5,y:m.y-L*.9},w:w*.62,kind:"twig",pairs:1+Math.round(g)});
+    }
+  }
+  paths.push({p0:T.p1,c:{x:TREE_X-1,y:trunkTop-(5+g*7)},p1:{x:TREE_X+2,y:trunkTop-(10+g*14)},w:1.8+g*1.4,kind:"branch",pairs:2});
+  const slots=[];
+  paths.forEach((p,pi)=>{
+    const rb=pi,ofs=p.kind==="twig"?1.5:0;
+    const push=(t,ang,order,layer)=>slots.push({x:qPoint(p.p0,p.c,p.p1,t).x,y:qPoint(p.p0,p.c,p.p1,t).y,ang,len:leafLen*(.9+((slots.length*37)%10)/50),rank:(order+ofs+layer*100)*100+rb});
+    push(1,qTangent(p.p0,p.c,p.p1,1),0,0);
+    for(let k=1;k<=p.pairs;k++)for(const layer of [0,1]){
+      const t=1-((k-.5*layer)/(p.pairs+1))*.8,ta=qTangent(p.p0,p.c,p.p1,t),spread=.72+layer*.28;
+      push(t,ta-spread,k,layer);push(t,ta+spread,k,layer);
+    }
+  });
+  slots.sort((a,b)=>a.rank-b.rank);
+  const W=5.5+g*4.5,N=14,L=[],R=[];
+  for(let i=0;i<=N;i++){const t=i/N,p=qPoint(T.p0,T.c,T.p1,t),a=qTangent(T.p0,T.c,T.p1,t)+Math.PI/2,hw=(W/2)*(1-.62*t);L.push(`${(p.x+Math.cos(a)*hw).toFixed(1)} ${(p.y+Math.sin(a)*hw).toFixed(1)}`);R.push(`${(p.x-Math.cos(a)*hw).toFixed(1)} ${(p.y-Math.sin(a)*hw).toFixed(1)}`)}
+  const trunkD=`M${L.join("L")}L${R.reverse().join("L")}Z`;
+  return treeGeoCache[week]={g,paths,slots,trunkD};
+}
+function assignLeafSlots(week,leaves){
+  const map=state.leafSlots[week]=state.leafSlots[week]||{};
+  const keys=new Set(leaves.map(l=>l.key));
+  Object.keys(map).forEach(k=>{if(!keys.has(k))delete map[k]});
+  const used=new Set(Object.values(map));
+  leaves.forEach(l=>{if(map[l.key]===undefined){let i=0;while(used.has(i))i++;map[l.key]=i;used.add(i)}});
+  return map;
+}
+function queueFall(week,key,color,delay=0){
+  const idx=(state.leafSlots[week]||{})[key],s=treeGeo(week).slots[idx];if(!s||!motionOk())return;
+  activeFalls.push({week,x:s.x,y:s.y,deg:(s.ang*180/Math.PI).toFixed(1),len:s.len,color,t0:performance.now(),delay,sx:(Math.random()*26-13).toFixed(0),fall:TREE_BASE-s.y+4});
+}
+function setLeafCount(n){const el=$("#homeLeafCount");if(el.textContent!==String(n)){el.textContent=n;el.classList.remove("bump");void el.offsetWidth;el.classList.add("bump")}}
+function renderTreeHome(){
+  const week=treeWeek(),leaves=currentLeafRecords(week),map=assignLeafSlots(week,leaves);
+  const keySet=new Set(leaves.map(l=>l.key)),flying=[...flyingKeys].filter(k=>keySet.has(k)).length;
+  const now=performance.now();activeFalls=activeFalls.filter(f=>now-f.t0-f.delay<1300);
+  if(renderTreeHome.week!==week){renderTreeHome.week=week;if(renderTreeHome.ready)treeIntro=true}renderTreeHome.ready=true;
+  $("#treeNumber").textContent=`TREE ${String(week).padStart(2,"0")}`;
+  setLeafCount(leaves.length-flying);
+  $("#homeTree").innerHTML=treeSvg(week,leaves,{live:true,intro:treeIntro,slotOf:k=>map[k],hidden:flyingKeys,grow:growKeys,falls:activeFalls.filter(f=>f.week===week),now});
+  treeIntro=false;growKeys.clear();
+}
+function treeSvg(week,leaves,opts={}){
+  const {live=false,intro=false,slotOf=null,hidden=null,grow=null,falls=null,now=0}=opts;
+  const geo=treeGeo(week),f1=n=>n.toFixed(1);
+  const branches=geo.paths.map((p,i)=>`<path class="tree-branch${intro?" draw":""}" pathLength="1" ${intro?`style="animation-delay:${(.3+i*.04).toFixed(2)}s"`:""} stroke-width="${p.w.toFixed(2)}" d="M${f1(p.p0.x)} ${f1(p.p0.y)}Q${f1(p.c.x)} ${f1(p.c.y)} ${f1(p.p1.x)} ${f1(p.p1.y)}"/>`).join("");
+  const leafEls=leaves.map((l,i)=>{
+    const si=slotOf?slotOf(l.key):i,s=geo.slots[si];if(!s)return "";
+    let cls="tree-leaf",style="";
+    if(hidden&&hidden.has(l.key))cls+=" is-hidden";
+    else if(grow&&grow.has(l.key))cls+=" grow";
+    else if(intro){cls+=" grow";style=`animation-delay:${(.75+Math.min(i,40)*.035).toFixed(2)}s`}
+    const dur=3.8+(si%5)*.45,phase=(((now/1000)+si*.37)%dur).toFixed(2);
+    const open=live?`<g class="leaf-sway" style="animation-duration:${dur.toFixed(2)}s;animation-delay:-${phase}s">`:"<g>";
+    return `<g transform="translate(${f1(s.x)} ${f1(s.y)}) rotate(${(s.ang*180/Math.PI).toFixed(1)})" data-leaf="${esc(l.key)}" data-len="${s.len.toFixed(1)}">${open}<g class="${cls}" style="${style}"><path d="${leafD(s.len)}" fill="${l.color}"><title>${esc(l.title)}</title></path><path class="leaf-vein" d="M0 0L${f1(s.len*.72)} 0"/></g></g></g>`;
+  }).join("");
+  const fallEls=(falls||[]).map(f=>`<g transform="translate(${f1(f.x)} ${f1(f.y)})"><g class="leaf-fall" style="--sx:${f.sx}px;--fall:${f.fall.toFixed(0)}px;animation-delay:${(-(now-f.t0-f.delay)).toFixed(0)}ms"><path transform="rotate(${f.deg})" d="${leafD(f.len)}" fill="${f.color}"/></g></g>`).join("");
+  return `<svg viewBox="0 0 250 170" preserveAspectRatio="xMidYMax meet" role="img" aria-label="Week ${week} 的成長樹"><ellipse cx="${TREE_X}" cy="${TREE_BASE+1.5}" rx="${(30+geo.g*22).toFixed(0)}" ry="4" fill="rgba(90,110,86,.13)"/>${branches}<path class="tree-trunk${intro?" draw":""}" d="${geo.trunkD}"/>${leafEls}${fallEls}</svg>`;
+}
+function revealLeaf(key){
+  flyingKeys.delete(key);
+  const el=$(`#homeTree [data-leaf="${key}"] .tree-leaf`);
+  if(el){el.classList.remove("is-hidden");el.classList.add("grow")}
+  setLeafCount(currentLeafRecords(treeWeek()).length-flyingKeys.size);renderDirection();
+  const svg=$("#homeTree svg");if(svg){svg.classList.remove("bounce");void svg.getBoundingClientRect();svg.classList.add("bounce")}
+}
+function sparkle(x,y,color,host=document.body){
+  for(let i=0;i<5;i++){
+    const d=document.createElement("i");d.className="sparkle";d.style.background=color;host.appendChild(d);
+    const a=-Math.PI/2+(i-2)*.7+(Math.random()*.3-.15),r=16+Math.random()*14;
+    const an=d.animate([{transform:`translate(${x}px,${y}px) scale(.4)`,opacity:1},{transform:`translate(${x+Math.cos(a)*r}px,${y+Math.sin(a)*r}px) scale(1)`,opacity:1,offset:.45},{transform:`translate(${x+Math.cos(a)*r*1.5}px,${y+Math.sin(a)*r*1.5+8}px) scale(.2)`,opacity:0}],{duration:620,easing:"ease-out"});
+    an.onfinish=()=>d.remove();
+  }
+}
+function launchLeaf(key,color,from,done){
+  const g=$(`#homeTree [data-leaf="${key}"]`);
+  if(!g){revealLeaf(key);return done()}
+  const sx=from.left+from.width/2,sy=from.top+from.height/2;
+  const m=g.getScreenCTM(),svg=g.ownerSVGElement,pt=svg.createSVGPoint();pt.x=0;pt.y=0;const end=pt.matrixTransform(m);
+  const scale=Math.hypot(m.a,m.b),len=Number(g.dataset.len),w=len*.36;
+  const off=end.y<10||end.y>innerHeight-10||end.x<0||end.x>innerWidth;
+  let endAng=Math.atan2(m.b,m.a)*180/Math.PI;while(endAng>180)endAng-=360;while(endAng<-180)endAng+=360;
+  const el=document.createElement("div");el.className="flying-leaf";
+  el.innerHTML=`<svg viewBox="0 -${w} ${len} ${2*w}" width="${len*scale}" height="${2*w*scale}" style="top:${-w*scale}px"><path d="${leafD(len)}" fill="${color}"/></svg>`;
+  document.body.appendChild(el);
+  const frames=[],rise=18;
+  for(let i=0;i<=6;i++){const u=i/6,e=1-Math.pow(1-u,3);frames.push({offset:.2*u,opacity:Math.min(1,u*3),transform:`translate(${sx.toFixed(1)}px,${(sy-rise*e).toFixed(1)}px) rotate(${(-35-12*e).toFixed(1)}deg) scale(${(.4+1.2*e).toFixed(3)})`})}
+  const p0={x:sx,y:sy-rise},tgt=off?{x:sx+(sx<innerWidth/2?30:-30),y:end.y<10?-40:innerHeight+40}:end;
+  const dist=Math.hypot(tgt.x-p0.x,tgt.y-p0.y),cx=(p0.x+tgt.x)/2+(tgt.x>p0.x?-24:24),cy=off?(p0.y+tgt.y)/2:Math.min(p0.y,tgt.y)-Math.min(140,60+dist*.25),N=18;
+  for(let i=1;i<=N;i++){
+    const u=i/N,e=u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;
+    const x=(1-e)**2*p0.x+2*(1-e)*e*cx+e*e*tgt.x,y=(1-e)**2*p0.y+2*(1-e)*e*cy+e*e*tgt.y;
+    const ang=off?-47+Math.sin(u*6)*14:-47*(1-e)+endAng*e+Math.sin(u*Math.PI*2)*12*(1-u);
+    const k=off?1.6-.9*e:1+.6*(1-e);
+    frames.push({offset:.2+.8*u,opacity:off&&u>.65?1-(u-.65)/.35:1,transform:`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) rotate(${ang.toFixed(1)}deg) scale(${k.toFixed(3)})`});
+  }
+  if(off)revealLeaf(key);
+  const a=el.animate(frames,{duration:off?700:950,fill:"forwards"});let ended=false;
+  const land=()=>{if(ended)return;ended=true;el.remove();if(!off){sparkle(end.x,end.y,color);revealLeaf(key)}done()};
+  a.onfinish=land;a.oncancel=land;
 }
 
-function closeModal() { els.modalRoot.innerHTML = ""; }
+function footprintDayGroups(week){
+  const dates=weekDateMap(week),start=dates.mon,raw=currentLeafRecords(week),buckets=new Map();
+  const order=["early",...DAY_KEYS];
+  const ensure=(key,label)=>{if(!buckets.has(key))buckets.set(key,{key,label,items:new Map()});return buckets.get(key)};
+  ensure("early","提前完成");
+  DAY_KEYS.forEach(k=>ensure(k,`週${DAY_LABELS[k]} ${formatShortDate(dates[k])}`));
+  raw.forEach(l=>{
+    const t=state.tasks.find(x=>x.id===l.taskId);let planned="";
+    if(t){
+      if(l.rec){const oid=String(l.key).split(":")[1],o=t.occurrences?.find(x=>x.id===oid);planned=o?.date||""}
+      else planned=t.focusDate||"";
+    }
+    const early=Boolean(l.date&&(compareIsoDate(l.date,start)<0||(planned&&compareIsoDate(l.date,planned)<0)));
+    let key="early";
+    if(!early){const found=DAY_KEYS.find(k=>dates[k]===l.date);key=found||"early"}
+    const bucket=buckets.get(key),itemKey=`${l.taskId}|${l.title}`;
+    if(!bucket.items.has(itemKey))bucket.items.set(itemKey,{title:l.title,color:l.color,n:0});
+    bucket.items.get(itemKey).n++;
+  });
+  return order.map(k=>buckets.get(k)).filter(b=>b.items.size>0).map(b=>({...b,items:[...b.items.values()]}));
+}
+function footprintWeekItems(week){return groupLeaves(currentLeafRecords(week))}
+function footprintMood(count){
+  const avg=Math.max(2,Math.round(state.cycle.directions.reduce((n,d)=>n+d.target,0)/12)||4);
+  return count>=avg?"成果滿滿":count>=Math.ceil(avg/2)?"一步一步":"先休息一下";
+}
+function renderFootprintCard(week){
+  const card=$("#weekFootprintCard"),count=currentCompletedUnits(week),dayMode=state.mode==="day";
+  let body="",i=0;
+  if(dayMode){
+    const groups=footprintDayGroups(week);
+    body=groups.length?groups.map(g=>`<div class="footprint-day"><strong>${esc(g.label)}</strong>${g.items.map(x=>`<div class="footprint-item" style="--i:${i++};--c:${x.color||NEUTRAL_LEAF}"><i></i><span>${esc(x.title)}</span>${x.n>1?`<em>${x.n} 次</em>`:""}</div>`).join("")}</div>`).join(""):`<div class="footprint-empty">這週還沒有完成紀錄</div>`;
+  }else{
+    const items=footprintWeekItems(week);
+    body=items.length?items.map(x=>`<div class="footprint-item" style="--i:${i++};--c:${x.color||NEUTRAL_LEAF}"><i></i><span>${esc(x.title)}</span>${x.rec?`<em>完成 ${x.n} 次</em>`:""}</div>`).join(""):`<div class="footprint-empty">這週還沒有完成紀錄</div>`;
+  }
+  const reflection=state.preferences.weeklyReflection&&!reflectionSaved(state.reflections[week]);
+  const r=reviewObj(state.reflections[week]);
+  const action=reflection?`<div class="footprint-reflection"><label>這週做得不錯的地方<input id="footprintGood" type="text" maxlength="80" value="${esc(r.good)}" placeholder="留下一句就好"></label><label>下週想調整的地方<input id="footprintAdjust" type="text" maxlength="80" value="${esc(r.adjust)}" placeholder="也可以只寫其中一格"></label></div><div class="footprint-actions"><button class="primary-button" type="button" data-footprint-save>儲存</button><p class="footprint-help">儲存後，這週會封存，感想也不能再改</p><button class="text-button" type="button" data-footprint-later>稍等一下</button></div>`:`<div class="footprint-actions"><p class="footprint-mood">${footprintMood(count)}</p><button class="primary-button" type="button" data-footprint-next>${week<12?"前往下一週":"完成本輪"}</button><button class="text-button" type="button" data-footprint-later>稍等一下</button></div>`;
+  card.innerHTML=`<div class="footprint-head"><div><p class="eyebrow">Week ${week}</p><h2 id="footprintTitle">本週足跡</h2></div><small>${count} 片葉子</small></div><p class="footprint-summary">這週真正完成的事，都留在這裡。</p><div class="footprint-list">${body}</div>${action}`;
+  $('[data-footprint-later]')?.addEventListener('click',()=>closeFootprint(true));
+  $('[data-footprint-save]')?.addEventListener('click',()=>{
+    const good=$("#footprintGood").value.trim(),adjust=$("#footprintAdjust").value.trim();
+    if(!good&&!adjust)return showToast("先留下一點這週的想法");
+    state.reflections[week]={good,adjust,savedAt:new Date().toISOString()};finalizeFootprintWeek(week);
+  });
+  $('[data-footprint-next]')?.addEventListener('click',()=>finalizeFootprintWeek(week));
+}
+function openFootprint(week){
+  week=Number(week);if(isWeekArchived(week)||!isWeekComplete(week))return;
+  footprintWeek=week;state.footprintDeferred[week]=false;renderFootprintCard(week);
+  const layer=$("#weekFootprintLayer");layer.classList.remove("closing");layer.hidden=false;layer.setAttribute("aria-hidden","false");document.body.classList.add("footprint-open");saveState();
+}
+function closeFootprint(defer=false){
+  if(footprintWeek&&defer)state.footprintDeferred[footprintWeek]=true;
+  footprintWeek=null;const layer=$("#weekFootprintLayer");if(layer){layer.classList.remove("closing");layer.hidden=true;layer.setAttribute("aria-hidden","true")}document.body.classList.remove("footprint-open");saveState();renderHome();
+}
+function maybeOpenFootprint(week,delay=500){
+  week=Number(week);if(state.footprintDeferred[week]||isWeekArchived(week)||!isWeekComplete(week))return;
+  setTimeout(()=>{if(!state.footprintDeferred[week]&&!isWeekArchived(week)&&isWeekComplete(week))openFootprint(week)},motionOk()?delay:0);
+}
+function syncFootprintState(){
+  if(footprintWeek&&(isWeekArchived(footprintWeek)||!isWeekComplete(footprintWeek))){
+    footprintWeek=null;const layer=$("#weekFootprintLayer");if(layer){layer.hidden=true;layer.setAttribute("aria-hidden","true")}document.body.classList.remove("footprint-open");
+  }
+}
+function finalizeFootprintWeek(week){
+  if(isWeekArchived(week))return;
+  if(!isWeekComplete(week))return showToast("這週還有事情沒完成");
+  archiveWeek(week,"review");
+  saveState();
+  const next=week<12?week+1:null,layer=$("#weekFootprintLayer");
+  const finish=()=>{
+    footprintWeek=null;
+    if(layer){layer.classList.remove("closing");layer.hidden=true;layer.setAttribute("aria-hidden","true")}
+    document.body.classList.remove("footprint-open");
+    if(next&&isWeekUnlocked(next)){state.selectedWeek=next;state.selectedDate=defaultDateForWeek(next);treeIntro=true;showToast(`Week ${next} 已經可以開始安排`)}else showToast("這一輪收好了");
+    renderAll();
+  };
+  if(motionOk()&&layer){layer.classList.add("closing");setTimeout(finish,280)}else finish();
+}
+function openCompletionRecord(t){
+  if(!t)return;$("#completionRecordTitle").textContent=t.title;
+  const rows=[];
+  if(isRecurring(t))t.occurrences.filter(o=>o.done||o.note).forEach(o=>rows.push({date:o.doneDate||o.date,note:o.note||"",noteEnabled:o.noteEnabledAtCompletion}));
+  else if(t.done||t.note)rows.push({date:t.doneDate,note:t.note||"",noteEnabled:t.noteEnabledAtCompletion});
+  $("#completionRecordBody").innerHTML=rows.length?rows.map((x,i)=>`<div class="completion-record-line"><strong>${x.date?formatShortDate(x.date):`完成 ${i+1}`}</strong>${x.note?`<p class="completion-record-note">${esc(x.note)}</p>`:""}</div>`).join(""):`<div class="empty-note">還沒有完成紀錄</div>`;
+  $("#completionRecordDialog").showModal();
+}
 
-const TOUR_STEPS = [
-  { page: "home", selector: "#toggleAddTaskBtn", title: "先加入", text: "把這週想做的事放進來。加入只是放下一步，不代表已經完成。" },
-  { page: "home", selector: "#starProgress", title: "進度條看完成狀況", text: "每完成一件，本週進度條就會往前一點。" },
-  { page: "history", selector: "#tourHistory", title: "需要時再回頭看", text: "調整時間、重新整理與真正完成的紀錄，都會留在 History。" },
+function renderHistory(){
+  renderHistoryTanks();
+  const mk=w=>{const leaves=currentLeafRecords(w),map=assignLeafSlots(w,leaves);return {week:w,map,leaves:leaves.map(l=>({key:l.key,title:l.title,color:l.color})),total:currentTotalUnits(w)}};
+  const cards=[];
+  state.archivedWeeks.forEach(w=>cards.push({week:w.week,leaves:(w.completed||[]).map((v,i)=>({key:v.key||`h${w.week}-${i}`,title:v.title,color:v.color||NEUTRAL_LEAF})),total:currentTotalUnits(w.week)}));
+  if(!isWeekArchived(CURRENT_WEEK))cards.push(mk(CURRENT_WEEK));
+  for(let w=CURRENT_WEEK+1;w<=12;w++){
+    if(isWeekArchived(w)){if(!cards.some(c=>c.week===w)){const a=state.archivedWeeks.find(x=>x.week===w);if(a)cards.push({week:w,leaves:(a.completed||[]).map((v,i)=>({key:v.key||`h${w}-${i}`,title:v.title,color:v.color||NEUTRAL_LEAF})),total:currentTotalUnits(w)})}continue}
+    const c=mk(w);if(c.leaves.length||state.events.some(e=>e.type!=="complete"&&e.type!=="uncomplete"&&e.type!=="focus"&&(e.week===w||e.fromWeek===w||e.toWeek===w)))cards.push(c);
+  }
+  cards.sort((a,b)=>a.week-b.week);
+  $("#historyGrid").innerHTML=cards.map((x,idx)=>{const done=x.leaves.length;const tree=treeSvg(x.week,x.leaves,x.map?{slotOf:k=>x.map[k],hidden:flyingKeys}:{});return `<button class="history-card soft-card" type="button" style="--i:${idx}" data-history-week="${x.week}"><div class="history-card-copy"><h3>Week ${x.week}</h3><div class="history-statline"><strong>${done}</strong><span>片葉子 · ${done}/${Math.max(x.total,done)}</span></div></div><div class="history-mini-tree">${tree}</div></button>`}).join("");
+  $$('[data-history-week]').forEach(b=>b.addEventListener('click',()=>{const w=Number(b.dataset.historyWeek);if(historySelected===w&&!$('#historyDetail').hidden)closeHistory();else{showHistoryWeek(w);$('#historyDetail').scrollIntoView({behavior:'smooth',block:'nearest'})}}));
+  const detailOpen=historySelected!==null&&!$('#historyDetail').hidden;
+  if(detailOpen){
+    if(cards.some(c=>Number(c.week)===Number(historySelected)))showHistoryWeek(historySelected);
+    else closeHistory();
+  }else markHistorySelected();
+}function groupLeaves(leaves){
+  const m=new Map();
+  leaves.forEach(l=>{const k=l.taskId??`${l.title}|${l.color}`;if(!m.has(k))m.set(k,{title:l.title,color:l.color,n:0,dates:[],items:[],note:l.note||"",noteEnabled:l.noteEnabled,rec:!!l.rec,target:l.target||0});const g=m.get(k);g.n++;if(l.date)g.dates.push(l.date);g.items.push({date:l.date||"",note:l.note||"",noteEnabled:l.noteEnabled})});
+  return [...m.values()];
+}
+function leftoverOf(week){return activeTasks(week).filter(t=>!taskDone(t)).map(t=>({id:t.id,title:t.title,left:taskTarget(t)-occurrenceDoneCount(t),recurring:isRecurring(t),reason:state.unfinishedReasons[t.id]||""}))}
+const REFLECTION_MESSAGES=[
+  "這週的葉子收好了，慢慢長大也很棒 🌿",
+  "這一週有留下痕跡，樹知道你有往前 🍃",
+  "不用長得很滿，每一片留下來的都算數 🌱",
+  "這週就先長到這裡，下一週再繼續 🌳"
 ];
-
-async function startTour(force = false) {
-  if (!force && localStorage.getItem("tp-star-tour-seen")) return;
-  state.tourIndex = 0;
-  els.tourPopover.hidden = false;
-  await renderTourStep();
-}
-
-async function renderTourStep() {
-  document.querySelectorAll(".v2-tour-highlight").forEach((x) => x.classList.remove("v2-tour-highlight"));
-  const step = TOUR_STEPS[state.tourIndex];
-  if (!step) return finishTour();
-  if (state.currentPage !== step.page) await switchPage(step.page);
-  const target = document.querySelector(step.selector);
-  target?.classList.add("v2-tour-highlight");
-  target?.scrollIntoView({ behavior: "smooth", block: "center" });
-  els.tourStepLabel.textContent = `${state.tourIndex + 1} / ${TOUR_STEPS.length}`;
-  els.tourTitle.textContent = step.title;
-  els.tourText.textContent = step.text;
-  els.tourNextBtn.textContent = state.tourIndex === TOUR_STEPS.length - 1 ? "開始使用" : "下一步";
-}
-
-function finishTour() {
-  document.querySelectorAll(".v2-tour-highlight").forEach((x) => x.classList.remove("v2-tour-highlight"));
-  els.tourPopover.hidden = true;
-  localStorage.setItem("tp-star-tour-seen", "1");
-  switchPage("home");
-}
-
-
-function renderCyclePath() {
-  const week = currentWeek();
-  if (!week) {
-    els.cyclePathCard.hidden = true;
-    return;
+function encouragementMessage(week,count){return REFLECTION_MESSAGES[(Number(week)+Number(count))%REFLECTION_MESSAGES.length]}
+function reviewObj(v){return {good:"",adjust:"",savedAt:"",...((v&&typeof v==="object")?v:{})}}
+function reflectionSaved(v){return Boolean(reviewObj(v).savedAt)}
+function markHistorySelected(){const g=$("#historyGrid");g.classList.toggle("has-selection",historySelected!==null);$$("#historyGrid .history-card").forEach(c=>c.classList.toggle("selected",Number(c.dataset.historyWeek)===historySelected))}
+function closeHistory(){$("#historyDetail").hidden=true;historySelected=null;markHistorySelected()}
+function showHistoryWeek(week){
+  const box=$("#historyDetail");box.hidden=false;historySelected=week;markHistorySelected();
+  let completed,replans,deleted,review,leftover=[];
+  const archived=state.archivedWeeks.find(x=>Number(x.week)===Number(week));
+  if(archived){
+    completed=groupLeaves(archived.completed||[]);replans=archived.replanned||[];deleted=archived.deleted||[];review=state.reflections[week]??archived.reflection;leftover=leftoverOf(week);
+  }else{
+    completed=groupLeaves(currentLeafRecords(week));
+    replans=state.events.filter(e=>e.type==="replan"&&e.fromWeek===week).map(e=>`${e.title} → Week ${e.toWeek}｜${e.reason||""}`).concat(state.events.filter(e=>e.type==="replan"&&e.toWeek===week).map(e=>`從 Week ${e.fromWeek} 移來：${e.title}｜${e.reason||""}`));
+    deleted=state.events.filter(e=>e.type==="delete"&&e.week===week).map(e=>`${e.title}｜${e.reason||""}`);
+    review=state.reflections[week];leftover=leftoverOf(week);
   }
-  const cycleWeeks = state.weeks
-    .filter((w) => Number(w.cycleNumber) === Number(week.cycleNumber))
-    .sort((a, b) => Number(a.weekNumber) - Number(b.weekNumber));
-
-  if (!cycleWeeks.length) {
-    els.cyclePathCard.hidden = true;
-    return;
-  }
-
-  const rows = [cycleWeeks.slice(0, 6), cycleWeeks.slice(6, 12)];
-  els.cyclePath.innerHTML = rows.map((row) => `
-    <div class="cycle-path-row">
-      ${row.map((w) => {
-        const cmp = Number(w.weekNumber) - Number(week.weekNumber);
-        const stateClass = cmp < 0 ? "is-past" : (cmp === 0 ? "is-current" : "is-future");
-        const marker = cmp === 0
-          ? mobiusMarkup("path-mobius")
-          : `<span class="path-dot" aria-hidden="true"></span>`;
-        return `<div class="path-node ${stateClass}">${marker}<span>W${w.weekNumber}</span></div>`;
-      }).join("")}
-    </div>`).join("");
-  els.cyclePathCaption.textContent = `Cycle ${week.cycleNumber} · Week ${week.weekNumber} / 12`;
-  els.cyclePathCard.hidden = false;
+  const count=completed.reduce((n,x)=>n+x.n,0);
+  const raw=archived?(archived.completed||[]):currentLeafRecords(week),dc={};raw.forEach(l=>{if(l.date)dc[l.date]=(dc[l.date]||0)+1});const daily=Object.keys(dc).sort().map(d=>`${formatShortDate(d)} ${dc[d]} 片`).join(" · ");
+  box.innerHTML=historyDetailHtml(week,completed,count,replans,deleted,review,leftover,daily);
+  $('[data-close-history]')?.addEventListener('click',closeHistory);
+  $('[data-save-reflection]')?.addEventListener('click',()=>{
+    if(reflectionSaved(state.reflections[week]))return showToast("這週的感想已經存好了");
+    if(!weekMetaFor(week).autoArchived)return showToast("這週的感想請從本週足跡留下");
+    const good=$("#reviewGood").value.trim(),adjust=$("#reviewAdjust").value.trim();
+    if(!good&&!adjust)return showToast("先留下一點這週的想法");
+    state.reflections[week]={good,adjust,savedAt:new Date().toISOString()};
+    const snap=state.archivedWeeks.find(x=>Number(x.week)===Number(week));if(snap)snap.reflection=state.reflections[week];
+    saveState();showToast("感想存好了，之後只能查看");showHistoryWeek(week);
+  });
+  $$('[data-reason-task]').forEach(b=>b.addEventListener('click',()=>{if(isWeekArchived(week))return;const id=b.dataset.reasonTask;state.unfinishedReasons[id]=state.unfinishedReasons[id]===b.dataset.reason?"":b.dataset.reason;saveState();showHistoryWeek(week)}));
+}function historyDetailHtml(week,completed,count,replanned,deleted,review,leftover,daily=""){
+  const r=reviewObj(review),saved=reflectionSaved(review),meta=weekMetaFor(week),archived=isWeekArchived(week);
+  const line=x=>{const head=x.rec?`完成 ${x.n} 次`:"";const subs=x.rec?[...x.items].sort((a,b)=>String(a.date).localeCompare(String(b.date))).filter(i=>String(i.note||"").trim()).map(i=>`<small>${esc(i.date?formatShortDate(i.date):"")}${i.date?"　":""}${esc(i.note)}</small>`):(x.note?[`<small>${esc(x.note)}</small>`]:[]);return `<div class="history-line"><i class="leaf-dot" style="--c:${x.color||NEUTRAL_LEAF}"></i><span>${esc(x.title)}${head?`<em class="line-head">　${esc(head)}</em>`:""}</span>${subs.length?`<div class="history-subs">${subs.join("")}</div>`:""}</div>`};
+  const left=leftover.length?`<div class="history-section"><p class="field-label">還留在這週的</p>${leftover.map(x=>`<div class="history-line"><i class="leaf-dot hollow"></i><span>${esc(x.title)}</span>${x.recurring?`<small>還差 ${x.left} 次</small>`:""}${archived?"":`<div class="reason-chips">${REASONS.map(rs=>`<button type="button" class="reason-chip ${x.reason===rs?"on":""}" data-reason-task="${x.id}" data-reason="${rs}">${rs}</button>`).join("")}</div>`}</div>`).join("")}</div>`:"";
+  let reviewBlock="";
+  if(saved){reviewBlock=`<div class="history-section"><p class="field-label">感想</p><div class="history-readonly-review">${r.good?`<p><small>這週做得不錯的地方</small><br>${esc(r.good)}</p>`:""}${r.adjust?`<p><small>下週想調整的地方</small><br>${esc(r.adjust)}</p>`:""}</div></div>`}
+  else if(meta.autoArchived&&state.preferences.weeklyReflection){reviewBlock=`<div class="reflection-editor history-section"><p class="field-label">補上這週的感想</p><label class="review-label">這週做得不錯的地方<input id="reviewGood" type="text" maxlength="80" value="${esc(r.good)}" placeholder="留下一句就好"></label><label class="review-label">下週想調整的地方<input id="reviewAdjust" type="text" maxlength="80" value="${esc(r.adjust)}" placeholder="也可以只寫其中一格"></label><button class="primary-button" type="button" data-save-reflection="${week}">儲存</button><p class="week-state-note">儲存後不能再修改</p></div>`}
+  const encouragement=saved?`<p>${encouragementMessage(week,count)}</p>`:"";
+  return `<div class="history-detail-head"><span>Week ${week}${archived?" · 已封存":""}</span><button class="text-button" type="button" data-close-history>收起</button></div><h3>這週留下來的進度</h3><div class="history-section"><p class="field-label">完成 ${count} 次</p>${daily?`<p class="daily-line">${esc(daily)}</p>`:""}${completed.length?completed.map(line).join(""):`<div class="empty-note">這週還沒有完成紀錄</div>`}</div>${left}${replanned.length?`<div class="history-section"><p class="field-label">移到其他週</p>${replanned.map(x=>`<div class="history-line history-change"><span>→</span><span>${esc(x)}</span></div>`).join("")}</div>`:""}${deleted.length?`<div class="history-section"><p class="field-label">刪除</p>${deleted.map(x=>`<div class="history-line history-delete"><span>×</span><span>${esc(x)}</span></div>`).join("")}</div>`:""}${reviewBlock}${encouragement}`;
+}function renderSettings(){
+  $$('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===state.mode));$("#completionNoteToggle").checked=state.preferences.completionNote;$("#weeklyReflectionToggle").checked=state.preferences.weeklyReflection;$("#lineToggle").checked=state.preferences.lineEnabled;$("#lineTime").value=state.preferences.lineTime;$("#lineSettings").hidden=!state.preferences.lineEnabled;
+  const daily=state.mode==="day";$("#lineSummary").textContent=daily?`每天 ${state.preferences.lineTime} 提醒今天想碰的事`:`每週一 ${state.preferences.lineTime} 看這週`;$("#lineCadenceNote").textContent=daily?"每天只看今天，不追討昨天；底層仍然累積到這週":"每週開始時看一次這週想完成的事情";renderDirectionList();renderRecurringList();renderCategoryList()
 }
+function renderRecurringList(){const el=$("#recurringList");el.innerHTML=state.recurringRules.length?state.recurringRules.map(r=>`<div class="manage-row"><span class="color-dot" style="--c:${categoryById(r.categoryId)?.color||NEUTRAL_LEAF}"></span><div><strong>${esc(r.title)}</strong><small>${r.frequency==="daily"?"每天":`每週 ${r.timesPerWeek} 次`}</small></div><label class="mini-switch"><input type="checkbox" data-rule-active="${r.id}" ${r.active?"checked":""}><i></i></label><button class="text-button" type="button" data-edit-rule="${r.id}">編輯</button></div>`).join(""):`<div class="empty-note">還沒有日常小事</div>`;$$('[data-rule-active]').forEach(i=>i.addEventListener('change',()=>{const r=state.recurringRules.find(x=>x.id===i.dataset.ruleActive);r.active=i.checked;renderAll()}));$$('[data-edit-rule]').forEach(b=>b.addEventListener('click',()=>openRecurringDialog(b.dataset.editRule)))}
+function renderCategoryList(){const el=$("#categoryList");el.innerHTML=state.categories.map(c=>`<div class="category-color-block"><div class="category-color-head"><div class="category-color-actions"><span class="color-dot" style="--c:${c.color}"></span><strong>${esc(c.name)}</strong></div><button class="text-button" data-edit-category="${c.id}" type="button">改名稱</button></div><div class="inline-palette">${PALETTE.map(color=>`<button type="button" class="palette-dot ${color===c.color?"on":""}" style="--c:${color}" data-category-color="${c.id}" data-color="${color}" aria-label="選擇顏色"></button>`).join("")}</div></div>`).join("");$$('[data-edit-category]').forEach(b=>b.addEventListener('click',()=>openCategoryDialog(b.dataset.editCategory)));$$('[data-category-color]').forEach(b=>b.addEventListener('click',()=>{const c=state.categories.find(x=>x.id===b.dataset.categoryColor);c.color=b.dataset.color;renderAll();showToast(`${c.name} 的顏色換好了`)}))}
 
-function renderWeeklyReview() {
-  const week = currentWeek();
-  if (!week || Number(week.cycleNumber) < 2) {
-    els.weeklyReviewPanel.hidden = true;
-    return;
-  }
-
-  const retro = getSubmittedReview(week.cycleNumber, week.weekNumber);
-  els.weeklyReviewPanel.hidden = false;
-  els.weeklyReviewSpark.textContent = "";
-  els.weeklyReviewSpark.classList.toggle("is-done", !!retro);
-  els.weeklyReviewStatus.textContent = retro ? "這週的回顧已經留下來了。" : "寫下這週真正留下的感覺。";
-  els.weeklyReviewBtn.textContent = retro ? "查看" : "開始回顧";
+function openEditTask(t){if(!t||!guardWeekEditable(t.week))return;editingTaskId=t.id;editingTaskOccurrenceId=actionOccurrenceId;$("#editTaskTitle").value=t.title;$("#editTaskGoal").innerHTML=`<option value="">不連結方向</option>`+state.cycle.goals.map(g=>`<option ${g===t.goal?"selected":""}>${esc(g)}</option>`).join("");$("#editTaskCategory").innerHTML=categoryOptions(t.categoryId);const editOcc=editingTaskOccurrenceId&&isRecurring(t)?t.occurrences.find(o=>o.id===editingTaskOccurrenceId):null;const editDate=editOcc?.date||t.focusDate||"",dates=weekDateMap(t.week);$("#editTaskDateWrap").hidden=isRecurring(t)&&!editOcc;$("#editTaskDate").innerHTML=`<option value="">不指定日期</option>`+DAY_KEYS.map(k=>`<option value="${dates[k]}" ${dates[k]===editDate?"selected":""}>週${DAY_LABELS[k]} ${Number(dates[k].slice(8))}</option>`).join("");$("#editTaskTimesWrap").hidden=!isRecurring(t)||t.frequency!=="weekly";$("#editTaskTimes").innerHTML=timesOptions(t.targetCount||2);$("#editTaskDialog").showModal()}
+function openReplanTask(t){
+  if(!t||!guardWeekEditable(t.week))return;
+  $("#replanTaskTitle").textContent=t.title;
+  $("#replanWeek").innerHTML=Array.from({length:12-t.week},(_,i)=>t.week+i+1).map(w=>{
+    const allowed=(w===t.week+1||isWeekUnlocked(w))&&!isWeekArchived(w);
+    return `<option value="${w}" ${allowed?"":"disabled"}>Week ${w}</option>`;
+  }).join("");
+  $("#replanReason").value="";
+  $("#replanDialog").showModal();
 }
+function openRecurringDialog(id=null){editingRecurringId=id;const r=id?state.recurringRules.find(x=>x.id===id):null;$("#recurringDialogTitle").textContent=r?"編輯日常小事":"新增日常小事";$("#recurringTitleInput").value=r?.title||"";$("#recurringCategory").innerHTML=categoryOptions(r?.categoryId||"");$("#recurringFrequency").value=r?.frequency||"weekly";$("#recurringTimes").innerHTML=timesOptions(r?.timesPerWeek||2);renderRecurringFields();$("#recurringDialog").showModal()}
+function renderRecurringFields(){$("#recurringTimesWrap").hidden=$("#recurringFrequency").value!=="weekly"}
+function openCategoryDialog(id=null){editingCategoryId=id;const c=id?state.categories.find(x=>x.id===id):null;$("#categoryDialogTitle").textContent=c?"編輯分類":"新增分類";$("#categoryNameInput").value=c?.name||"";categoryPickColor=c?.color||PALETTE[state.categories.length%PALETTE.length];renderCategoryPalette();$("#categoryDialog").showModal()}
+function renderCategoryPalette(){$("#categoryPalette").innerHTML=PALETTE.map(c=>`<button type="button" class="palette-dot ${c===categoryPickColor?"on":""}" style="--c:${c}" data-color="${c}" aria-label="選擇顏色"></button>`).join("");$$('#categoryPalette [data-color]').forEach(b=>b.addEventListener('click',()=>{categoryPickColor=b.dataset.color;renderCategoryPalette()}))}
 
-function openCycleThemeEditor() {
-  const week = currentWeek();
-  const cycle = currentCycle();
-  if (!week || !cycle) return;
-
-  openFormModal({
-    icon: "",
-    title: "本輪主題",
-    confirmText: "儲存",
-    cancelText: "取消",
-    body: `<label class="v2-form-field">本輪主題<input id="cycleThemeInput" maxlength="80" value="${escapeHtml(cycle.theme || "")}" placeholder="例如：CSS" /></label>`,
-    onConfirm: async () => {
-      const theme = document.getElementById("cycleThemeInput").value.trim();
-      if (!theme) throw new Error("本輪主題不可空白");
-      const updatedCycle = await api(`/cycles/${week.cycleNumber}/theme`, { method: "PATCH", body: { theme } });
-      applyCycleMutation(updatedCycle);
-    },
+function createRecurringTask(rule,week=CURRENT_WEEK){const id=Date.now()+Math.floor(Math.random()*999);const target=rule.frequency==="daily"?7:rule.timesPerWeek;const t=recurringTask(id,rule.title,rule.categoryId,rule.frequency,target,week);t.recurringRuleId=rule.id;t.goal=rule.goal||"";state.tasks.push(t);return id}
+function resizeRecurringTask(t,target){const old=t.occurrences||[],dates=weekDateMap(t.week);if(target>old.length){for(let i=old.length;i<target;i++)old.push(occurrence(`${t.id}-o${i+1}`,t.frequency==="daily"?dates[DAY_KEYS[i]]||"":""))}else if(target<old.length){const removable=[...old].reverse().filter(o=>!o.done);while(old.length>target&&removable.length){const r=removable.shift();old.splice(old.indexOf(r),1)}}t.targetCount=Math.max(target,old.filter(o=>o.done).length);t.occurrences=old;syncTaskDone(t)}
+function ensureRecurringTasksForWeek(week){
+  week=Number(week);if(isWeekArchived(week))return;
+  state.recurringRules.filter(r=>r.active).forEach(r=>{
+    const exists=state.tasks.some(t=>t.week===week&&t.recurringRuleId===r.id);
+    if(!exists)createRecurringTask(r,week);
   });
 }
-
-function openPlanningEntry() {
-  if (state.context?.canPlanNextCycle) return openNextCyclePlanner();
-  return openNextWeekPlanner();
+function syncRecurringTasks(){
+  ensureRecurringTasksForWeek(CURRENT_WEEK);
+  const max=highestUnlockedWeek();
+  for(let w=CURRENT_WEEK+1;w<=max;w++)ensureRecurringTasksForWeek(w);
+  if(state.selectedWeek&&isWeekUnlocked(state.selectedWeek))ensureRecurringTasksForWeek(state.selectedWeek);
 }
 
-function openNextCyclePlanner(draft = null) {
-  const context = state.context || {};
-  const current = context.currentWeek;
-  const existingCycle = context.nextCycle || null;
-  const inFinalWeekWindow = !!(current && Number(current.weekNumber) === 12 && context.canPlanNextCycle);
-  const inRestDraftWindow = !!(context.restPeriod && existingCycle);
-  if (!inFinalWeekWindow && !inRestDraftWindow) return;
+function dupExists(title){const wk=state.selectedWeek;return state.tasks.some(t=>t.status==="active"&&t.week===wk&&t.title.trim()===title)}function bindStaticEvents(){
+  $("#tankHint").addEventListener("click",e=>{
+    if(e.target.closest("[data-tank-adjust]")){state.tankReviewed[CURRENT_WEEK]=true;renderAll();switchPage("settings");setTimeout(()=>$("#directionBlock").scrollIntoView({behavior:"smooth",block:"center"}),350)}
+    else if(e.target.closest("[data-tank-later]")){state.tankReviewed[CURRENT_WEEK]=true;renderAll()}
+  });
+  $("#addDirectionBtn").addEventListener("click",()=>openDirectionDialog());
+  $("#directionForm").addEventListener("submit",e=>{
+    e.preventDefault();
+    const name=$("#directionNameInput").value.trim(),outcome=$("#directionOutcomeInput").value.trim(),target=Math.max(1,Math.min(999,Number($("#directionTargetInput").value)||1));
+    if(!name)return;
+    if(state.cycle.directions.some(d=>d.name===name&&d.id!==editingDirectionId))return showToast("方向的名字不能重複");
+    const list=state.cycle.directions.map(d=>({...d}));
+    if(editingDirectionId)Object.assign(list.find(d=>d.id===editingDirectionId),{name,outcome,target,color:directionPickColor});
+    else{if(list.length>=3)return;list.push({id:`d${Date.now()}`,name,outcome,target,color:directionPickColor})}
+    commitDirections(list);$("#directionDialog").close();renderAll();showToast("方向存好了");
+  });
+  $("#deleteDirectionBtn").addEventListener("click",()=>{if(state.cycle.directions.length<=1)return;commitDirections(state.cycle.directions.filter(d=>d.id!==editingDirectionId).map(d=>({...d})));$("#directionDialog").close();renderAll();showToast("方向刪除了，葉子都還在")});
+  $("#replayTutorialBtn").addEventListener("click",openTutorial);
 
+  $("#undoLastBtn").addEventListener("click",()=>{const t=state.tasks.find(x=>x.id===actionTaskId);$("#taskActionDialog").close();if(t)undoLastCompletion(t)});
+  $("#completionRecordBtn").addEventListener("click",()=>{const t=state.tasks.find(x=>x.id===actionTaskId);$("#taskActionDialog").close();openCompletionRecord(t)});
+  $("#closeCompletionRecord").addEventListener("click",()=>$("#completionRecordDialog").close());
 
-  const cycleNumber = existingCycle?.cycleNumber || ((state.cycles.length ? Math.max(...state.cycles.map((c) => Number(c.cycleNumber))) : 0) + 1);
-  const weekOne = existingCycle
-    ? state.weeks.find((week) => Number(week.cycleNumber) === Number(existingCycle.cycleNumber) && Number(week.weekNumber) === 1) || null
-    : null;
-  const existingTasks = existingCycle ? state.items.filter((item) =>
-    item.type === "task" &&
-    Number(item.scheduledCycleNumber || item.cycleNumber) === Number(existingCycle.cycleNumber) &&
-    Number(item.scheduledWeekNumber || item.weekNumber) === 1 &&
-    !["cancelled", "replanned"].includes(item.status)
-  ) : [];
-  const pendingTasks = Array.isArray(draft?.pendingTasks) ? draft.pendingTasks : [];
+  $("#tutNext").addEventListener("click",()=>{if(tutStep===1&&!tutValid())return;if(tutStep===3){tutApply=true;$("#tutorialDialog").close();return}tutStep++;renderTutorial()});
+  $("#tutBack").addEventListener("click",()=>{tutStep=Math.max(0,tutStep-1);renderTutorial()});
+  $("#tutSkip").addEventListener("click",()=>{tutApply=false;$("#tutorialDialog").close()});
+  $("#tutorialDialog").addEventListener("close",finishTutorial);
+  $("#dupCancel").addEventListener("click",()=>$("#dupDialog").close());
+  $("#dupConfirm").addEventListener("click",()=>{$("#dupDialog").close();dupAllowed=true;$("#quickAddForm").requestSubmit();dupAllowed=false});
 
-  const previousCycleNumber = Number(existingCycle?.cycleNumber || cycleNumber) - 1;
-  const previousWeek12 = state.weeks.find((week) =>
-    Number(week.cycleNumber) === previousCycleNumber && Number(week.weekNumber) === 12
-  ) || null;
-  const minStart = current?.weekEnd
-    ? addDaysYmd(current.weekEnd, 1)
-    : (previousWeek12?.weekEnd ? addDaysYmd(previousWeek12.weekEnd, 1) : todayYmd());
-  const startDate = draft?.startDate ?? existingCycle?.startDate ?? minStart;
-  const cycleTheme = draft?.cycleTheme ?? existingCycle?.theme ?? "";
-  const title = draft?.title ?? weekOne?.title ?? "";
-  const achievement = draft?.achievement ?? weekOne?.achievement ?? "";
-  const activeCategories = getActiveCategories();
-  const firstCat = activeCategories[0] || null;
+  $("#weekStrip").addEventListener("click",e=>{const b=e.target.closest("[data-week]");if(!b||b.disabled)return;state.selectedWeek=Number(b.dataset.week);state.selectedDate=defaultDateForWeek(state.selectedWeek);treeIntro=true;renderAll();b.scrollIntoView({inline:"center",block:"nearest",behavior:"smooth"})});
+  $("#dayStrip").addEventListener("click",e=>{const b=e.target.closest("[data-date]");if(!b)return;state.selectedDate=b.dataset.date;renderAll()});
+  $("#returnCurrentWeekBtn").addEventListener("click",()=>{state.selectedWeek=CURRENT_WEEK;state.selectedDate=currentWeekDefaultDate();treeIntro=true;renderAll()});
+  $("#footprintEntry").addEventListener("click",()=>openFootprint(state.selectedWeek));
+  $("#brandHome").addEventListener('click',e=>{e.preventDefault();switchPage('home')});
+  $$('[data-page-target]').forEach(b=>b.addEventListener('click',()=>switchPage(b.dataset.pageTarget)));
+  $$('[data-mode]').forEach(b=>b.addEventListener('click',()=>{state.mode=b.dataset.mode;if(state.mode==="day")state.selectedDate=defaultDateForWeek(state.selectedWeek);renderAll()}));
 
-  const existingRows = existingTasks.length ? existingTasks.map((item) => `
-    <div class="next-task-row">
-      <span>${escapeHtml(item.title)}</span>
-      <div class="next-task-actions">
-        <button class="text-btn" type="button" data-next-cycle-task-edit="${escapeHtml(item.id)}">編輯</button>
-        <button class="text-btn" type="button" data-next-cycle-task-remove="${escapeHtml(item.id)}">刪除</button>
-      </div>
-    </div>`).join("") : "";
-  const pendingRows = pendingTasks.length ? pendingTasks.map((item, index) => `
-    <div class="next-task-row">
-      <span>${escapeHtml(item.title)}</span>
-      <button class="text-btn" type="button" data-next-cycle-draft-remove="${index}">刪除</button>
-    </div>`).join("") : "";
-
-  els.modalRoot.innerHTML = `
-    <div class="tp-modal-overlay tp-modal-open">
-      <div class="tp-modal tp-modal-wide" role="dialog" aria-modal="true">
-        <div class="tp-modal-icon">✓</div>
-        <p class="tp-modal-body"><strong>Cycle ${cycleNumber}</strong><br>
-          <span style="color:var(--muted);font-size:12px;">先準備下一輪，不會提前結束現在的 Cycle；開始日期若有調整，會留下時間紀錄。</span>
-        </p>
-
-        <div class="v2-modal-form">
-          <label class="v2-form-field">開始日期<input id="nextCycleStart" type="date" min="${escapeHtml(minStart)}" value="${escapeHtml(startDate)}" /></label>
-          <label class="v2-form-field">本輪主題<input id="nextCycleTheme" maxlength="80" value="${escapeHtml(cycleTheme)}" placeholder="例如：JavaScript" /></label>
-          <label class="v2-form-field">Week 1 主題<input id="nextCycleWeekTheme" maxlength="80" value="${escapeHtml(title)}" /></label>
-          <label class="v2-form-field">Week 1 目標<textarea id="nextCycleWeekGoal" rows="3" maxlength="240">${escapeHtml(achievement)}</textarea></label>
-
-          <div class="next-task-list" id="nextCycleTaskList">
-            ${existingRows}${pendingRows || (!existingRows ? `<div class="tp-modal-preformatted">Week 1 還沒有先放進去的事情。</div>` : "")}
-          </div>
-
-          ${firstCat ? `
-          <div class="v2-modal-grid">
-            <label class="v2-form-field">想先加入的事情<input id="nextCycleTaskTitle" maxlength="120" placeholder="可以先留白" /></label>
-            <label class="v2-form-field">難度<select id="nextCycleTaskDifficulty">${difficultyOptionsHtml("適中")}</select></label>
-          </div>
-          <div class="v2-modal-grid">
-            <label class="v2-form-field">分類<select id="nextCycleTaskCategory">${categoryOptionsHtml(firstCat.id)}</select></label>
-            <label class="v2-form-field" id="nextCycleTaskSubWrap">子分類<select id="nextCycleTaskSubCategory"></select></label>
-          </div>
-          <button class="v2-soft-btn" id="nextCycleTaskAddBtn" type="button">加入</button>` : `
-          <div class="tp-modal-preformatted">如果要先加 Week 1 任務，可以先到 Settings 建立分類。</div>`}
-          <p class="v2-modal-error" id="nextCyclePlannerError" hidden></p>
-        </div>
-
-        <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" id="nextCyclePlannerCancel" type="button">取消</button>
-          <button class="tp-btn tp-btn-primary" id="nextCyclePlannerSave" type="button">儲存下一輪</button>
-        </div>
-      </div>
-    </div>`;
-
-  const collectDraft = () => ({
-    startDate: document.getElementById("nextCycleStart")?.value || startDate,
-    cycleTheme: document.getElementById("nextCycleTheme")?.value.trim() || "",
-    title: document.getElementById("nextCycleWeekTheme")?.value.trim() || "",
-    achievement: document.getElementById("nextCycleWeekGoal")?.value.trim() || "",
-    pendingTasks: pendingTasks.slice(),
+  $("#moreToggle").addEventListener('click',()=>{const box=$("#moreFields");box.hidden=!box.hidden;$("#moreToggle").textContent=box.hidden?"＋ 更多設定":"－ 收起更多設定"});
+  $("#quickRepeat").addEventListener('change',()=>{$("#quickRepeatFields").hidden=!$("#quickRepeat").checked});
+  $("#quickFrequency").addEventListener('change',()=>{$("#quickTimesWrap").hidden=$("#quickFrequency").value!=="weekly"});
+  $("#quickAddForm").addEventListener('submit',e=>{
+    e.preventDefault();
+    const title=$("#quickTitle").value.trim();if(!title)return showToast("先寫下一件想做的事");
+    const targetWeek=state.selectedWeek;
+    if(!isWeekUnlocked(targetWeek))return showToast("這一週還沒解鎖");
+    if(!guardWeekEditable(targetWeek))return;
+    if(!dupAllowed&&dupExists(title)){$("#dupTitle").textContent=title;$("#dupDialog").showModal();return}
+    const categoryId=$("#quickCategory").value,goal=$("#quickGoal").value;
+    if($("#quickRepeat").checked){
+      const frequency=$("#quickFrequency").value,times=frequency==="daily"?7:Number($("#quickTimes").value||2);
+      const rule={id:`rr-${Date.now()}`,title,frequency,timesPerWeek:times,categoryId,goal,active:true};
+      state.recurringRules.push(rule);justAdded=createRecurringTask(rule,targetWeek);
+    }else state.tasks.push({id:(justAdded=Date.now()),week:targetWeek,title,done:false,doneDate:"",focusDate:state.mode==="day"?state.selectedDate:"",goal,categoryId,status:"active",note:""});
+    state.footprintDeferred[targetWeek]=false;
+    e.currentTarget.reset();$("#quickRepeatFields").hidden=true;$("#moreFields").hidden=true;$("#moreToggle").textContent="＋ 更多設定";renderAll();showToast("已經放進這週了");
   });
 
-  document.getElementById("nextCyclePlannerCancel").onclick = closeModal;
+  $("#editTaskBtn").addEventListener('click',()=>{const t=state.tasks.find(x=>x.id===actionTaskId);$("#taskActionDialog").close();openEditTask(t)});
+  $("#replanTaskBtn").addEventListener('click',()=>{const t=state.tasks.find(x=>x.id===actionTaskId);$("#taskActionDialog").close();openReplanTask(t)});
+  $("#deleteTaskBtn").addEventListener('click',()=>{const t=state.tasks.find(x=>x.id===actionTaskId);if(!t||!guardWeekEditable(t.week))return;$("#taskActionDialog").close();$("#deleteTaskTitle").textContent=t.title;$("#deleteReason").value="";$("#deleteDialog").showModal()});
+  $("#deleteForm").addEventListener('submit',e=>{e.preventDefault();const t=state.tasks.find(x=>x.id===actionTaskId);const reason=$("#deleteReason").value.trim();if(!t||!reason||!guardWeekEditable(t.week))return;$("#deleteDialog").close();performDelete(t,reason)});
+  $("#editTaskForm").addEventListener('submit',e=>{
+    e.preventDefault();const t=state.tasks.find(x=>x.id===editingTaskId);if(!t||!guardWeekEditable(t.week))return;
+    const title=$("#editTaskTitle").value.trim();if(!title)return showToast("名稱不能空白");
+    t.title=title;t.goal=$("#editTaskGoal").value;t.categoryId=$("#editTaskCategory").value;const dateValue=$("#editTaskDate").value;
+    if(editingTaskOccurrenceId&&isRecurring(t)){const o=t.occurrences.find(x=>x.id===editingTaskOccurrenceId);if(o)o.date=dateValue}else if(!isRecurring(t))t.focusDate=dateValue;
+    if(isRecurring(t)&&t.frequency==="weekly")resizeRecurringTask(t,Number($("#editTaskTimes").value));
+    $("#editTaskDialog").close();renderAll();showToast("已更新");
+  });
+  $("#replanForm").addEventListener('submit',e=>{
+    e.preventDefault();const t=state.tasks.find(x=>x.id===actionTaskId);if(!t||!guardWeekEditable(t.week))return;
+    const reason=$("#replanReason").value.trim();if(!reason)return;
+    const from=t.week,to=Number($("#replanWeek").value),allowed=(to===from+1||isWeekUnlocked(to))&&!isWeekArchived(to);
+    if(!allowed)return showToast("這一週還沒開放");
+    state.events.push({type:"replan",taskId:t.id,title:t.title,fromWeek:from,toWeek:to,date:TODAY,reason});
+    t.week=to;t.focusDate="";state.footprintDeferred[from]=false;
+    if(isRecurring(t)&&t.frequency==="daily"){
+      const dates=weekDateMap(to);t.occurrences.forEach((o,i)=>{if(!o.done)o.date=dates[DAY_KEYS[i]]||""});
+    }else if(isRecurring(t))t.occurrences.forEach(o=>{if(!o.done)o.date=""});
+    $("#replanDialog").close();renderAll();showToast(`移到 Week ${to} 了`);
+  });
 
-  els.modalRoot.querySelectorAll("[data-next-cycle-task-edit]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const item = state.items.find((x) => x.id === button.dataset.nextCycleTaskEdit);
-      if (!item) return;
-      closeModal();
-      openEditTask(item);
+  $("#skipNoteBtn").addEventListener('click',()=>{const t=state.tasks.find(x=>x.id===pendingNoteTaskId);const week=t?.week;pendingNoteTaskId=null;pendingNoteOccId="";showToast("這片葉子已經留下來了");if(week)maybeOpenFootprint(week,420)});
+  $("#saveNoteBtn").addEventListener('click',()=>{const t=state.tasks.find(x=>x.id===pendingNoteTaskId);const week=t?.week;if(t){const v=$("#completionNoteInput").value.trim(),o=pendingNoteOccId&&t.occurrences?.find(x=>x.id===pendingNoteOccId);if(o)o.note=v;else t.note=v}pendingNoteTaskId=null;pendingNoteOccId="";saveState();showToast("完成紀錄存好了");if(week)maybeOpenFootprint(week,420)});
+
+  $("#completionNoteToggle").addEventListener('change',e=>{state.preferences.completionNote=e.target.checked;renderAll()});
+  $("#weeklyReflectionToggle").addEventListener('change',e=>{state.preferences.weeklyReflection=e.target.checked;renderAll()});
+  $("#lineToggle").addEventListener('change',e=>{state.preferences.lineEnabled=e.target.checked;renderAll()});
+  $("#lineTime").addEventListener('change',e=>{state.preferences.lineTime=e.target.value;renderAll()});
+
+  $("#addRecurringBtn").addEventListener('click',()=>openRecurringDialog());
+  $("#recurringFrequency").addEventListener('change',renderRecurringFields);
+  $("#recurringForm").addEventListener('submit',e=>{
+    e.preventDefault();const title=$("#recurringTitleInput").value.trim();if(!title)return showToast("先寫名稱");
+    const frequency=$("#recurringFrequency").value,times=frequency==="daily"?7:Number($("#recurringTimes").value||2),categoryId=$("#recurringCategory").value;
+    if(editingRecurringId){
+      const r=state.recurringRules.find(x=>x.id===editingRecurringId);Object.assign(r,{title,frequency,timesPerWeek:times,categoryId});
+      state.tasks.filter(t=>t.recurringRuleId===r.id&&!isWeekArchived(t.week)).forEach(t=>{
+        t.title=title;t.categoryId=categoryId;t.frequency=frequency;resizeRecurringTask(t,times);
+        if(frequency==="daily"){const dates=weekDateMap(t.week);t.occurrences.forEach((o,i)=>{if(!o.done)o.date=dates[DAY_KEYS[i]]||""})}
+      });
+    }else state.recurringRules.push({id:`rr-${Date.now()}`,title,frequency,timesPerWeek:times,categoryId,active:true});
+    $("#recurringDialog").close();renderAll();showToast("日常小事已更新");
+  });
+  $("#addCategoryBtn").addEventListener('click',()=>openCategoryDialog());
+  $("#categoryForm").addEventListener('submit',e=>{e.preventDefault();const name=$("#categoryNameInput").value.trim();if(!name)return showToast("先寫分類名稱");if(editingCategoryId)Object.assign(state.categories.find(x=>x.id===editingCategoryId),{name,color:categoryPickColor});else state.categories.push({id:`cat-${Date.now()}`,name,color:categoryPickColor});$("#categoryDialog").close();renderAll()});
+  $$('[data-close-dialog]').forEach(b=>b.addEventListener('click',()=>document.getElementById(b.dataset.closeDialog)?.close()));
+  $("#yearReviewBtn").addEventListener('click',openYearReview);$("#closeYearReview").addEventListener('click',()=>$("#yearReviewDialog").close());
+}
+
+function performDelete(t,reason){
+  if(!t||!guardWeekEditable(t.week))return;
+  const rows=$$(`#taskList [data-task-id="${t.id}"]`);
+  rows.forEach(r=>{r.style.height=r.offsetHeight+"px"});void document.body.offsetHeight;
+  rows.forEach(r=>r.classList.add("leaving"));
+  const inTree=t.week===treeWeek(),units=occurrenceDoneCount(t);
+  setTimeout(()=>{
+    if(inTree&&units>0){const keys=isRecurring(t)?t.occurrences.filter(o=>o.done).map(o=>`${t.id}:${o.id}`):[String(t.id)];keys.slice(0,7).forEach((k,i)=>queueFall(t.week,k,taskColor(t),i*90))}
+    state.events.push({type:"delete",taskId:t.id,title:t.title,week:t.week,date:TODAY,completedUnits:units,reason});t.status="deleted";
+    renderAll();showToast("已刪除，原因留在 History 裡");
+  },rows.length?300:0);
+}
+function restartEnter(p){p.classList.remove("entering");void p.offsetWidth;p.classList.add("entering");clearTimeout(p._t);p._t=setTimeout(()=>p.classList.remove("entering"),1500)}
+function switchPage(page){
+  const cur=$(".page.active");
+  if(cur&&cur.dataset.page===page){window.scrollTo({top:0,behavior:"smooth"});return}
+  $$('.page').forEach(p=>p.classList.toggle('active',p.dataset.page===page));$$('[data-page-target]').forEach(b=>b.classList.toggle('active',b.dataset.pageTarget===page));
+  window.scrollTo(0,0);
+  if(page==="home"){treeIntro=true;lastListKey=null;renderHome()}
+  restartEnter($(`.page[data-page="${page}"]`));
+}
+
+let tutStep=0,tutDraft=[],tutApply=false,tutDemoDone=false;
+function openTutorial(){
+  tutDraft=JSON.parse(JSON.stringify(state.cycle.directions));tutStep=0;tutApply=false;tutDemoDone=false;
+  $("#tutorialDialog").showModal();renderTutorial();
+}
+function tutPace(weekly){
+  const total=Math.round(weekly*12*.8),n=tutDraft.length;
+  if(n===1){tutDraft[0].target=total;return}
+  const first=Math.round(total*.625),rest=total-first,share=Math.floor(rest/(n-1));
+  tutDraft.forEach((d,i)=>d.target=i===0?first:(i===n-1?rest-share*(n-2):share));
+}
+function renderTutorial(){
+  const body=$("#tutBody");
+  $("#tutDots").innerHTML=[0,1,2,3].map(i=>`<i class="${i===tutStep?"on":""}"></i>`).join("");
+  $("#tutBack").hidden=tutStep===0;$("#tutNext").textContent=tutStep===3?"開始使用":"下一步";$("#tutSkip").hidden=tutStep===3;
+  if(tutStep===0){
+    body.innerHTML=`<div class="tut-pane"><svg class="tut-art" viewBox="0 0 160 120" aria-hidden="true"><ellipse cx="80" cy="106" rx="46" ry="8" fill="rgba(120,100,80,.18)"/><path class="tut-stem" d="M80 104C80 90 78 76 82 58" pathLength="1"/><path class="tut-leaf l1" d="M82 62C96 52 108 54 114 60C106 70 92 70 82 62Z"/><path class="tut-leaf l2" d="M81 76C68 66 56 68 50 74C58 84 72 84 81 76Z"/><circle class="tut-seed" cx="80" cy="102" r="6"/></svg><h3>歡迎來到 Tiny Progress</h3><p>每完成一件小事，就長一片葉子。<br>葉子慢慢多了，就是一棵屬於你的樹。</p></div>`;
+  }else if(tutStep===1){
+    body.innerHTML=`<div class="tut-pane"><h3>你想往哪裡走？</h3><p>先寫下 1 到 3 個大方向，之後隨時可以改。</p><div class="tut-dirs">${tutDraft.map((d,i)=>`<div class="tut-dir" style="--c:${d.color}"><i class="color-dot"></i><div><input data-tut-name="${i}" value="${esc(d.name)}" placeholder="方向名稱" maxlength="12"><input data-tut-outcome="${i}" value="${esc(d.outcome)}" placeholder="做到什麼算完成" maxlength="40"></div></div>`).join("")}</div>${tutDraft.length<3?`<button class="text-button" type="button" id="tutAddDir">＋ 再加一個方向</button>`:""}</div>`;
+    $$("[data-tut-name]").forEach(el=>el.addEventListener("input",()=>tutDraft[Number(el.dataset.tutName)].name=el.value));
+    $$("[data-tut-outcome]").forEach(el=>el.addEventListener("input",()=>tutDraft[Number(el.dataset.tutOutcome)].outcome=el.value));
+    $("#tutAddDir")?.addEventListener("click",()=>{tutDraft.push({id:`d${Date.now()}`,name:"",outcome:"",target:12,color:PALETTE[(tutDraft.length*3)%PALETTE.length]});renderTutorial()});
+  }else if(tutStep===2){
+    const total=tutDraft.reduce((n,d)=>n+d.target,0);
+    body.innerHTML=`<div class="tut-pane"><h3>水缸要裝多少葉子？</h3><p>每個方向有一個水缸，葉子越多，水越高。</p><div class="tut-pace">${[["輕",3],["穩",5],["積極",7]].map(([n,w])=>`<button type="button" class="reason-chip" data-pace="${w}">${n} · 一週約 ${w} 片</button>`).join("")}</div><div class="tut-goals">${tutDraft.map((d,i)=>`<div class="tut-goal" style="--c:${d.color}"><div class="tut-goal-head"><strong>${esc(d.name||"未命名")}</strong><div class="stepper"><button type="button" data-dec="${i}">−</button><input type="number" min="1" max="999" data-tut-target="${i}" value="${d.target}"><button type="button" data-inc="${i}">＋</button></div></div><div class="tank big"><div class="tank-fill" data-fill="${i}" style="width:0%"></div></div></div>`).join("")}</div><p class="tut-note" id="tutTotal">合計 ${total} 片，平均一週約 ${(total/12).toFixed(1)} 片</p></div>`;
+    const upd=()=>{const t=tutDraft.reduce((n,d)=>n+d.target,0);$("#tutTotal").textContent=`合計 ${t} 片，平均一週約 ${(t/12).toFixed(1)} 片`;$$("[data-tut-target]").forEach(el=>el.value=tutDraft[Number(el.dataset.tutTarget)].target);$$("[data-fill]").forEach(el=>el.style.width="45%")};
+    requestAnimationFrame(()=>requestAnimationFrame(()=>$$("[data-fill]").forEach(el=>el.style.width="45%")));
+    $$("[data-pace]").forEach(b=>b.addEventListener("click",()=>{tutPace(Number(b.dataset.pace));upd();$$("[data-fill]").forEach(el=>{el.style.width="12%";requestAnimationFrame(()=>requestAnimationFrame(()=>el.style.width="45%"))})}));
+    $$("[data-inc]").forEach(b=>b.addEventListener("click",()=>{const d=tutDraft[Number(b.dataset.inc)];d.target=Math.min(999,d.target+1);upd()}));
+    $$("[data-dec]").forEach(b=>b.addEventListener("click",()=>{const d=tutDraft[Number(b.dataset.dec)];d.target=Math.max(1,d.target-1);upd()}));
+    $$("[data-tut-target]").forEach(el=>el.addEventListener("change",()=>{tutDraft[Number(el.dataset.tutTarget)].target=Math.max(1,Math.min(999,Number(el.value)||1));upd()}));
+  }else{
+    const d=tutDraft[0];
+    body.innerHTML=`<div class="tut-pane"><h3>試著按一下</h3><p>這只是練習，不會留下任何紀錄。</p><div class="tut-demo"><div class="tank demo" style="--c:${d.color}"><div class="tank-fill" id="tutDemoFill" style="width:0%"></div><span class="tank-name">${esc(d.name)}</span><span class="tank-count" id="tutDemoCount">0 / ${d.target}</span></div><article class="task-row demo-row" style="--c:${d.color}"><button class="task-check" type="button" id="tutDemoCheck" aria-label="完成"></button><div class="task-main"><p class="task-title">按一下左邊的圈圈</p><div class="task-meta"><span>${esc(d.name)}</span></div></div></article></div><p class="tut-note" id="tutDemoMsg">做完一件事，就長一片葉子</p></div>`;
+    $("#tutDemoCheck").addEventListener("click",()=>{
+      if(tutDemoDone)return;tutDemoDone=true;
+      const btn=$("#tutDemoCheck"),r=btn.getBoundingClientRect(),tank=$("#tutDemoFill").parentElement.getBoundingClientRect();
+      btn.classList.add("popped");
+      const step=Math.max(8,Math.min(100,Math.round(100/d.target)));
+      const to={x:tank.left+Math.max(14,tank.width*step/100),y:tank.top+tank.height/2};
+      flyLeafSimple(r,to,d.color,()=>{
+        $("#tutDemoFill").style.width=step+"%";$("#tutDemoCount").textContent=`1 / ${d.target}`;
+        btn.textContent="✓";btn.closest(".task-row").classList.add("done");
+        sparkle(to.x,to.y,d.color,$("#tutorialDialog"));$("#tutDemoMsg").textContent="就是這樣，每一件小事都算數 🌿";
+      },$("#tutorialDialog"));
     });
-  });
-
-  els.modalRoot.querySelectorAll("[data-next-cycle-task-remove]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const id = button.dataset.nextCycleTaskRemove;
-      const item = state.items.find((x) => x.id === id);
-      const draftSnapshot = collectDraft();
-      const ok = await showConfirm({
-        icon: "",
-        title: "確定刪除這件草稿任務嗎？",
-        text: `「${item?.title || "這件任務"}」\n\n下一輪還沒開始，刪除後不會留下 History 紀錄。`,
-        confirmText: "刪除",
-        cancelText: "取消",
-        danger: true,
-      });
-      if (!ok) return openNextCyclePlanner(draftSnapshot);
-      try {
-        showLoading("刪除中…");
-        await api(`/items/${encodeURIComponent(id)}/draft`, { method: "DELETE" });
-        removeStateItem(id);
-        renderAll();
-        noteLocalMutation();
-        openNextCyclePlanner(draftSnapshot);
-      } catch (e) {
-        showAlert("刪除失敗", e.message || "草稿任務刪除失敗", "");
-      } finally {
-        hideLoading();
-      }
-    });
-  });
-
-  els.modalRoot.querySelectorAll("[data-next-cycle-draft-remove]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const nextDraft = collectDraft();
-      const index = Number(button.dataset.nextCycleDraftRemove);
-      const task = nextDraft.pendingTasks[index];
-      const ok = await showConfirm({
-        icon: "",
-        title: "確定刪除這件草稿任務嗎？",
-        text: `「${task?.title || "這件任務"}」\n\n這件事還沒儲存，刪除後不會留下紀錄。`,
-        confirmText: "刪除",
-        cancelText: "取消",
-        danger: true,
-      });
-      if (!ok) return openNextCyclePlanner(nextDraft);
-      nextDraft.pendingTasks.splice(index, 1);
-      openNextCyclePlanner(nextDraft);
-    });
-  });
-
-  if (firstCat) {
-    const cat = document.getElementById("nextCycleTaskCategory");
-    const sub = document.getElementById("nextCycleTaskSubCategory");
-    const subWrap = document.getElementById("nextCycleTaskSubWrap");
-    const refreshSubs = () => {
-      const subs = getSubcategories(cat.value);
-      subWrap.hidden = !subs.length;
-      sub.innerHTML = subs.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
-    };
-    cat.addEventListener("change", refreshSubs);
-    refreshSubs();
-
-    document.getElementById("nextCycleTaskAddBtn").onclick = async () => {
-      const taskTitle = document.getElementById("nextCycleTaskTitle").value.trim();
-      if (!taskTitle) return;
-
-      const nextDraft = collectDraft();
-      const newTask = {
-        title: taskTitle,
-        categoryId: cat.value,
-        subCategoryId: subWrap.hidden ? "" : sub.value,
-        difficulty: document.getElementById("nextCycleTaskDifficulty").value,
-      };
-
-      // 已經有下一個 Cycle（尤其休息日）時，「加入」就是立即寫入資料庫。
-      // 這樣重新整理、隔天回來、換裝置都還在，而且可以立刻編輯。
-      if (existingCycle) {
-        try {
-          showLoading("加入下一輪任務…");
-          const created = await api("/items", {
-            method: "POST",
-            body: {
-              type: "task",
-              ...newTask,
-              scheduledCycleNumber: Number(existingCycle.cycleNumber),
-              scheduledWeekNumber: 1,
-            },
-          });
-          upsertStateItem(created);
-          renderAll();
-          noteLocalMutation();
-          openNextCyclePlanner(nextDraft);
-        } catch (error) {
-          showAlert("加入失敗", error.message || "下一輪任務沒有成功儲存", "");
-        } finally {
-          hideLoading();
-        }
-        return;
-      }
-
-      // Week 12 尚未建立下一輪時，仍先暫存在畫面；按「儲存下一輪」建立 Cycle 後再一起寫入。
-      nextDraft.pendingTasks.push(newTask);
-      openNextCyclePlanner(nextDraft);
-    };
   }
-
-  document.getElementById("nextCyclePlannerSave").onclick = async () => {
-    const error = document.getElementById("nextCyclePlannerError");
-    error.hidden = true;
-    const finalDraft = collectDraft();
-    if (!finalDraft.startDate || !finalDraft.cycleTheme || !finalDraft.title || !finalDraft.achievement) {
-      error.textContent = "開始日期、本輪主題、Week 1 主題與目標都要填";
-      error.hidden = false;
-      return;
-    }
-    if (finalDraft.startDate < minStart) {
-      error.textContent = `開始日期要在目前 Cycle 結束後，也就是 ${formatDate(minStart)} 之後。`;
-      error.hidden = false;
-      return;
-    }
-
-    try {
-      showLoading("儲存下一輪…");
-      let targetCycleNumber = Number(existingCycle?.cycleNumber || 0);
-
-      if (!existingCycle) {
-        const created = await api("/cycles", {
-          method: "POST",
-          body: {
-            startDate: finalDraft.startDate,
-            theme: finalDraft.cycleTheme,
-            title: finalDraft.title,
-            achievement: finalDraft.achievement,
-          },
-        });
-        targetCycleNumber = Number(created?.cycleNumber || cycleNumber);
-      } else {
-        if (finalDraft.startDate !== String(existingCycle.startDate || "").slice(0, 10)) {
-          await api(`/cycles/${existingCycle.cycleNumber}/start-date`, {
-            method: "PATCH",
-            body: { startDate: finalDraft.startDate },
-          });
-        }
-        if (finalDraft.cycleTheme !== String(existingCycle.theme || "").trim()) {
-          await api(`/cycles/${existingCycle.cycleNumber}/theme`, {
-            method: "PATCH",
-            body: { theme: finalDraft.cycleTheme },
-          });
-        }
-        if (!weekOne || finalDraft.title !== String(weekOne.title || "").trim() || finalDraft.achievement !== String(weekOne.achievement || "").trim()) {
-          await api(`/weeks/${existingCycle.cycleNumber}/1/plan`, {
-            method: "PATCH",
-            body: { title: finalDraft.title, achievement: finalDraft.achievement },
-          });
-        }
-      }
-
-      for (const task of finalDraft.pendingTasks) {
-        await api("/items", {
-          method: "POST",
-          body: {
-            type: "task",
-            title: task.title,
-            categoryId: task.categoryId,
-            subCategoryId: task.subCategoryId,
-            difficulty: task.difficulty,
-            scheduledCycleNumber: targetCycleNumber,
-            scheduledWeekNumber: 1,
-          },
-        });
-      }
-
-      closeModal();
-      await loadCore({ quiet: true });
-      showAlert("下一輪已準備好", `Cycle ${targetCycleNumber} 會在 ${formatDate(finalDraft.startDate)} 開始。`, "");
-    } catch (e) {
-      error.textContent = e.message || "儲存下一輪失敗";
-      error.hidden = false;
-    } finally {
-      hideLoading();
-    }
-  };
 }
-
-function openNextWeekPlanner(draft = null) {
-  const next = state.context?.nextWeek;
-  if (!next || !state.context?.canPlanNextWeek) return;
-
-  const nextTasks = state.items.filter((item) =>
-    item.type === "task" &&
-    Number(item.scheduledCycleNumber || item.cycleNumber) === Number(next.cycleNumber) &&
-    Number(item.scheduledWeekNumber || item.weekNumber) === Number(next.weekNumber) &&
-    !["cancelled", "replanned"].includes(item.status)
-  );
-
-  const firstCat = getActiveCategories()[0];
-  if (!firstCat) return showAlert("還沒有分類", "先到 Settings 加入一個分類。", "");
-
-  const modal = `
-    <div class="tp-modal-overlay tp-modal-open">
-      <div class="tp-modal tp-modal-wide" role="dialog" aria-modal="true">
-        
-        <p class="tp-modal-body"><strong>Week ${next.weekNumber}</strong><br>
-        <span style="color:var(--muted);font-size:12px;">${formatDate(next.weekStart)} ～ ${formatDate(next.weekEnd)}</span></p>
-
-        <div class="v2-modal-form">
-          <label class="v2-form-field">本週主題<input id="nextWeekTheme" maxlength="80" value="${escapeHtml(draft?.title ?? next.title ?? "")}" /></label>
-          <label class="v2-form-field">本週目標<textarea id="nextWeekGoal" rows="3" maxlength="240">${escapeHtml(draft?.achievement ?? next.achievement ?? "")}</textarea></label>
-
-          <div class="next-task-list">
-            ${nextTasks.length ? nextTasks.map((item) => `
-              <div class="next-task-row">
-                <span>${escapeHtml(item.title)}</span>
-                <button class="text-btn" type="button" data-next-task-edit="${escapeHtml(item.id)}">編輯</button>
-              </div>`).join("") : `<div class="tp-modal-preformatted">目前還沒有先放進去的事情。</div>`}
-          </div>
-
-          <div class="v2-modal-grid">
-            <label class="v2-form-field">想先加入的事情<input id="nextTaskTitle" maxlength="120" placeholder="可以先留白" /></label>
-            <label class="v2-form-field">難度<select id="nextTaskDifficulty">${difficultyOptionsHtml("適中")}</select></label>
-          </div>
-          <div class="v2-modal-grid">
-            <label class="v2-form-field">分類<select id="nextTaskCategory">${categoryOptionsHtml(firstCat.id)}</select></label>
-            <label class="v2-form-field" id="nextTaskSubWrap">子分類<select id="nextTaskSubCategory"></select></label>
-          </div>
-          <button class="v2-soft-btn" id="nextTaskAddBtn" type="button">加入</button>
-          <p class="v2-modal-error" id="nextPlannerError" hidden></p>
-        </div>
-
-        <div class="tp-modal-actions">
-          <button class="tp-btn tp-btn-ghost" id="nextPlannerCancel" type="button">取消</button>
-          <button class="tp-btn tp-btn-primary" id="nextPlannerSave" type="button">儲存安排</button>
-        </div>
-      </div>
-    </div>`;
-
-  els.modalRoot.innerHTML = modal;
-
-  const cat = document.getElementById("nextTaskCategory");
-  const sub = document.getElementById("nextTaskSubCategory");
-  const subWrap = document.getElementById("nextTaskSubWrap");
-  const refreshSubs = () => {
-    const subs = getSubcategories(cat.value);
-    subWrap.hidden = !subs.length;
-    sub.innerHTML = subs.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join("");
-  };
-  cat.addEventListener("change", refreshSubs);
-  refreshSubs();
-
-  els.modalRoot.querySelectorAll("[data-next-task-edit]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const item = state.items.find((x) => x.id === button.dataset.nextTaskEdit);
-      if (!item) return;
-      closeModal();
-      openEditTask(item);
-    });
-  });
-
-  document.getElementById("nextPlannerCancel").onclick = closeModal;
-
-  document.getElementById("nextTaskAddBtn").onclick = async () => {
-    const error = document.getElementById("nextPlannerError");
-    error.hidden = true;
-    const title = document.getElementById("nextTaskTitle").value.trim();
-    if (!title) return;
-
-    try {
-      showLoading("加入中…");
-      const created = await api("/items", {
-        method: "POST",
-        body: {
-          type: "task",
-          title,
-          categoryId: cat.value,
-          subCategoryId: subWrap.hidden ? "" : sub.value,
-          difficulty: document.getElementById("nextTaskDifficulty").value,
-          scheduledCycleNumber: next.cycleNumber,
-          scheduledWeekNumber: next.weekNumber,
-        },
-      });
-      const plannerDraft = {
-        title: document.getElementById("nextWeekTheme")?.value.trim() || "",
-        achievement: document.getElementById("nextWeekGoal")?.value.trim() || "",
-      };
-      upsertStateItem(created);
-      renderAll();
-      noteLocalMutation();
-      openNextWeekPlanner(plannerDraft);
-    } catch (e) {
-      error.textContent = e.message || "加入失敗";
-      error.hidden = false;
-    } finally {
-      hideLoading();
-    }
-  };
-
-  document.getElementById("nextPlannerSave").onclick = async () => {
-    const error = document.getElementById("nextPlannerError");
-    error.hidden = true;
-    const title = document.getElementById("nextWeekTheme").value.trim();
-    const achievement = document.getElementById("nextWeekGoal").value.trim();
-    if (!title || !achievement) {
-      error.textContent = "本週主題與目標都要填";
-      error.hidden = false;
-      return;
-    }
-    try {
-      showLoading("儲存安排…");
-      const updatedWeek = await api(`/weeks/${next.cycleNumber}/${next.weekNumber}/plan`, {
-        method: "PATCH",
-        body: { title, achievement },
-      });
-      applyWeekMutation(updatedWeek);
-      closeModal();
-    } catch (e) {
-      error.textContent = e.message || "儲存失敗";
-      error.hidden = false;
-    } finally {
-      hideLoading();
-    }
-  };
+function flyLeafSimple(from,to,color,done,host=document.body){
+  const len=16,w=len*.36,el=document.createElement("div");el.className="flying-leaf";
+  el.innerHTML=`<svg viewBox="0 -${w} ${len} ${2*w}" width="${len}" height="${2*w}" style="top:${-w}px"><path d="${leafD(len)}" fill="${color}"/></svg>`;host.appendChild(el);
+  const sx=from.left+from.width/2,sy=from.top+from.height/2,N=16,frames=[],cx=(sx+to.x)/2,cy=Math.min(sy,to.y)-60;
+  for(let i=0;i<=5;i++){const u=i/5,e=1-Math.pow(1-u,3);frames.push({offset:.2*u,opacity:Math.min(1,u*3),transform:`translate(${sx}px,${sy-16*e}px) rotate(${-35-12*e}deg) scale(${.4+1.2*e})`})}
+  for(let i=1;i<=N;i++){const u=i/N,e=u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2,p0y=sy-16,x=(1-e)**2*sx+2*(1-e)*e*cx+e*e*to.x,y=(1-e)**2*p0y+2*(1-e)*e*cy+e*e*to.y;frames.push({offset:.2+.8*u,transform:`translate(${x}px,${y}px) rotate(${-47+e*80}deg) scale(${1.6-.6*e})`})}
+  const a=el.animate(frames,{duration:900,fill:"forwards"});let ended=false;const fin=()=>{if(ended)return;ended=true;el.remove();done()};a.onfinish=fin;a.oncancel=fin;
 }
-
-function openWeeklyReview(cycleNumber, weekNumber, draft = null) {
-  if (Number(cycleNumber) < 2) return;
-
-  let retro = getSubmittedReview(cycleNumber, weekNumber);
-  if (!retro && state.history) {
-    const cycleWrap = state.history.find((c) => Number(c.cycle?.cycleNumber) === Number(cycleNumber));
-    retro = cycleWrap?.weeks?.find((w) => Number(w.week?.weekNumber) === Number(weekNumber))?.retrospective || null;
-    if (retro && !retro.submittedAt) retro = null;
+function finishTutorial(){
+  if(tutApply){
+    const list=tutDraft.map(d=>({...d,name:d.name.trim(),outcome:d.outcome.trim()}));
+    commitDirections(list);
   }
-
-  if (retro?.submittedAt) {
-    els.modalRoot.innerHTML = `
-      <div class="tp-modal-overlay tp-modal-open">
-        <div class="tp-modal tp-modal-wide" role="dialog" aria-modal="true">
-          <div class="tp-modal-icon">✓</div>
-          <p class="tp-modal-body"><strong>Weekly Review</strong><br><span style="color:var(--muted);font-size:12px;">Cycle ${cycleNumber} · Week ${weekNumber}</span></p>
-          <div class="v2-modal-form">
-            ${[
-              ["1. 這週做得最好的地方是什麼？", retro.q1],
-              ["2. 這週最大的卡點是什麼？", retro.q2],
-              ["3. 有沒有低估工作量，或排得太大的任務？", retro.q3],
-              ["4. 下週最需要調整什麼？", retro.q4],
-            ].map(([q, a]) => `<div class="tp-modal-preformatted"><strong>${escapeHtml(q)}</strong><br>${escapeHtml(a || "—")}</div>`).join("")}
-          </div>
-          <div class="tp-modal-actions"><button class="tp-btn tp-btn-primary" id="reviewViewClose" type="button">關閉</button></div>
-        </div>
-      </div>`;
-    document.getElementById("reviewViewClose").onclick = closeModal;
-    return;
-  }
-
-  const values = draft || { q1: "", q2: "", q3: "", q4: "" };
-  openFormModal({
-    icon: "",
-    title: `Weekly Review · Week ${weekNumber}`,
-    confirmText: "送出",
-    cancelText: "取消",
-    wide: true,
-    body: `
-      <label class="v2-form-field">1. 這週做得最好的地方是什麼？<textarea id="retroQ1" rows="3">${escapeHtml(values.q1 || "")}</textarea></label>
-      <label class="v2-form-field">2. 這週最大的卡點是什麼？<textarea id="retroQ2" rows="3">${escapeHtml(values.q2 || "")}</textarea></label>
-      <label class="v2-form-field">3. 有沒有低估工作量，或排得太大的任務？<textarea id="retroQ3" rows="3">${escapeHtml(values.q3 || "")}</textarea></label>
-      <label class="v2-form-field">4. 下週最需要調整什麼？<textarea id="retroQ4" rows="3">${escapeHtml(values.q4 || "")}</textarea></label>`,
-    onConfirm: async () => {
-      const answers = {
-        q1: document.getElementById("retroQ1").value.trim(),
-        q2: document.getElementById("retroQ2").value.trim(),
-        q3: document.getElementById("retroQ3").value.trim(),
-        q4: document.getElementById("retroQ4").value.trim(),
-      };
-      if (!answers.q1 || !answers.q2 || !answers.q3 || !answers.q4) {
-        throw new Error("四個問題都寫完後再送出");
-      }
-
-      closeModal();
-      const ok = await showConfirm({
-        icon: "",
-        title: "確定送出這週的 Review？",
-        text: "送出後就不能再修改，可以先確認一下內容。",
-        confirmText: "確定送出",
-        cancelText: "取消",
-      });
-
-      if (!ok) {
-        openWeeklyReview(cycleNumber, weekNumber, answers);
-        return false;
-      }
-
-      showLoading("留下這週的回顧…");
-      try {
-        const submitted = await api("/retrospectives", {
-          method: "POST",
-          body: { cycleNumber, weekNumber, ...answers },
-        });
-        const normalized = submitted?.result || submitted;
-        state.retrospectives = (state.retrospectives || []).filter((r) =>
-          !(Number(r.cycleNumber) === Number(cycleNumber) && Number(r.weekNumber) === Number(weekNumber))
-        );
-        if (normalized) state.retrospectives.push(normalized);
-        if (state.currentPage === "history") await loadHistory();
-        else renderWeeklyReview();
-        return true;
-      } catch (error) {
-        showAlert("送出失敗", error.message, "");
-        return false;
-      } finally {
-        hideLoading();
-      }
-    },
-  });
+  state.onboarded=true;renderAll();
 }
-
-function bindGlobalEvents() {
-  els.navButtons.forEach((button) => button.addEventListener("click", () => switchPage(button.dataset.page)));
-  els.taskCategory.addEventListener("change", () => updateSubcategorySelect(els.taskSubCategory, els.taskCategory.value));
-  els.addTaskForm.addEventListener("submit", addTask);
-  els.toggleAddTaskBtn.addEventListener("click", () => {
-    els.addTaskForm.hidden = !els.addTaskForm.hidden;
-    els.toggleAddTaskBtn.textContent = els.addTaskForm.hidden ? "＋ 加入" : "收起";
-    if (!els.addTaskForm.hidden) setTimeout(() => els.taskInput.focus(), 50);
-  });
-  els.weekSetupForm.addEventListener("submit", saveWeekSetup);
-  els.editWeekPlanBtn.addEventListener("click", openWeekPlanEditor);
-  els.editCycleThemeBtn.addEventListener("click", openCycleThemeEditor);
-  els.postponeWeekBtn.addEventListener("click", openPostponeWeek);
-  els.nextWeekPlanBtn.addEventListener("click", openPlanningEntry);
-  els.weeklyReviewBtn.addEventListener("click", () => {
-    const week = currentWeek();
-    if (week) openWeeklyReview(week.cycleNumber, week.weekNumber);
-  });
-  els.showAllOverdueBtn.addEventListener("click", () => { state.showAllOverdue = !state.showAllOverdue; renderOverdue(); });
-  els.showAllRescheduledBtn.addEventListener("click", () => { state.showAllRescheduled = !state.showAllRescheduled; renderRescheduled(); });
-  els.refreshHistoryBtn.addEventListener("click", loadHistory);
-  els.addCategoryBtn.addEventListener("click", () => openAddCategory("category", ""));
-  els.toggleInactiveBtn.addEventListener("click", () => { state.showInactiveCategories = !state.showInactiveCategories; renderSettings(); });
-  els.replayTourBtn.addEventListener("click", () => startTour(true));
-  els.changeCycleStartBtn.addEventListener("click", () => openNextCyclePlanner());
-  els.openReviewBtn.addEventListener("click", () => openReview(Number(state.context.completedCycleNumber), true));
-  els.skipCelebrationBtn.addEventListener("click", closeCelebrationAndReview);
-  els.closeSheetBtn.addEventListener("click", closeBottomSheet);
-  els.bottomSheet.addEventListener("click", (event) => { if (event.target === els.bottomSheet) closeBottomSheet(); });
-  els.tourSkipBtn.addEventListener("click", finishTour);
-  els.tourNextBtn.addEventListener("click", () => {
-    if (state.tourIndex >= TOUR_STEPS.length - 1) return finishTour();
-    state.tourIndex += 1;
-    renderTourStep();
-  });
-  document.addEventListener("click", (event) => {
-    if (!event.target.closest(".v2-task-menu") && !event.target.closest("[data-more-id]")) closeTaskMenu();
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      closeTaskMenu();
-      closeBottomSheet();
-      closeModal();
-      if (!els.tourPopover.hidden) finishTour();
-    }
-  });
-
-  // 從 LINE、另一台裝置或別的分頁回來時，低頻率靜默校正一次。
-  // 不顯示 loading，也不阻塞目前操作。
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) schedulePassiveCoreSync();
-  });
-  window.addEventListener("focus", schedulePassiveCoreSync);
+function tutValid(){
+  const names=tutDraft.map(d=>d.name.trim());
+  if(names.some(n=>!n)){showToast("每個方向都要有名字");return false}
+  if(new Set(names).size!==names.length){showToast("方向的名字不能重複");return false}
+  return true;
 }
+function formatShortDate(iso){const [,m,d]=iso.split('-');return `${Number(m)}/${Number(d)}`}
+function showToast(msg){const t=$("#toast");t.textContent=msg;t.classList.add('show');clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>t.classList.remove('show'),1800)}
+function openYearReview(){const currentExtra=isWeekArchived(CURRENT_WEEK)?0:currentLeafRecords(CURRENT_WEEK).length;const completed=state.archivedWeeks.reduce((n,w)=>n+w.completed.length,0)+currentExtra;const replans=state.archivedWeeks.reduce((n,w)=>n+w.replanned.length,0)+state.events.filter(e=>e.type==="replan").length;$("#yearReviewText").textContent="每一週的樹大小不同，葉子也不同。回頭看時，這些就是你真的完成過的小進度。";$("#yearStats").innerHTML=`<div><strong>${completed}</strong><span>片葉子</span></div><div><strong>${CURRENT_WEEK}</strong><span>週走過</span></div><div><strong>${replans}</strong><span>次移到其他週</span></div>`;$("#yearReviewDialog").showModal()}
 
-async function init() {
-  cacheElements();
-  bindGlobalEvents();
-  await loadCore();
-  if (!localStorage.getItem("tp-star-tour-seen")) setTimeout(() => startTour(false), 350);
-}
-
-init();
+bindStaticEvents();renderAll();restartEnter($(".page.active"));if(!state.onboarded)setTimeout(openTutorial,500);

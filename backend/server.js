@@ -14,8 +14,6 @@ const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 // 例如：https://你的網站網址
 const TINY_PROGRESS_WEB_URL = "https://micole-hub.github.io/tiny-progress/";
 
-const pendingActions = new Map();
-const PENDING_ACTION_TTL_MS = 10 * 60 * 1000;
 
 // Queue retry 改由 Render 排程，避免 Google Apps Script time trigger 偶發失敗寄信。
 // 正常 LINE 即時流程完全不走這個 timer，所以不會拖慢一般回覆。
@@ -25,12 +23,6 @@ const QUEUE_RETRY_TIMEOUT_MS = Math.max(10 * 1000, Number(process.env.QUEUE_RETR
 let queueRetryInFlight = false;
 let legacyGasRetryTriggerDisabled = false;
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, val] of pendingActions.entries()) {
-    if (now - val.createdAt > PENDING_ACTION_TTL_MS) pendingActions.delete(key);
-  }
-}, 5 * 60 * 1000);
 
 // 保留做 LINE 卡片排序與預設顯示，不再當成分類白名單。
 const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
@@ -46,6 +38,42 @@ if (!GOOGLE_SHEETS_API_SECRET) throw new Error("缺少環境變數 GOOGLE_SHEETS
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+
+const TP_POSTBACK_PREFIX = "__TP_POSTBACK__:";
+const TP_LINE_PENDING_TTL_SECONDS = 10 * 60;
+
+function getDisplayLabel(label) {
+  if (label === "任務") return "任務";
+  if (label === "完成標準" || label === "標準") return "完成標準";
+  return String(label || "內容");
+}
+
+async function getCurrentWeekNumberFromGoogleSheets() {
+  const context = await fetchWeekContextFromGoogleSheets();
+  if (!context.currentWeek) throw new Error("目前不在進行中的 Week");
+  return Number(context.currentWeek.weekNumber);
+}
+
+function getLineSourceKey(event) {
+  const source = (event && event.source) || {};
+  return String(source.userId || source.groupId || source.roomId || "line-unknown").trim();
+}
+
+function buildTpPostbackData(action, params = {}) {
+  const query = new URLSearchParams();
+  query.set("action", action);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  }
+  return query.toString();
+}
+
+function parseTpPostbackData(raw) {
+  const query = new URLSearchParams(String(raw || ""));
+  const data = {};
+  for (const [key, value] of query.entries()) data[key] = value;
+  return data;
+}
 
 function normalizeCategory(value) {
   return String(value || "").trim() || DEFAULT_CATEGORY;
@@ -104,6 +132,11 @@ function normalizeItem(item) {
     cancelReason: safe.cancelReason || "",
     cancelNote: safe.cancelNote || "",
     replannedAt: safe.replannedAt || "",
+    recurringRuleId: String(safe.recurringRuleId || "").trim(),
+    frequency: String(safe.frequency || "").trim(),
+    timesPerWeek: Number(safe.timesPerWeek || 0),
+    occurrences: Array.isArray(safe.occurrences) ? safe.occurrences : [],
+    completionNote: String(safe.completionNote || "").trim(),
     createdAt: safe.createdAt || "",
     updatedAt: safe.updatedAt || "",
   };
@@ -237,6 +270,7 @@ function normalizeWeekContextPayload(data = {}) {
     previousWeek: data.previousWeek || null,
     currentWeek: data.currentWeek || null,
     nextWeek: data.nextWeek || null,
+    maxPlannableWeek: Number(data.maxPlannableWeek || ((data.currentWeek || {}).weekNumber || 0)) || null,
     canPlanNextWeek: data.canPlanNextWeek === true,
     canPlanNextCycle: data.canPlanNextCycle === true,
     restPeriod: data.restPeriod === true,
@@ -354,10 +388,37 @@ async function getTaskBoardForLine() {
     tasks: sortTasksByCategory(items.filter((item) => item.type === "task")),
     standards: items.filter((item) => item.type === "standard"),
   };
+
+}
+
+async function getTaskContextById(id) {
+  const core = await fetchCoreFromGoogleSheets();
+  const task = core.items.find((item) => item.type === "task" && item.id === String(id || "")) || null;
+  return { core, task, currentWeek: core.context.currentWeek || null };
+}
+
+function getTaskDoneCount(task) {
+  if (!task) return 0;
+  if (task.frequency) return (task.occurrences || []).filter((o) => o && o.done).length;
+  return task.done ? 1 : 0;
+}
+
+function getTaskTargetCount(task) {
+  if (!task) return 1;
+  if (task.frequency === "daily") return 7;
+  if (task.frequency === "weekly") return Math.max(1, Number(task.timesPerWeek || 1));
+  return 1;
+}
+
+function getRecurringMetaText(task) {
+  if (!task || !task.frequency) return "";
+  const done = getTaskDoneCount(task);
+  const target = getTaskTargetCount(task);
+  return task.frequency === "daily" ? `每天 · ${done}/${target}` : `每週 ${target} 次 · ${done}/${target}`;
 }
 
 function getLineCommandHintText() {
-  return "需要操作說明請輸入：說明";
+  return "主要操作請直接點卡片按鈕";
 }
 
 function getTaskMetaText(task, includeDifficulty = true) {
@@ -454,40 +515,6 @@ function formatTaskBoardForLine({ currentWeek, tasks, standards }) {
   ].join("\n");
 }
 
-function formatTasksByDifficultyForLine(tasks, difficulty) {
-  const matchedTasks = tasks
-    .map((task, index) => ({ task, originalNumber: index + 1 }))
-    .filter((entry) => normalizeDifficulty(entry.task.difficulty) === difficulty);
-
-  if (matchedTasks.length === 0) {
-    return [
-      `📌 本週${difficulty}任務`,
-      "",
-      `目前沒有${difficulty}任務。`,
-      "",
-      "需要完整清單請輸入：清單",
-    ].join("\n");
-  }
-
-  const lines = matchedTasks.map(function (entry) {
-    const checkbox = entry.task.done ? "☑" : "☐";
-    return `${entry.originalNumber}. ${checkbox} ${entry.task.title}｜${getTaskMetaText(entry.task, false)}`;
-  });
-
-  const firstUnfinishedEntry = matchedTasks.find((entry) => !entry.task.done);
-  const commandHint = firstUnfinishedEntry ? `可直接輸入：完成任務${firstUnfinishedEntry.originalNumber}` : "這一區都完成了";
-
-  return [
-    `📌 本週${difficulty}任務`,
-    "",
-    ...lines,
-    "",
-    "以上編號沿用完整清單。",
-    commandHint,
-    "",
-    "需要完整清單請輸入：清單",
-  ].join("\n");
-}
 
 
 const FLEX_COLORS = {
@@ -503,25 +530,13 @@ const FLEX_COLORS = {
   brandText: "#566A55",
 };
 
-// 8 張主要 LINE 卡片各自的品牌框色。
-// 只有外框／主要進度色依卡片功能不同；分類與子分類色仍由 LINE_TAG_PALETTE 決定。
+// LINE 固定 5 張主卡：3 張日常操作卡由 server.js 產生，2 張主動推播由 Code.gs 產生。
+// server.js 這裡只保留日常的 3 張，避免再為難度、攻略額外長出新卡片。
 const CARD_ACCENTS = {
-  allList: "#93B9D1",    // ① 本週清單：柔霧藍
-  draw: "#6EB7B0",       // ② 抽一件：青綠
-  easy: "#D6C96F",       // ③ 簡單任務：奶油黃
-  medium: "#E9A276",     // ④ 適中任務：杏桃橘
-  hard: "#C97572",       // ⑤ 困難任務：柔霧磚紅
-  guide: "#9B806B",      // ⑥ 攻略：奶茶棕
-  monday: "#7F93C8",     // ⑦ 週一小卡：霧靛藍（server 保留對照，實際推播在 Code.gs）
-  sunday: "#C9A35F",     // ⑧ 週日回顧：柔金（server 保留對照，實際推播在 Code.gs）
+  allList: "#93B9D1",    // ① 本週清單
+  draw: "#6EB7B0",       // ② 抽一件
+  action: "#9B806B",     // ③ 事情操作
 };
-
-function getDifficultyCardAccent(difficulty) {
-  const value = normalizeDifficulty(difficulty);
-  if (value === "簡單") return CARD_ACCENTS.easy;
-  if (value === "困難") return CARD_ACCENTS.hard;
-  return CARD_ACCENTS.medium;
-}
 
 const LINE_TAG_PALETTE = [
   { bg: "#E6F0E4", text: "#56705A", border: "#BDD5BC", accent: "#87AA88" },
@@ -559,51 +574,6 @@ const LINE_TAG_COLOR_FAMILIES = [
   "green", "rose", "blue", "orange", "purple", "teal",
   "yellow", "green", "orange", "blue", "green", "rose",
 ];
-
-function getSubCategoryFlexStyle(subCategory, valueKey, parentKey) {
-  const label = getLineSubCategoryLabel(subCategory) || "未分類";
-  let index = stableLineTagIndex(valueKey || label, "subcategory");
-  const parentIndex = stableLineTagIndex(parentKey || "parent", "category");
-
-  // 主分類與次分類都沿用 script.js 的 12 色 palette，
-  // 但 LINE 卡片額外避開「同色系」，避免兩顆標籤看起來像同一種顏色。
-  let guard = 0;
-  while (
-    (index === parentIndex || LINE_TAG_COLOR_FAMILIES[index] === LINE_TAG_COLOR_FAMILIES[parentIndex]) &&
-    guard < LINE_TAG_PALETTE.length
-  ) {
-    index = (index + 1) % LINE_TAG_PALETTE.length;
-    guard += 1;
-  }
-
-  const style = LINE_TAG_PALETTE[index];
-  return { backgroundColor: style.bg, textColor: style.text, borderColor: style.border, accentColor: style.accent };
-}
-
-function getDifficultyFlexStyle(difficulty) {
-  const normalizedDifficulty = normalizeDifficulty(difficulty);
-
-  if (normalizedDifficulty === "簡單") {
-    return { backgroundColor: "#FBF5EA", textColor: "#6F7D62", borderColor: "#DED3C4", accentColor: "#7EAB67" };
-  }
-
-  if (normalizedDifficulty === "適中") {
-    return { backgroundColor: "#FBF5EA", textColor: "#8A6B35", borderColor: "#DED3C4", accentColor: "#D5A751" };
-  }
-
-  return { backgroundColor: "#FBF5EA", textColor: "#9A5A55", borderColor: "#DED3C4", accentColor: "#C97769" };
-}
-
-
-
-function getDifficultyFooterCopy(difficulty, isCompleted) {
-  const normalizedDifficulty = normalizeDifficulty(difficulty);
-
-  if (normalizedDifficulty === "簡單") return isCompleted ? "這件完成了。" : "可以先從這件開始。";
-  if (normalizedDifficulty === "適中") return isCompleted ? "這件完成了，已經留下進度。" : "照自己的速度往前就好。";
-  return isCompleted ? "這件完成了，進度又往前一點。" : "需要的話，可以先拆成更小的步驟。";
-}
-
 
 function buildCuteSectionLabel(emoji, text, color, iconColor) {
   const contents = [];
@@ -682,72 +652,6 @@ function buildCategoryFlexTag(category, options = {}) {
     paddingEnd: "9px",
   });
 }
-
-// ── 子分類標籤：未分類回傳 null，呼叫端需判斷後才放入 contents ──
-function buildSubCategoryFlexTag(subCategory, options = {}) {
-  const label = String(subCategory || "").trim();
-  if (!label || label === EMPTY_SUBCATEGORY) return null;
-
-  const style = getSubCategoryFlexStyle(subCategory, options.valueKey, options.parentKey);
-
-  // 次分類保留較輕字重，但使用自己 palette 的柔色底，
-  // 讓它和主分類一眼看得出是兩種不同標籤。
-  return buildFlexTag(label, style.backgroundColor, style.textColor, {
-    width: options.width,
-    cornerRadius: "999px",
-    size: "xxs",
-    weight: "regular",
-    borderColor: style.borderColor,
-    paddingTop: "3px",
-    paddingBottom: "3px",
-    paddingStart: "8px",
-    paddingEnd: "8px",
-  });
-}
-
-function getSubCategoryFlexTagWidth(subCategory) {
-  if (subCategory === "W3Schools") return "76px";
-  if (subCategory === "freeCodeCamp") return "86px";
-  if (subCategory === "Vibe Coding") return "80px";
-  return "66px";
-}
-
-function buildDifficultyFlexTag(difficulty, options = {}) {
-  const style = getDifficultyFlexStyle(difficulty);
-
-  // 難度 = 第三層資訊：只留色點 + 文字，不再做成第三顆膠囊標籤。
-  return {
-    type: "box",
-    layout: "horizontal",
-    flex: 0,
-    width: options.width || "52px",
-    spacing: "xs",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    contents: [
-      {
-        type: "box",
-        layout: "vertical",
-        width: "6px",
-        height: "6px",
-        backgroundColor: style.accentColor,
-        cornerRadius: "999px",
-        contents: [],
-      },
-      {
-        type: "text",
-        text: difficulty,
-        size: "xxs",
-        weight: "bold",
-        color: style.textColor,
-        align: "end",
-        flex: 0,
-        maxLines: 1,
-      },
-    ],
-  };
-}
-
 
 function formatLineShortDate(value) {
   const text = String(value || "").trim();
@@ -972,76 +876,39 @@ function buildListProgressBlock(doneCount, totalCount, color) {
   };
 }
 
-function buildTaskTitleLine({ task, prefix = "", showDifficulty = true, size = "md", difficultyWidth = "58px" }) {
-  const difficulty = normalizeDifficulty(task.difficulty);
+function buildTaskTitleLine({ task, prefix = "", size = "md" }) {
   const title = String(task.title || "").trim() || "未命名任務";
   return {
-    type: "box",
-    layout: "horizontal",
-    spacing: "xs",
-    alignItems: "center",
-    contents: [
-      {
-        type: "text",
-        text: `${prefix}${title}`,
-        size,
-        color: task.done ? "#8D9589" : FLEX_COLORS.darkGreen,
-        wrap: false,
-        maxLines: 1,
-        weight: "regular",
-        flex: 1,
-      },
-      ...(showDifficulty ? [buildDifficultyFlexTag(difficulty, { width: difficultyWidth })] : []),
-    ],
+    type: "text",
+    text: `${prefix}${title}`,
+    size,
+    color: task.done ? "#8D9589" : FLEX_COLORS.darkGreen,
+    wrap: false,
+    maxLines: 1,
+    weight: "regular",
   };
 }
 
-
-function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, showSubCategory = true }) {
+function buildTaskFlexRow({ task, taskNumber }) {
   const checkbox = task.done ? "✓ " : "";
   const category = normalizeCategory(task.category);
-  const tagContents = [];
-
-  // 第一個標籤：主題分類。完整保留，例如「前端」或「程式學習」。
-  if (showCategory) {
-    tagContents.push(
-      buildCategoryFlexTag(category, {
-        // 不固定寬度，讓分類名稱完整顯示。
-        valueKey: task.categoryId || category,
-      })
-    );
-  }
-
-  // 第二個標籤：次分類。所有主分類都可以有次分類，不能只限制「程式學習」。
-  // 這正是前端 script.js 會顯示「前端 / 練習 / 簡單」三層資訊的原因。
-  if (showSubCategory) {
-    const subCategory = normalizeSubCategory(task.subCategory, category);
-    const subTag = buildSubCategoryFlexTag(subCategory, {
-      valueKey: task.subCategoryId || subCategory,
-      parentKey: task.categoryId || category,
-    });
-    if (subTag) tagContents.push(subTag);
-  }
-
   const rowContents = [
     buildTaskTitleLine({
       task,
-      prefix: `${taskNumber}. ${checkbox}`,
-      showDifficulty,
+      prefix: `${taskNumber === "" || taskNumber === undefined || taskNumber === null ? "" : `${taskNumber}. `}${checkbox}`,
       size: "md",
-      difficultyWidth: "52px",
     }),
-  ];
-
-  if (tagContents.length > 0) {
-    // 任務第二行：分類＋子分類。不要和難度擠在第一行。
-    rowContents.push({
+    {
       type: "box",
       layout: "horizontal",
-      spacing: "lg",
       margin: "xs",
-      contents: tagContents,
-    });
+      contents: [buildCategoryFlexTag(category, { valueKey: task.categoryId || category })],
+    },
+  ];
+
+  const recurringMeta = getRecurringMetaText(task);
+  if (recurringMeta) {
+    rowContents.push({ type: "text", text: recurringMeta, size: "xs", color: FLEX_COLORS.mutedText, margin: "xs", wrap: false, maxLines: 1 });
   }
 
   return {
@@ -1059,7 +926,20 @@ function buildTaskFlexRow({ task, taskNumber, showDifficulty, showCategory, show
 // 第一行 = 任務名稱＋難度；第二行 = 主題分類＋次分類。
 // 難度雖在第一行，但整張任務仍完整保留三層資訊。
 function buildListTaskFlexRow({ task, taskNumber }) {
-  return buildTaskFlexRow({ task, taskNumber, showDifficulty: true, showCategory: true, showSubCategory: true });
+  const row = buildTaskFlexRow({ task, taskNumber });
+  row.contents.push({
+    type: "box",
+    layout: "horizontal",
+    justifyContent: "flex-end",
+    margin: "xs",
+    contents: [
+      buildSoftActionPill("操作", linePostbackAction("操作", buildTpPostbackData("task_action", { id: task.id })), {
+        flex: 0,
+        width: "62px",
+      }),
+    ],
+  });
+  return row;
 }
 
 
@@ -1074,69 +954,108 @@ function buildListTaskRows(tasks) {
   return rows;
 }
 
-function getTinyProgressWebUrl() {
-  const url = String(TINY_PROGRESS_WEB_URL || "").trim();
-  if (!/^https?:\/\//i.test(url)) return "";
-  return url;
+function linePostbackAction(label, data, options = {}) {
+  const action = { type: "postback", label, data };
+  if (options.displayText) action.displayText = options.displayText;
+  if (options.inputOption) action.inputOption = options.inputOption;
+  if (options.fillInText) action.fillInText = options.fillInText;
+  return action;
 }
 
-function buildTinyProgressWebButton() {
-  const url = getTinyProgressWebUrl();
-  if (!url) return null;
+function buildQuickReplyItem(action) {
+  return { type: "action", action };
+}
 
+function buildSoftActionPill(label, action, options = {}) {
+  const box = {
+    type: "box",
+    layout: "vertical",
+    flex: options.flex === undefined ? 1 : options.flex,
+    backgroundColor: options.backgroundColor || FLEX_COLORS.brandSoft,
+    borderColor: options.borderColor || FLEX_COLORS.brandBorder,
+    borderWidth: "1px",
+    cornerRadius: "999px",
+    paddingTop: "8px",
+    paddingBottom: "8px",
+    paddingStart: "10px",
+    paddingEnd: "10px",
+    justifyContent: "center",
+    contents: [
+      {
+        type: "text",
+        text: label,
+        size: "xs",
+        weight: options.weight || "bold",
+        color: options.textColor || FLEX_COLORS.brandText,
+        align: "center",
+        wrap: false,
+        maxLines: 1,
+      },
+    ],
+    action,
+  };
+  if (options.width) box.width = options.width;
+  return box;
+}
+
+function buildActionPillRow(items) {
   return {
-    type: "button",
-    style: "primary",
-    height: "sm",
-    color: "#769275",
-    action: {
-      type: "uri",
-      label: "查看完整任務",
-      uri: url,
-    },
+    type: "box",
+    layout: "horizontal",
+    spacing: "sm",
+    contents: items,
   };
 }
 
 function buildListFooter() {
-  const contents = [];
-  const button = buildTinyProgressWebButton();
-
-  if (button) contents.push(button);
-
-  contents.push({
-    type: "text",
-    text: "需要操作說明請輸入：說明",
-    size: "xxs",
-    color: "#92867B",
-    wrap: true,
-    margin: button ? "sm" : "none",
-  });
-
   return {
     type: "box",
     layout: "vertical",
     spacing: "sm",
-    contents,
+    contents: [
+      buildActionPillRow([
+        buildSoftActionPill("抽一件", linePostbackAction("抽一件", buildTpPostbackData("draw"))),
+        buildSoftActionPill("＋ 新增", linePostbackAction("新增", buildTpPostbackData("add_prompt"), { inputOption: "openKeyboard" }), {
+          backgroundColor: FLEX_COLORS.paper,
+        }),
+      ]),
+    ],
   };
 }
 
-function buildFlexFooterHint(lines) {
+function buildTaskActionFooter(task, taskNumber) {
+  const primaryText = task.done ? "改回未完成" : "完成";
+  const primaryAction = task.done ? "task_undo" : "task_done";
   return {
     type: "box",
     layout: "vertical",
-    spacing: "xs",
-    margin: "sm",
-    contents: lines.map((line, index) => ({
-      type: "text",
-      text: line,
-      size: index === 0 ? "sm" : "xxs",
-      color: index === 0 ? FLEX_COLORS.darkGreen : "#92867B",
-      weight: index === 0 ? "bold" : "regular",
-      wrap: index === 0,
-      maxLines: 1,
-    })),
+    spacing: "sm",
+    contents: [
+      buildActionPillRow([
+        buildSoftActionPill(primaryText, linePostbackAction(primaryText, buildTpPostbackData(primaryAction, { id: task.id })), {
+          backgroundColor: task.done ? "#F4F2ED" : FLEX_COLORS.brandSoft,
+        }),
+        buildSoftActionPill("編輯", linePostbackAction("編輯", buildTpPostbackData("edit_prompt", { id: task.id }), { inputOption: "openKeyboard" }), {
+          backgroundColor: FLEX_COLORS.paper,
+        }),
+        buildSoftActionPill("移週", linePostbackAction("移週", buildTpPostbackData("reschedule_choose", { id: task.id })), {
+          backgroundColor: FLEX_COLORS.paper,
+        }),
+      ]),
+      buildActionPillRow([
+        buildSoftActionPill("刪除", linePostbackAction("刪除", buildTpPostbackData("delete_preview", { id: task.id })), {
+          backgroundColor: "#FBF3F1",
+          borderColor: "#E7CFC9",
+          textColor: "#8B5E57",
+        }),
+        buildSoftActionPill("回清單", linePostbackAction("回清單", buildTpPostbackData("list")), {
+          backgroundColor: FLEX_COLORS.paper,
+        }),
+      ]),
+    ],
   };
 }
+
 
 function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor, headerAccessory, headerBadge, titleSize, cycleNumber }) {
   const innerContents = [
@@ -1184,17 +1103,21 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber, unfinishedCoun
     `分類：${getTaskMetaText(selectedTask)}`,
     `目前還有 ${unfinishedCount} 件未完成。`,
     "",
-    "完成後可以輸入：",
-    `完成任務${taskNumber}`,
-    "",
-    
+    "可以直接點卡片上的完成、換一件或更多。",
   ].join("\n");
 }
 
 
 function buildDrawEmptyFlexMessage(currentWeek) {
+  const footerButtons = [
+    buildSoftActionPill("看清單", linePostbackAction("看清單", buildTpPostbackData("list"))),
+    buildSoftActionPill("＋ 新增", linePostbackAction("新增", buildTpPostbackData("add_prompt"), { inputOption: "openKeyboard" }), {
+      backgroundColor: FLEX_COLORS.paper,
+    }),
+  ];
+
   const bubble = buildBaseFlexBubble({
-    title: "抽一件",
+    title: "專注一件",
     subtitle: "目前沒有未完成任務",
     cycleNumber: currentWeek?.cycleNumber,
     headerBadge: buildCircleWeekMeta(currentWeek),
@@ -1205,6 +1128,7 @@ function buildDrawEmptyFlexMessage(currentWeek) {
         { label: "今天做什麼", emoji: "○" }
       ),
     ],
+    footerContents: buildActionPillRow(footerButtons),
   });
   return { type: "flex", altText: "Tiny Progress｜目前沒有任務可以抽，本週都完成了！", contents: bubble };
 }
@@ -1212,18 +1136,33 @@ function buildDrawEmptyFlexMessage(currentWeek) {
 
 function buildDrawOneTaskFlexMessage({ currentWeek, selectedTask, taskNumber, unfinishedCount }) {
   const bubble = buildBaseFlexBubble({
-    title: "抽一件",
+    title: "專注一件",
     subtitle: `還有 ${unfinishedCount} 件未完成`,
     cycleNumber: currentWeek?.cycleNumber,
     headerBadge: buildCircleWeekMeta(currentWeek),
     accentColor: CARD_ACCENTS.draw,
     bodyContents: [
       buildFlexInfoCard(
-        [buildTaskFlexRow({ task: selectedTask, taskNumber, showDifficulty: true, showCategory: true, showSubCategory: true })],
+        [buildTaskFlexRow({ task: selectedTask, taskNumber })],
         { label: "今天抽到", emoji: "•" }
       ),
     ],
-    footerContents: buildFlexFooterHint([`完成後可輸入：完成任務${taskNumber}`]),
+    footerContents: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        buildActionPillRow([
+          buildSoftActionPill("完成", linePostbackAction("完成", buildTpPostbackData("task_done", { id: selectedTask.id }))),
+          buildSoftActionPill("換一件", linePostbackAction("換一件", buildTpPostbackData("draw")), {
+            backgroundColor: FLEX_COLORS.paper,
+          }),
+          buildSoftActionPill("更多", linePostbackAction("更多", buildTpPostbackData("task_action", { id: selectedTask.id })), {
+            backgroundColor: FLEX_COLORS.paper,
+          }),
+        ]),
+      ],
+    },
   });
   return {
     type: "flex",
@@ -1251,54 +1190,6 @@ async function handleDrawOneTaskCommand() {
   };
 }
 
-
-function buildDifficultyTaskFooterLines(matchedTasks, difficulty) {
-  const firstUnfinishedEntry = matchedTasks.find((entry) => !entry.task.done);
-  if (!firstUnfinishedEntry) return ["這一區都完成了", getDifficultyFooterCopy(difficulty, true)];
-  return [`可直接輸入：完成任務${firstUnfinishedEntry.originalNumber}`, getDifficultyFooterCopy(difficulty, false)];
-}
-
-function buildDifficultyTaskListFlexMessage({ currentWeek, tasks, difficulty }) {
-  const matchedTasks = tasks
-    .map((task, index) => ({ task, originalNumber: index + 1 }))
-    .filter((entry) => normalizeDifficulty(entry.task.difficulty) === difficulty);
-  const unfinishedCount = matchedTasks.filter((entry) => !entry.task.done).length;
-  let bodyContents;
-  if (matchedTasks.length === 0) {
-    bodyContents = [
-      buildFlexInfoCard(
-        [{ type: "text", text: `目前沒有${difficulty}任務。`, size: "md", color: FLEX_COLORS.darkGreen, weight: "regular", wrap: true }],
-        { label: `本週${difficulty}任務`, emoji: "•" }
-      ),
-    ];
-  } else {
-    const rows = [];
-    matchedTasks.forEach((entry, index) => {
-      rows.push(buildTaskFlexRow({ task: entry.task, taskNumber: entry.originalNumber, showDifficulty: true, showCategory: true, showSubCategory: true }));
-      if (index < matchedTasks.length - 1) rows.push({ type: "separator", color: FLEX_COLORS.beigeLine });
-    });
-    bodyContents = [buildFlexInfoCard(rows, { label: `本週${difficulty}任務 · 未完成 ${unfinishedCount} 件`, emoji: "•" })];
-  }
-  const bubble = buildBaseFlexBubble({
-    title: `本週${difficulty}任務`,
-    subtitle: `共 ${matchedTasks.length} 件`,
-    cycleNumber: currentWeek?.cycleNumber,
-    headerBadge: buildCircleWeekMeta(currentWeek),
-    accentColor: getDifficultyCardAccent(difficulty),
-    bodyContents,
-    footerContents: buildFlexFooterHint(matchedTasks.length === 0 ? ["需要完整清單請輸入：清單"] : buildDifficultyTaskFooterLines(matchedTasks, difficulty)),
-  });
-  return { type: "flex", altText: `Tiny Progress｜本週${difficulty}任務，未完成 ${unfinishedCount} 件`, contents: bubble };
-}
-
-
-async function handleDifficultyTaskFlexCommand(difficulty) {
-  const board = await getTaskBoardForLine();
-  return {
-    replyText: formatTasksByDifficultyForLine(board.tasks, difficulty),
-    replyMessages: [buildDifficultyTaskListFlexMessage({ currentWeek: board.currentWeek, tasks: board.tasks, difficulty })],
-  };
-}
 
 
 function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
@@ -1344,6 +1235,326 @@ async function handleAllListFlexCommand() {
   };
 }
 
+
+function buildTaskActionFlexMessage({ currentWeek, task, taskNumber }) {
+  const statusText = task.done ? "已完成" : "未完成";
+  const bubble = buildBaseFlexBubble({
+    title: "事情",
+    subtitle: statusText,
+    cycleNumber: currentWeek?.cycleNumber,
+    headerBadge: buildCircleWeekMeta(currentWeek),
+    accentColor: CARD_ACCENTS.action,
+    bodyContents: [
+      buildFlexInfoCard(
+        [buildTaskFlexRow({ task, taskNumber })],
+        { label: "目前狀態", emoji: task.done ? "✓" : "○" }
+      ),
+    ],
+    footerContents: buildTaskActionFooter(task, taskNumber),
+  });
+
+  return {
+    type: "flex",
+    altText: `Tiny Progress｜${task.title}｜${statusText}`,
+    contents: bubble,
+  };
+}
+
+async function handleTaskActionCommand(numberText) {
+  const taskNumber = Number(numberText);
+  const board = await getTaskBoardForLine();
+  if (!Number.isInteger(taskNumber) || taskNumber <= 0 || !board.tasks[taskNumber - 1]) {
+    return {
+      replyText: "目前找不到這件事情，已重新開啟本週清單。",
+      replyMessages: [buildAllListFlexMessage(board)],
+    };
+  }
+
+  const task = board.tasks[taskNumber - 1];
+  return {
+    replyText: `Tiny Progress｜${task.title}｜${task.done ? "已完成" : "未完成"}`,
+    replyMessages: [buildTaskActionFlexMessage({ currentWeek: board.currentWeek, task, taskNumber })],
+  };
+}
+
+async function handleTaskDoneClick(numberText, done) {
+  const taskNumber = Number(numberText);
+  const board = await getTaskBoardForLine();
+  if (!Number.isInteger(taskNumber) || taskNumber <= 0 || !board.tasks[taskNumber - 1]) {
+    return {
+      replyText: "目前找不到這件事情，已重新開啟本週清單。",
+      replyMessages: [buildAllListFlexMessage(board)],
+    };
+  }
+
+  const original = board.tasks[taskNumber - 1];
+  const updated = await updateItemToGoogleSheets(original.id, { done });
+  return {
+    replyText: `${updated.title || original.title}｜${done ? "已完成" : "已改回未完成"}`,
+    replyMessages: [
+      buildTaskActionFlexMessage({
+        currentWeek: board.currentWeek,
+        task: updated,
+        taskNumber,
+      }),
+    ],
+  };
+}
+
+
+function buildConfirmFlexMessage({ title, subtitle, task, confirmLabel, confirmAction, cancelAction }) {
+  const body = [];
+  if (task) {
+    body.push(buildFlexInfoCard([
+      buildTaskFlexRow({ task, taskNumber: "" }),
+    ], { label: "這件事情", emoji: "•" }));
+  }
+  const bubble = buildBaseFlexBubble({
+    title,
+    subtitle,
+    cycleNumber: task && task.cycleNumber,
+    accentColor: CARD_ACCENTS.action,
+    bodyContents: body.length ? body : [buildFlexInfoCard([{ type: "text", text: subtitle || "請確認", size: "sm", color: FLEX_COLORS.darkGreen, wrap: true }])],
+    footerContents: buildActionPillRow([
+      buildSoftActionPill(confirmLabel || "確定", confirmAction),
+      buildSoftActionPill("取消", cancelAction, { backgroundColor: FLEX_COLORS.paper }),
+    ]),
+  });
+  return { type: "flex", altText: `Tiny Progress｜${title}`, contents: bubble };
+}
+
+function buildStatusMiniCard(title, subtitle, task, actionLabel, action) {
+  const body = task ? [buildFlexInfoCard([
+    { type: "text", text: task.title || "未命名事情", size: "md", color: FLEX_COLORS.darkGreen, wrap: true },
+  ], { label: subtitle || "已更新", emoji: "✓" })] : [];
+  const footer = action ? buildActionPillRow([
+    buildSoftActionPill(actionLabel, action),
+    buildSoftActionPill("回清單", linePostbackAction("回清單", buildTpPostbackData("list")), { backgroundColor: FLEX_COLORS.paper }),
+  ]) : buildActionPillRow([
+    buildSoftActionPill("回清單", linePostbackAction("回清單", buildTpPostbackData("list"))),
+  ]);
+  return {
+    type: "flex",
+    altText: `Tiny Progress｜${title}`,
+    contents: buildBaseFlexBubble({ title, subtitle: subtitle || "", accentColor: CARD_ACCENTS.action, bodyContents: body, footerContents: footer }),
+  };
+}
+
+function buildReasonPromptMessage({ kind, task, targetWeek }) {
+  const isDelete = kind === "delete";
+  const common = isDelete
+    ? ["不需要了", "這週不適合", "改變安排"]
+    : ["這週做不完", "優先順序改了", "等待其他事情"];
+  const reasonActionName = isDelete ? "delete_reason" : "reschedule_reason";
+  const baseParams = { id: task.id };
+  if (!isDelete && targetWeek) {
+    baseParams.cycle = targetWeek.cycleNumber;
+    baseParams.week = targetWeek.weekNumber;
+  }
+  const items = common.map((reason) => buildQuickReplyItem(
+    linePostbackAction(reason, buildTpPostbackData(reasonActionName, { ...baseParams, reason }))
+  ));
+  items.push(buildQuickReplyItem(
+    linePostbackAction("自己寫", buildTpPostbackData("reason_custom", baseParams), { inputOption: "openKeyboard" })
+  ));
+  items.push(buildQuickReplyItem(
+    linePostbackAction("取消", buildTpPostbackData("pending_cancel", { id: task.id }))
+  ));
+  return {
+    type: "text",
+    text: isDelete
+      ? `為什麼要刪除「${task.title}」？\n可以點常用原因，也可以直接在輸入框打。`
+      : `為什麼要把「${task.title}」移到 Week ${targetWeek.weekNumber}？\n可以點常用原因，也可以直接在輸入框打。`,
+    quickReply: { items },
+  };
+}
+
+function buildRescheduleChoicesMessage(task, core) {
+  const current = core.context.currentWeek;
+  const max = Number(core.context.maxPlannableWeek || (current && current.weekNumber) || 0);
+  const immediateNext = Number(task.scheduledWeekNumber || task.weekNumber) + 1;
+  const cycleNumber = Number(task.scheduledCycleNumber || task.cycleNumber);
+  const choices = (core.weeks || []).filter((week) => {
+    const w = Number(week.weekNumber);
+    if (Number(week.cycleNumber) !== cycleNumber) return false;
+    if (w === Number(task.scheduledWeekNumber || task.weekNumber)) return false;
+    if (week.archived) return false;
+    if (current && w < Number(current.weekNumber)) return false;
+    return w <= max || w === immediateNext;
+  }).slice(0, 12);
+
+  if (!choices.length) {
+    return { type: "text", text: "目前沒有可以移動的 Week。" };
+  }
+  return {
+    type: "text",
+    text: `把「${task.title}」移到哪一週？`,
+    quickReply: {
+      items: choices.map((week) => buildQuickReplyItem(
+        linePostbackAction(`Week ${week.weekNumber}`, buildTpPostbackData("reschedule_preview", {
+          id: task.id,
+          cycle: week.cycleNumber,
+          week: week.weekNumber,
+        }))
+      )).concat([
+        buildQuickReplyItem(linePostbackAction("取消", buildTpPostbackData("pending_cancel", { id: task.id }))),
+      ]),
+    },
+  };
+}
+
+async function createSimpleTaskFromLine(title) {
+  const core = await fetchCoreFromGoogleSheets();
+  const current = core.context.currentWeek;
+  if (!current) throw new Error("目前不在進行中的 Week，不能新增事情");
+  return createItemToGoogleSheets({
+    type: "task",
+    title: String(title || "").trim(),
+    category: DEFAULT_CATEGORY,
+    subCategory: DEFAULT_SUBCATEGORY,
+    difficulty: DEFAULT_DIFFICULTY,
+    cycleNumber: current.cycleNumber,
+    weekNumber: current.weekNumber,
+    scheduledCycleNumber: current.cycleNumber,
+    scheduledWeekNumber: current.weekNumber,
+  });
+}
+
+async function handleTinyProgressPostback({ sourceKey, rawData }) {
+  const data = parseTpPostbackData(rawData);
+  const action = data.action || "";
+
+  if (action === "list") return handleAllListFlexCommand();
+  if (action === "draw") return handleDrawOneTaskCommand();
+
+  if (action === "task_action") {
+    const { task, currentWeek } = await getTaskContextById(data.id);
+    if (!task) return handleAllListFlexCommand();
+    return { replyText: `Tiny Progress｜${task.title}`, replyMessages: [buildTaskActionFlexMessage({ currentWeek, task, taskNumber: "" })] };
+  }
+
+  if (action === "task_done" || action === "task_undo") {
+    const done = action === "task_done";
+    const { task, currentWeek } = await getTaskContextById(data.id);
+    if (!task) return handleAllListFlexCommand();
+    let updated;
+    if (task.frequency) {
+      updated = await gasPost(done ? "complete-occurrence" : "correct-occurrence", { id: task.id });
+    } else {
+      updated = await gasPost(done ? "complete-task" : "correct-completion", { id: task.id });
+    }
+    const normalized = normalizeItem(updated);
+    return { replyText: `${normalized.title}｜${done ? "已完成" : "已改回未完成"}`, replyMessages: [buildTaskActionFlexMessage({ currentWeek, task: normalized, taskNumber: "" })] };
+  }
+
+  if (action === "add_prompt") {
+    await gasPost("line-pending-set", { userId: sourceKey, pending: { kind: "add_title" }, ttlSeconds: TP_LINE_PENDING_TTL_SECONDS });
+    return { type: "text", text: "要新增什麼事情？\n直接在輸入框打名稱即可，10 分鐘內有效。" };
+  }
+  if (action === "add_submit") {
+    const title = String(data.title || "").trim();
+    if (!title) return "事情名稱不能是空白。";
+    const created = await createSimpleTaskFromLine(title);
+    return { replyText: `已新增：${created.title}`, replyMessages: [buildTaskActionFlexMessage({ currentWeek: (await fetchWeekContextFromGoogleSheets()).currentWeek, task: created, taskNumber: "" })] };
+  }
+
+  if (action === "edit_prompt") {
+    const { task } = await getTaskContextById(data.id);
+    if (!task) return "找不到這件事情。";
+    await gasPost("line-pending-set", { userId: sourceKey, pending: { kind: "edit_title", id: task.id }, ttlSeconds: TP_LINE_PENDING_TTL_SECONDS });
+    return { type: "text", text: `要把「${task.title}」改成什麼？\n直接輸入新的名稱，或輸入「取消」。` };
+  }
+  if (action === "edit_submit") {
+    const title = String(data.title || "").trim();
+    const updated = await updateItemToGoogleSheets(data.id, { title });
+    return { replyText: `已修改：${updated.title}`, replyMessages: [buildTaskActionFlexMessage({ currentWeek: (await fetchWeekContextFromGoogleSheets()).currentWeek, task: updated, taskNumber: "" })] };
+  }
+
+  if (action === "delete_preview") {
+    const { task } = await getTaskContextById(data.id);
+    if (!task) return "找不到這件事情。";
+    return {
+      replyText: `確定刪除「${task.title}」？`,
+      replyMessages: [buildConfirmFlexMessage({
+        title: "確認刪除",
+        subtitle: "刪除後會留下原因與紀錄",
+        task,
+        confirmLabel: "確定",
+        confirmAction: linePostbackAction("確定", buildTpPostbackData("delete_reason_prompt", { id: task.id }), { inputOption: "openKeyboard" }),
+        cancelAction: linePostbackAction("取消", buildTpPostbackData("pending_cancel", { id: task.id })),
+      })],
+    };
+  }
+  if (action === "delete_reason_prompt") {
+    const { task } = await getTaskContextById(data.id);
+    if (!task) return "找不到這件事情。";
+    await gasPost("line-pending-set", { userId: sourceKey, pending: { kind: "delete_reason", id: task.id }, ttlSeconds: TP_LINE_PENDING_TTL_SECONDS });
+    return { replyText: "請選或輸入刪除原因", replyMessages: [buildReasonPromptMessage({ kind: "delete", task })] };
+  }
+  if (action === "delete_reason") {
+    const reason = String(data.reason || "").trim();
+    const deleted = normalizeItem(await gasPost("cancel-task", { id: data.id, reason }));
+    await gasPost("line-pending-clear", { userId: sourceKey });
+    return {
+      replyText: `已刪除：${deleted.title}`,
+      replyMessages: [buildStatusMiniCard("已刪除", `原因：${reason}`, deleted, "復原", linePostbackAction("復原", buildTpPostbackData("task_restore", { id: deleted.id })))],
+    };
+  }
+  if (action === "task_restore") {
+    const restored = normalizeItem(await gasPost("restore-cancelled-task", { id: data.id }));
+    return { replyText: `已復原：${restored.title}`, replyMessages: [buildStatusMiniCard("已復原", "事情已回到原本的 Week", restored)] };
+  }
+
+  if (action === "reschedule_choose") {
+    const { core, task } = await getTaskContextById(data.id);
+    if (!task) return "找不到這件事情。";
+    return { replyText: `選擇「${task.title}」要移到的 Week`, replyMessages: [buildRescheduleChoicesMessage(task, core)] };
+  }
+  if (action === "reschedule_preview") {
+    const { core, task } = await getTaskContextById(data.id);
+    if (!task) return "找不到這件事情。";
+    const targetWeek = (core.weeks || []).find((w) => Number(w.cycleNumber) === Number(data.cycle) && Number(w.weekNumber) === Number(data.week));
+    if (!targetWeek) return "找不到目標 Week。";
+    return {
+      replyText: `確定移到 Week ${targetWeek.weekNumber}？`,
+      replyMessages: [buildConfirmFlexMessage({
+        title: "確認移動",
+        subtitle: `移到 Week ${targetWeek.weekNumber}`,
+        task,
+        confirmLabel: "確定",
+        confirmAction: linePostbackAction("確定", buildTpPostbackData("reschedule_reason_prompt", { id: task.id, cycle: targetWeek.cycleNumber, week: targetWeek.weekNumber }), { inputOption: "openKeyboard" }),
+        cancelAction: linePostbackAction("取消", buildTpPostbackData("pending_cancel", { id: task.id })),
+      })],
+    };
+  }
+  if (action === "reschedule_reason_prompt") {
+    const { core, task } = await getTaskContextById(data.id);
+    if (!task) return "找不到這件事情。";
+    const targetWeek = (core.weeks || []).find((w) => Number(w.cycleNumber) === Number(data.cycle) && Number(w.weekNumber) === Number(data.week));
+    if (!targetWeek) return "找不到目標 Week。";
+    await gasPost("line-pending-set", { userId: sourceKey, pending: { kind: "reschedule_reason", id: task.id, cycle: targetWeek.cycleNumber, week: targetWeek.weekNumber }, ttlSeconds: TP_LINE_PENDING_TTL_SECONDS });
+    return { replyText: "請選或輸入調整原因", replyMessages: [buildReasonPromptMessage({ kind: "reschedule", task, targetWeek })] };
+  }
+  if (action === "reschedule_reason") {
+    const reason = String(data.reason || "").trim();
+    const moved = normalizeItem(await gasPost("reschedule-task", {
+      id: data.id,
+      target: { cycleNumber: Number(data.cycle), weekNumber: Number(data.week) },
+      reason,
+    }));
+    await gasPost("line-pending-clear", { userId: sourceKey });
+    return { replyText: `已移到 Week ${moved.scheduledWeekNumber}`, replyMessages: [buildStatusMiniCard("已移動", `Week ${moved.scheduledWeekNumber} · ${reason}`, moved)] };
+  }
+
+  if (action === "reason_custom") return { type: "text", text: "直接在輸入框寫原因即可。輸入「取消」可以中止。" };
+  if (action === "pending_cancel") {
+    await gasPost("line-pending-clear", { userId: sourceKey });
+    return { type: "text", text: "已取消，資料沒有變動。" };
+  }
+
+  return getUnknownCommandText();
+}
+
 function buildLineTextMessage(text) {
   return {
     type: "text",
@@ -1362,6 +1573,13 @@ function getFallbackTextFromReplyMessages(replyMessages) {
 }
 
 function normalizeLineReplyResult(replyResult) {
+  if (replyResult && typeof replyResult === "object" && typeof replyResult.type === "string") {
+    return {
+      replyText: replyResult.text || replyResult.altText || "Tiny Progress 已回覆。",
+      replyMessages: [replyResult],
+    };
+  }
+
   if (replyResult && typeof replyResult === "object" && Array.isArray(replyResult.replyMessages)) {
     const replyMessages = replyResult.replyMessages;
     return {
@@ -1411,111 +1629,24 @@ async function replyToLine(replyToken, replyResult) {
 
 function getGuideText() {
   return [
-    "📋 Tiny Progress｜攻略",
+    "Tiny Progress｜LINE 快速操作",
     "",
-    "【查看】",
-    "清單：查看本週任務",
-    "抽一件：從未完成任務中抽一件",
-    "簡單任務 / 適中任務 / 困難任務：依難度查看",
+    "主要操作都直接點卡片：",
+    "• 本週清單：看狀態、進入事情操作",
+    "• 抽一件：完成、換一件、更多",
+    "• 事情：完成／改回未完成",
     "",
-    "【加入】",
-    "新增任務 練習 CSS",
-    "新增任務 練習 CSS｜程式學習｜練習｜適中",
-    "新增標準 本週能說明一個學到的觀念",
+    "新增、改內容、刪除原因會直接開 Tiny Progress 網頁處理。",
+    "週一與週日會另外收到主動推播。",
     "",
-    "【任務操作】",
-    "完成任務3 / 取消任務3",
-    "修改任務3 / 刪除任務3",
-    "取消修改：中止正在等待輸入的新內容",
-    "",
-    "需要查看目前編號時，先輸入：清單",
-  ].join("\n");
+    "如果卡片沒有顯示，也可以輸入「清單」或「抽一件」重新叫出來。",
+  ].join("\\n");
 }
-
-// ── 攻略 Flex Message：常用指令集中顯示，維持柔和標籤視覺 ──
-function buildGuideFlexMessage() {
-  function buildGuideRow(command, desc) {
-    return {
-      type: "box",
-      layout: "horizontal",
-      spacing: "sm",
-      alignItems: "center",
-      paddingBottom: "8px",
-      contents: [
-        buildFlexTag(command, FLEX_COLORS.brandSoft, FLEX_COLORS.brandText, {
-          width: "100px",
-          borderColor: FLEX_COLORS.brandBorder,
-          weight: "regular",
-          paddingTop: "4px",
-          paddingBottom: "4px",
-        }),
-        { type: "text", text: desc, size: "xs", color: FLEX_COLORS.mutedText, wrap: true, flex: 1 },
-      ],
-    };
-  }
-  const viewCard = buildFlexInfoCard([
-    buildGuideRow("清單", "查看本週完整任務"),
-    buildGuideRow("抽一件", "從未完成任務中隨機抽一件"),
-    buildGuideRow("簡單任務", "只看簡單任務"),
-    buildGuideRow("適中任務", "只看適中任務"),
-    buildGuideRow("困難任務", "只看困難任務"),
-  ], { label: "查看", emoji: "○" });
-  const createCard = buildFlexInfoCard([
-    buildGuideRow("新增任務", "例：新增任務 練習 CSS"),
-    buildGuideRow("完整格式", "新增任務 xxx｜分類｜子分類｜難度"),
-    buildGuideRow("新增標準", "例：新增標準 本週能說明一個學到的觀念"),
-  ], { label: "加入", emoji: "＋" });
-  const actionCard = buildFlexInfoCard([
-    buildGuideRow("完成任務3", "完成第 3 個任務"),
-    buildGuideRow("取消任務3", "恢復成未完成"),
-    buildGuideRow("修改任務3", "等待你輸入新的任務內容"),
-    buildGuideRow("刪除任務3", "取消第 3 個任務"),
-    buildGuideRow("取消修改", "中止等待輸入的修改流程"),
-  ], { label: "任務操作", emoji: "✓" });
-  const bubble = buildBaseFlexBubble({
-    title: "攻略",
-    subtitle: "常用指令",
-    // 攻略是固定說明卡，不綁 Cycle / Week / 日期。
-    cycleNumber: undefined,
-    headerBadge: null,
-    accentColor: CARD_ACCENTS.guide,
-    bodyContents: [viewCard, createCard, actionCard],
-    footerContents: buildFlexFooterHint(["不知道任務編號時，先輸入：清單", "Tiny Progress"]),
-  });
-  return { type: "flex", altText: "Tiny Progress｜攻略：查看、加入、任務操作", contents: bubble };
-}
-
 
 async function handleGuideCommand() {
-  // 固定攻略不需要為了 Week 資訊額外打 Google Apps Script。
-  return { replyText: getGuideText(), replyMessages: [buildGuideFlexMessage()] };
+  return getGuideText();
 }
 
-
-async function handlePendingActionIfNeeded(sourceKey, userText) {
-  const pending = pendingActions.get(sourceKey);
-  if (!pending) return null;
-
-  const displayLabel = getDisplayLabel(pending.label);
-
-  if (userText === "取消修改") {
-    pendingActions.delete(sourceKey);
-    return "已取消這次修改，原本內容保持不變。";
-  }
-
-  if (Date.now() - pending.createdAt > PENDING_ACTION_TTL_MS) {
-    pendingActions.delete(sourceKey);
-    return ["這次修改已經逾時，資料沒有變動。", "", `可以重新輸入：修改${pending.label} 數字`].join("\n");
-  }
-
-  const newTitle = userText.trim();
-  if (!newTitle) return `請輸入新的${displayLabel}文字，或輸入「取消修改」。`;
-
-  const updatedItem = await updateItemToGoogleSheets(pending.itemId, { title: newTitle });
-  pendingActions.delete(sourceKey);
-
-  return [`已修改第 ${pending.itemNumber} 個${displayLabel}：`, updatedItem.title || newTitle, "", "已更新內容。"].join("\n");
-}
 
 function parseCreateText({ userText, command }) {
   let rawText = userText.replace(new RegExp(`^${command}\\s*`), "").trim();
@@ -1638,14 +1769,21 @@ async function handleDoneCommand({ numberText, type, label, done }) {
 async function handleDeleteCommand({ numberText, type, label }) {
   const result = await findItemByNumber({ type, numberText, label });
   if (result.error) return result.error;
-
-  const deletedItem = await deleteItemFromGoogleSheets(result.item.id);
-  const displayLabel = getDisplayLabel(label);
-
-  return [`已取消第 ${result.itemNumber} 個${displayLabel}：`, deletedItem.title || result.item.title, "", "已更新任務。"].join("\n");
+  if (type !== "task") return "這個內容請到 Tiny Progress 網頁處理。";
+  return {
+    replyText: `確定刪除「${result.item.title}」？`,
+    replyMessages: [buildConfirmFlexMessage({
+      title: "確認刪除",
+      subtitle: "刪除後會留下原因與紀錄",
+      task: result.item,
+      confirmLabel: "確定",
+      confirmAction: linePostbackAction("確定", buildTpPostbackData("delete_reason_prompt", { id: result.item.id }), { inputOption: "openKeyboard" }),
+      cancelAction: linePostbackAction("取消", buildTpPostbackData("pending_cancel", { id: result.item.id })),
+    })],
+  };
 }
 
-async function handleEditCommand({ sourceKey, numberText, newTitle, type, label }) {
+async function handleEditCommand({ numberText, newTitle, type, label }) {
   const result = await findItemByNumber({ type, numberText, label });
   if (result.error) return result.error;
 
@@ -1653,20 +1791,14 @@ async function handleEditCommand({ sourceKey, numberText, newTitle, type, label 
 
   if (newTitle && newTitle.trim()) {
     const updatedItem = await updateItemToGoogleSheets(result.item.id, { title: newTitle.trim() });
-    return [`已修改第 ${result.itemNumber} 個${displayLabel}：`, updatedItem.title || newTitle.trim(), "", "已更新內容。"].join("\n");
+    return [`已修改第 ${result.itemNumber} 個${displayLabel}：`, updatedItem.title || newTitle.trim(), "", "已更新內容。"].join("\\n");
   }
 
-  pendingActions.set(sourceKey, {
-    action: "edit",
-    type,
-    label,
-    itemNumber: result.itemNumber,
-    itemId: result.item.id,
-    oldTitle: result.item.title,
-    createdAt: Date.now(),
-  });
+  if (type === "task") {
+    return handleTaskActionCommand(numberText);
+  }
 
-  return [`請輸入第 ${result.itemNumber} 個${displayLabel}的新文字：`, "", `目前內容：${result.item.title}`, "", "若不想修改，請輸入：取消修改"].join("\n");
+  return "這個內容請到 Tiny Progress 網頁調整。";
 }
 
 function parseFlexibleNumber(numberText) {
@@ -1719,44 +1851,39 @@ function parseLineOperationCommand(userText) {
 
 function getFormatReminderText() {
   return [
-    "格式需要再確認，資料沒有變動。",
+    "這個操作可以直接用 LINE 卡片按鈕完成。",
     "",
-    "常用格式：",
-    "新增任務 練習 CSS｜程式學習｜練習｜適中",
-    "完成任務3",
-    "取消任務3",
-    "修改任務3",
-    "刪除任務3",
-    "完成標準2",
-    "",
-    "需要完整說明請輸入：說明",
+    "輸入「清單」可以重新叫出本週清單，",
+    "輸入「抽一件」可以重新抽一件。",
   ].join("\n");
 }
 
 function getUnknownCommandText() {
   return [
-    "Tiny Progress 目前看不懂這個指令，所以資料沒有變動。",
+    "Tiny Progress 目前看不懂這個訊息，資料沒有變動。",
     "",
-    "可以輸入：",
-    "清單",
-    "抽一件",
-    "攻略",
-    "",
-    getLineCommandHintText(),
+    "可以輸入「清單」或「抽一件」重新叫出卡片。",
   ].join("\n");
 }
 
 async function handleLineTextCommand({ sourceKey, userText }) {
-  const pendingReply = await handlePendingActionIfNeeded(sourceKey, userText);
-  if (pendingReply) return pendingReply;
-
+  if (String(userText || "").startsWith(TP_POSTBACK_PREFIX)) {
+    return handleTinyProgressPostback({ sourceKey, rawData: String(userText).slice(TP_POSTBACK_PREFIX.length) });
+  }
   if (["攻略", "說明", "help", "Help"].includes(userText)) return handleGuideCommand();
   if (["抽一件", "抽任務", "隨機任務", "今天做什麼"].includes(userText)) return handleDrawOneTaskCommand();
-
   if (userText === "清單" || userText === "全部清單") return handleAllListFlexCommand();
-  if (userText === "簡單任務" || userText === "簡單") return handleDifficultyTaskFlexCommand("簡單");
-  if (userText === "適中任務" || userText === "適中") return handleDifficultyTaskFlexCommand("適中");
-  if (userText === "困難任務" || userText === "困難") return handleDifficultyTaskFlexCommand("困難");
+
+  // 舊的難度文字入口保留相容，但不再產生獨立難度卡，一律回到同一張本週清單。
+  if (["簡單任務", "簡單", "適中任務", "適中", "困難任務", "困難"].includes(userText)) {
+    return handleAllListFlexCommand();
+  }
+
+  let actionMatch = userText.match(/^操作任務\s*(\d+)$/);
+  if (actionMatch) return handleTaskActionCommand(actionMatch[1]);
+
+  actionMatch = userText.match(/^改回未完成任務\s*(\d+)$/);
+  if (actionMatch) return handleTaskDoneClick(actionMatch[1], false);
 
   if (userText.startsWith("新增一個任務")) {
     return handleCreateCommand({ userText, command: "新增一個任務", type: "task", label: "任務", example: "練習 LINE Bot" });
@@ -1782,13 +1909,15 @@ async function handleLineTextCommand({ sourceKey, userText }) {
 
   if (operation) {
     if (operation.error) return operation.error;
+    if (operation.type === "task" && operation.action === "done") return handleTaskDoneClick(operation.numberText, true);
+    if (operation.type === "task" && operation.action === "cancel") return handleTaskDoneClick(operation.numberText, false);
     if (operation.action === "done") return handleDoneCommand({ numberText: operation.numberText, type: operation.type, label: operation.label, done: true });
     if (operation.action === "cancel") return handleDoneCommand({ numberText: operation.numberText, type: operation.type, label: operation.label, done: false });
     if (operation.action === "edit") return handleEditCommand({ sourceKey, numberText: operation.numberText, newTitle: operation.newTitle, type: operation.type, label: operation.label });
     if (operation.action === "delete") return handleDeleteCommand({ numberText: operation.numberText, type: operation.type, label: operation.label });
   }
 
-  if (["完成", "已完成", "取消", "修改", "刪除", "新增"].some((prefix) => userText.startsWith(prefix))) {
+  if (["完成", "已完成", "取消", "修改", "刪除", "新增", "操作", "改回未完成"].some((prefix) => userText.startsWith(prefix))) {
     return getFormatReminderText();
   }
 
@@ -1822,10 +1951,17 @@ app.post("/line/webhook", async (req, res) => {
   const events = req.body.events || [];
   for (const event of events) {
     try {
-      if (event.type !== "message" || event.message.type !== "text") continue;
       const sourceKey = getLineSourceKey(event);
-      const userText = event.message.text.trim();
-      const replyResult = await handleLineTextCommand({ sourceKey, userText });
+      let replyResult = null;
+      if (event.type === "postback") {
+        replyResult = await handleTinyProgressPostback({ sourceKey, rawData: String((event.postback || {}).data || "") });
+      } else if (event.type === "message" && event.message && event.message.type === "text") {
+        const consumed = await gasPost("line-pending-consume", { userId: sourceKey, text: event.message.text.trim() });
+        const userText = consumed && consumed.messageText ? consumed.messageText : event.message.text.trim();
+        replyResult = await handleLineTextCommand({ sourceKey, userText });
+      } else {
+        continue;
+      }
       await replyToLine(event.replyToken, replyResult);
     } catch (error) {
       console.error("處理 LINE Webhook 發生錯誤：", error);
