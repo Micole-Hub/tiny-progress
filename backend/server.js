@@ -2,6 +2,40 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const crypto = require("node:crypto"),
+  D = require("./domain"),
+  Cards = require("./line-cards"),
+  Bot = require("./line-bot"),
+  Access = require("./access");
+const ACCESS = Access.config();
+const { AsyncLocalStorage } = require("node:async_hooks");
+const LINE_CONTEXT = new AsyncLocalStorage();
+const LEGACY_MUTATIONS = new Set([
+  "create",
+  "update",
+  "delete",
+  "complete-task",
+  "correct-completion",
+  "cancel-task",
+  "restore-cancelled-task",
+  "remove-draft-task",
+  "reschedule-task",
+  "replan-task",
+  "complete-occurrence",
+  "correct-occurrence",
+  "schedule-occurrence",
+  "archive-week",
+  "postpone-current-week",
+  "update-current-week-plan",
+  "update-week-plan",
+  "create-cycle",
+  "update-cycle-theme",
+  "change-cycle-start",
+  "create-category",
+  "update-category",
+  "save-retrospective",
+  "submit-retrospective",
+]);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,32 +46,151 @@ const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
 // 把你自己的 Tiny Progress 網頁網址貼在下面。
 // 例如：https://你的網站網址
-const TINY_PROGRESS_WEB_URL = "https://micole-hub.github.io/tiny-progress/";
-
+const TINY_PROGRESS_WEB_URL = ACCESS.webUrl;
 
 // Queue retry 改由 Render 排程，避免 Google Apps Script time trigger 偶發失敗寄信。
 // 正常 LINE 即時流程完全不走這個 timer，所以不會拖慢一般回覆。
-const QUEUE_RETRY_INTERVAL_MS = Math.max(60 * 1000, Number(process.env.QUEUE_RETRY_INTERVAL_MS || 5 * 60 * 1000));
-const QUEUE_RETRY_START_DELAY_MS = Math.max(5 * 1000, Number(process.env.QUEUE_RETRY_START_DELAY_MS || 30 * 1000));
-const QUEUE_RETRY_TIMEOUT_MS = Math.max(10 * 1000, Number(process.env.QUEUE_RETRY_TIMEOUT_MS || 45 * 1000));
+const QUEUE_RETRY_INTERVAL_MS = Math.max(
+  60 * 1000,
+  Number(process.env.QUEUE_RETRY_INTERVAL_MS || 5 * 60 * 1000),
+);
+const QUEUE_RETRY_START_DELAY_MS = Math.max(
+  5 * 1000,
+  Number(process.env.QUEUE_RETRY_START_DELAY_MS || 30 * 1000),
+);
+const QUEUE_RETRY_TIMEOUT_MS = Math.max(
+  10 * 1000,
+  Number(process.env.QUEUE_RETRY_TIMEOUT_MS || 45 * 1000),
+);
 let queueRetryInFlight = false;
 let legacyGasRetryTriggerDisabled = false;
 
-
 // 保留做 LINE 卡片排序與預設顯示，不再當成分類白名單。
 const CATEGORY_OPTIONS = ["程式學習", "身心穩定", "興趣探索"];
-const SUBCATEGORY_OPTIONS = ["觀看課程影片", "練習", "寫筆記", "W3Schools", "freeCodeCamp", "Vibe Coding"];
-const DIFFICULTY_OPTIONS = ["簡單", "適中", "困難"];
+const SUBCATEGORY_OPTIONS = [
+  "觀看課程影片",
+  "練習",
+  "寫筆記",
+  "W3Schools",
+  "freeCodeCamp",
+  "Vibe Coding",
+];
 const DEFAULT_CATEGORY = "程式學習";
 const DEFAULT_SUBCATEGORY = "觀看課程影片";
 const EMPTY_SUBCATEGORY = "未分類";
-const DEFAULT_DIFFICULTY = "適中";
 
-if (!GOOGLE_SHEETS_API_URL) throw new Error("缺少環境變數 GOOGLE_SHEETS_API_URL");
-if (!GOOGLE_SHEETS_API_SECRET) throw new Error("缺少環境變數 GOOGLE_SHEETS_API_SECRET");
+if (require.main === module) Access.validate(ACCESS);
 
-app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+app.use((req, res, next) => {
+  if (req.headers.origin && !ACCESS.origins.includes(req.headers.origin))
+    return res.status(403).json({ message: "不允許的網站來源" });
+  next();
+});
+app.use(
+  cors({
+    origin: ACCESS.origins,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
+app.use(
+  express.json({
+    limit: "2mb",
+    verify: (req, res, buf) => {
+      req.rawBody = Buffer.from(buf);
+    },
+  }),
+);
+Access.install(app, ACCESS);
+app.get("/api/state", async (req, res) => {
+  try {
+    res.json(await loadWebState(req.query.cycle));
+  } catch (e) {
+    res.status(e.status || 400).json({ message: e.message });
+  }
+});
+app.put("/api/state", async (req, res) => {
+  try {
+    res.json(await gasPost("web-save", req.body));
+  } catch (e) {
+    res.status(e.status || 400).json({ message: e.message });
+  }
+});
+app.post("/api/import-local", async (req, res) => {
+  try {
+    res.json(await gasPost("web-import", req.body));
+  } catch (e) {
+    res.status(e.status || 400).json({ message: e.message });
+  }
+});
+app.post("/internal/reminders", async (req, res) => {
+  try {
+    const due = await gasPost("reminder-claim");
+    if (due.skipped) return res.json({ ok: true, skipped: due.skipped });
+    const message = scopeMessages(
+      [
+        Cards[due.kind](due.state, {
+          week: due.week,
+          webUrl: TINY_PROGRESS_WEB_URL,
+        }),
+      ],
+      due.state.cycle.number,
+    )[0];
+    const hash = crypto
+      .createHash("sha256")
+      .update("v28-reminder:" + due.key)
+      .digest("hex");
+    const retryKey =
+      hash.slice(0, 8) +
+      "-" +
+      hash.slice(8, 12) +
+      "-4" +
+      hash.slice(13, 16) +
+      "-a" +
+      hash.slice(17, 20) +
+      "-" +
+      hash.slice(20, 32);
+    const response = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + LINE_CHANNEL_ACCESS_TOKEN,
+        "Content-Type": "application/json",
+        "X-Line-Retry-Key": retryKey,
+      },
+      body: JSON.stringify({ to: ACCESS.owner, messages: [message] }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok && response.status !== 409)
+      throw new Error("LINE 傳送暫時失敗");
+    await gasPost("reminder-sent", {
+      cycle: due.state.cycle.number,
+      key: due.key,
+    });
+    res.json({ ok: true, sent: true });
+  } catch (e) {
+    res.status(503).json({ message: e.message });
+  }
+});
+app.post("/internal/card", async (req, res) => {
+  try {
+    if (!["list", "draw", "monday", "footprint"].includes(req.body.kind))
+      return res.status(400).json({ message: "卡片類型不正確" });
+    const data = await loadWebState(req.body.cycle);
+    res.json({
+      message: scopeMessages(
+        [
+          Cards[req.body.kind](data.state, {
+            week: Number(req.body.week) || D.currentWeek(data.state),
+            webUrl: TINY_PROGRESS_WEB_URL,
+          }),
+        ],
+        data.state.cycle.number,
+      )[0],
+    });
+  } catch (e) {
+    res.status(e.status || 400).json({ message: e.message });
+  }
+});
 
 const TP_POSTBACK_PREFIX = "__TP_POSTBACK__:";
 const TP_LINE_PENDING_TTL_SECONDS = 10 * 60;
@@ -56,14 +209,17 @@ async function getCurrentWeekNumberFromGoogleSheets() {
 
 function getLineSourceKey(event) {
   const source = (event && event.source) || {};
-  return String(source.userId || source.groupId || source.roomId || "line-unknown").trim();
+  return String(
+    source.userId || source.groupId || source.roomId || "line-unknown",
+  ).trim();
 }
 
 function buildTpPostbackData(action, params = {}) {
   const query = new URLSearchParams();
   query.set("action", action);
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+    if (value !== undefined && value !== null && value !== "")
+      query.set(key, String(value));
   }
   return query.toString();
 }
@@ -82,15 +238,9 @@ function normalizeCategory(value) {
 function normalizeSubCategory(value, category = DEFAULT_CATEGORY) {
   const sub = String(value || "").trim();
   if (sub) return sub;
-  return normalizeCategory(category) === DEFAULT_CATEGORY ? DEFAULT_SUBCATEGORY : EMPTY_SUBCATEGORY;
-}
-
-function normalizeDifficulty(value) {
-  const difficulty = String(value || "").trim() || DEFAULT_DIFFICULTY;
-  if (!DIFFICULTY_OPTIONS.includes(difficulty)) {
-    throw new Error("difficulty 只能是：" + DIFFICULTY_OPTIONS.join("、"));
-  }
-  return difficulty;
+  return normalizeCategory(category) === DEFAULT_CATEGORY
+    ? DEFAULT_SUBCATEGORY
+    : EMPTY_SUBCATEGORY;
 }
 
 function normalizeDone(value) {
@@ -98,6 +248,7 @@ function normalizeDone(value) {
 }
 
 function getApiErrorStatus(error) {
+  if (error && error.status) return error.status;
   const message = String((error && error.message) || "");
   if (/必填|只能是|不存在|找不到|無效|不能|已經/.test(message)) return 400;
   if (/已封存|已完成/.test(message)) return 409;
@@ -106,7 +257,9 @@ function getApiErrorStatus(error) {
 
 function normalizeItem(item) {
   const safe = item || {};
-  const status = String(safe.status || (normalizeDone(safe.done) ? "completed" : "active"));
+  const status = String(
+    safe.status || (normalizeDone(safe.done) ? "completed" : "active"),
+  );
   return {
     ...safe,
     id: String(safe.id || "").trim(),
@@ -116,15 +269,20 @@ function normalizeItem(item) {
     subCategoryId: String(safe.subCategoryId || "").trim(),
     category: normalizeCategory(safe.category),
     subCategory: normalizeSubCategory(safe.subCategory, safe.category),
-    difficulty: normalizeDifficulty(safe.difficulty),
     status,
     done: status === "completed" || normalizeDone(safe.done),
     cycleNumber: Number(safe.cycleNumber || safe.scheduledCycleNumber || 1),
     weekNumber: Number(safe.weekNumber || safe.scheduledWeekNumber || 1),
-    originalCycleNumber: Number(safe.originalCycleNumber || safe.cycleNumber || 1),
+    originalCycleNumber: Number(
+      safe.originalCycleNumber || safe.cycleNumber || 1,
+    ),
     originalWeekNumber: Number(safe.originalWeekNumber || safe.weekNumber || 1),
-    scheduledCycleNumber: Number(safe.scheduledCycleNumber || safe.cycleNumber || 1),
-    scheduledWeekNumber: Number(safe.scheduledWeekNumber || safe.weekNumber || 1),
+    scheduledCycleNumber: Number(
+      safe.scheduledCycleNumber || safe.cycleNumber || 1,
+    ),
+    scheduledWeekNumber: Number(
+      safe.scheduledWeekNumber || safe.weekNumber || 1,
+    ),
     weekStart: safe.weekStart || "",
     weekEnd: safe.weekEnd || "",
     completedAt: safe.completedAt || "",
@@ -156,8 +314,12 @@ function sortTasksByCategory(tasks) {
     const indexA = knownA === -1 ? CATEGORY_OPTIONS.length : knownA;
     const indexB = knownB === -1 ? CATEGORY_OPTIONS.length : knownB;
     if (indexA !== indexB) return indexA - indexB;
-    if (categoryA !== categoryB) return categoryA.localeCompare(categoryB, "zh-Hant");
-    return getSubCategorySortIndex(a.subCategory) - getSubCategorySortIndex(b.subCategory);
+    if (categoryA !== categoryB)
+      return categoryA.localeCompare(categoryB, "zh-Hant");
+    return (
+      getSubCategorySortIndex(a.subCategory) -
+      getSubCategorySortIndex(b.subCategory)
+    );
   });
 }
 
@@ -166,32 +328,28 @@ function buildGoogleSheetsResourceUrl(resource, params = {}) {
   url.searchParams.set("secret", GOOGLE_SHEETS_API_SECRET);
   url.searchParams.set("resource", resource);
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+    if (value !== undefined && value !== null && value !== "")
+      url.searchParams.set(key, String(value));
   }
   return url.toString();
 }
 
 async function gasGet(resource, params = {}) {
-  const response = await fetch(buildGoogleSheetsResourceUrl(resource, params));
-  if (!response.ok) throw new Error(`呼叫 Google Apps Script ${resource} 失敗，狀態碼：${response.status}`);
-  const data = await response.json();
-  if (!data.ok) throw new Error(data.message || `Google Apps Script ${resource} 回傳失敗`);
-  return data;
+  return gasPost("read-resource", { resource, params });
 }
 
 async function gasPost(action, payload = {}) {
-  const response = await fetch(GOOGLE_SHEETS_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ secret: GOOGLE_SHEETS_API_SECRET, action, ...payload }),
-  });
-  if (!response.ok) throw new Error(`呼叫 Google Apps Script ${action} 失敗，狀態碼：${response.status}`);
-  const data = await response.json();
-  if (!data.ok) throw new Error(data.message || `Google Apps Script ${action} 失敗`);
-  return data.result !== undefined ? data.result : data.item;
+  return gasPostWithTimeout(action, payload, 35000);
 }
 
-async function gasPostWithTimeout(action, payload = {}, timeoutMs = QUEUE_RETRY_TIMEOUT_MS) {
+async function gasPostWithTimeout(
+  action,
+  payload = {},
+  timeoutMs = QUEUE_RETRY_TIMEOUT_MS,
+) {
+  const context = LINE_CONTEXT.getStore();
+  if (context && LEGACY_MUTATIONS.has(action))
+    payload = { ...payload, requestId: context.id + ":" + ++context.seq };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -199,17 +357,32 @@ async function gasPostWithTimeout(action, payload = {}, timeoutMs = QUEUE_RETRY_
     const response = await fetch(GOOGLE_SHEETS_API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ secret: GOOGLE_SHEETS_API_SECRET, action, ...payload }),
+      body: JSON.stringify({
+        ...payload,
+        secret: GOOGLE_SHEETS_API_SECRET,
+        action,
+      }),
       signal: controller.signal,
     });
 
-    if (!response.ok) throw new Error(`呼叫 Google Apps Script ${action} 失敗，狀態碼：${response.status}`);
+    if (!response.ok)
+      throw new Error(
+        `呼叫 Google Apps Script ${action} 失敗，狀態碼：${response.status}`,
+      );
     const data = await response.json();
-    if (!data.ok) throw new Error(data.message || `Google Apps Script ${action} 失敗`);
+    if (!data.ok) {
+      const error = new Error(
+        data.message || `Google Apps Script ${action} 失敗`,
+      );
+      error.status = Number(data.status) || 400;
+      throw error;
+    }
     return data.result !== undefined ? data.result : data.item;
   } catch (error) {
     if (error && error.name === "AbortError") {
-      throw new Error(`Google Apps Script ${action} 超過 ${Math.round(timeoutMs / 1000)} 秒未回應`);
+      throw new Error(
+        `Google Apps Script ${action} 超過 ${Math.round(timeoutMs / 1000)} 秒未回應`,
+      );
     }
     throw error;
   } finally {
@@ -221,29 +394,50 @@ async function disableLegacyGasRetryTriggerIfReady() {
   if (legacyGasRetryTriggerDisabled) return;
 
   try {
-    const result = await gasPostWithTimeout("disable-retry-pending-queue-trigger", {}, QUEUE_RETRY_TIMEOUT_MS);
+    const result = await gasPostWithTimeout(
+      "disable-retry-pending-queue-trigger",
+      {},
+      QUEUE_RETRY_TIMEOUT_MS,
+    );
     legacyGasRetryTriggerDisabled = true;
-    console.log(`[queue-retry] 舊 GAS retry trigger 已停用；移除 ${Number((result && result.removedCount) || 0)} 個`);
+    console.log(
+      `[queue-retry] 舊 GAS retry trigger 已停用；移除 ${Number((result && result.removedCount) || 0)} 個`,
+    );
   } catch (error) {
     // 停用失敗時保留舊 trigger，寧可暫時雙保險，也不讓 retry 功能出現空窗。
-    console.warn("[queue-retry] 暫時無法停用舊 GAS trigger，會在下次成功 retry 後再試：", error.message);
+    console.warn(
+      "[queue-retry] 暫時無法停用舊 GAS trigger，會在下次成功 retry 後再試：",
+      error.message,
+    );
   }
 }
 
 async function runQueueRetryTick() {
-  if (queueRetryInFlight) return { ok: true, skipped: true, reason: "retry_in_flight" };
+  if (queueRetryInFlight)
+    return { ok: true, skipped: true, reason: "retry_in_flight" };
   queueRetryInFlight = true;
 
   try {
-    const result = await gasPostWithTimeout("retry-pending-queue", {}, QUEUE_RETRY_TIMEOUT_MS);
-    const retryCount = Array.isArray(result && result.results) ? result.results.length : 0;
-    console.log(`[queue-retry] Render 排程完成；本次處理 ${retryCount} 筆 pending queue`);
+    const result = await gasPostWithTimeout(
+      "retry-pending-queue",
+      {},
+      QUEUE_RETRY_TIMEOUT_MS,
+    );
+    const retryCount = Array.isArray(result && result.results)
+      ? result.results.length
+      : 0;
+    console.log(
+      `[queue-retry] Render 排程完成；本次處理 ${retryCount} 筆 pending queue`,
+    );
 
     // 只有 Render -> GAS 的新 retry 路徑成功後，才自動刪掉舊的 GAS time trigger。
     await disableLegacyGasRetryTriggerIfReady();
     return result;
   } catch (error) {
-    console.warn("[queue-retry] 本次背景 retry 失敗，正常 LINE 即時功能不受影響：", error.message);
+    console.warn(
+      "[queue-retry] 本次背景 retry 失敗，正常 LINE 即時功能不受影響：",
+      error.message,
+    );
     return { ok: false, error: error.message };
   } finally {
     queueRetryInFlight = false;
@@ -252,17 +446,23 @@ async function runQueueRetryTick() {
 
 function startQueueRetryScheduler() {
   const firstTimer = setTimeout(() => {
-    runQueueRetryTick().catch((error) => console.warn("[queue-retry] startup retry error：", error.message));
+    runQueueRetryTick().catch((error) =>
+      console.warn("[queue-retry] startup retry error：", error.message),
+    );
   }, QUEUE_RETRY_START_DELAY_MS);
 
   const interval = setInterval(() => {
-    runQueueRetryTick().catch((error) => console.warn("[queue-retry] interval retry error：", error.message));
+    runQueueRetryTick().catch((error) =>
+      console.warn("[queue-retry] interval retry error：", error.message),
+    );
   }, QUEUE_RETRY_INTERVAL_MS);
 
   if (typeof firstTimer.unref === "function") firstTimer.unref();
   if (typeof interval.unref === "function") interval.unref();
 
-  console.log(`[queue-retry] Render scheduler 已啟動：${Math.round(QUEUE_RETRY_INTERVAL_MS / 1000)} 秒檢查一次`);
+  console.log(
+    `[queue-retry] Render scheduler 已啟動：${Math.round(QUEUE_RETRY_INTERVAL_MS / 1000)} 秒檢查一次`,
+  );
 }
 
 function normalizeWeekContextPayload(data = {}) {
@@ -270,7 +470,10 @@ function normalizeWeekContextPayload(data = {}) {
     previousWeek: data.previousWeek || null,
     currentWeek: data.currentWeek || null,
     nextWeek: data.nextWeek || null,
-    maxPlannableWeek: Number(data.maxPlannableWeek || ((data.currentWeek || {}).weekNumber || 0)) || null,
+    maxPlannableWeek:
+      Number(
+        data.maxPlannableWeek || (data.currentWeek || {}).weekNumber || 0,
+      ) || null,
     canPlanNextWeek: data.canPlanNextWeek === true,
     canPlanNextCycle: data.canPlanNextCycle === true,
     restPeriod: data.restPeriod === true,
@@ -308,7 +511,12 @@ async function fetchCurrentWeekItemsFromGoogleSheets() {
   if (!context.currentWeek) return [];
   const c = Number(context.currentWeek.cycleNumber);
   const w = Number(context.currentWeek.weekNumber);
-  return core.items.filter((item) => Number(item.scheduledCycleNumber) === c && Number(item.scheduledWeekNumber) === w && !["cancelled", "replanned"].includes(item.status));
+  return core.items.filter(
+    (item) =>
+      Number(item.scheduledCycleNumber) === c &&
+      Number(item.scheduledWeekNumber) === w &&
+      !["cancelled", "replanned"].includes(item.status),
+  );
 }
 
 async function createItemToGoogleSheets({
@@ -318,7 +526,6 @@ async function createItemToGoogleSheets({
   subCategory,
   categoryId,
   subCategoryId,
-  difficulty,
   done,
   cycleNumber,
   weekNumber,
@@ -336,7 +543,6 @@ async function createItemToGoogleSheets({
     subCategory: normalizeSubCategory(subCategory, category),
     categoryId,
     subCategoryId,
-    difficulty: normalizeDifficulty(difficulty),
     done: done === true,
     cycleNumber,
     weekNumber,
@@ -353,7 +559,7 @@ async function createItemToGoogleSheets({
 
 async function updateItemToGoogleSheets(id, updates) {
   const safe = { ...updates };
-  if (safe.difficulty !== undefined) safe.difficulty = normalizeDifficulty(safe.difficulty);
+  delete safe.difficulty;
   const result = await gasPost("update", { id, updates: safe });
   return normalizeItem(result);
 }
@@ -377,10 +583,11 @@ async function getTaskBoardForLine() {
 
   const c = Number(currentWeek.cycleNumber);
   const w = Number(currentWeek.weekNumber);
-  const items = core.items.filter((item) =>
-    Number(item.scheduledCycleNumber) === c &&
-    Number(item.scheduledWeekNumber) === w &&
-    !["cancelled", "replanned"].includes(item.status)
+  const items = core.items.filter(
+    (item) =>
+      Number(item.scheduledCycleNumber) === c &&
+      Number(item.scheduledWeekNumber) === w &&
+      !["cancelled", "replanned"].includes(item.status),
   );
 
   return {
@@ -388,25 +595,29 @@ async function getTaskBoardForLine() {
     tasks: sortTasksByCategory(items.filter((item) => item.type === "task")),
     standards: items.filter((item) => item.type === "standard"),
   };
-
 }
 
 async function getTaskContextById(id) {
   const core = await fetchCoreFromGoogleSheets();
-  const task = core.items.find((item) => item.type === "task" && item.id === String(id || "")) || null;
+  const task =
+    core.items.find(
+      (item) => item.type === "task" && item.id === String(id || ""),
+    ) || null;
   return { core, task, currentWeek: core.context.currentWeek || null };
 }
 
 function getTaskDoneCount(task) {
   if (!task) return 0;
-  if (task.frequency) return (task.occurrences || []).filter((o) => o && o.done).length;
+  if (task.frequency)
+    return (task.occurrences || []).filter((o) => o && o.done).length;
   return task.done ? 1 : 0;
 }
 
 function getTaskTargetCount(task) {
   if (!task) return 1;
   if (task.frequency === "daily") return 7;
-  if (task.frequency === "weekly") return Math.max(1, Number(task.timesPerWeek || 1));
+  if (task.frequency === "weekly")
+    return Math.max(1, Number(task.timesPerWeek || 1));
   return 1;
 }
 
@@ -414,21 +625,22 @@ function getRecurringMetaText(task) {
   if (!task || !task.frequency) return "";
   const done = getTaskDoneCount(task);
   const target = getTaskTargetCount(task);
-  return task.frequency === "daily" ? `每天 · ${done}/${target}` : `每週 ${target} 次 · ${done}/${target}`;
+  return task.frequency === "daily"
+    ? `每天 · ${done}/${target}`
+    : `每週 ${target} 次 · ${done}/${target}`;
 }
 
 function getLineCommandHintText() {
   return "主要操作請直接點卡片按鈕";
 }
 
-function getTaskMetaText(task, includeDifficulty = true) {
+function getTaskMetaText(task) {
   const parts = [normalizeCategory(task.category)];
 
   if (normalizeCategory(task.category) === "程式學習") {
     parts.push(normalizeSubCategory(task.subCategory, task.category));
   }
 
-  if (includeDifficulty) parts.push(normalizeDifficulty(task.difficulty));
   return parts.join("｜");
 }
 
@@ -443,48 +655,61 @@ function getLineSubCategoryLabel(subCategory) {
 // ── LINE 任務名稱只做清理，不先用固定字數截斷。
 // 真正的單行省略交給 Flex 的版面寬度處理，避免不同手機被過早截字。 ──
 function getLineTaskTitle(title) {
-  const text = String(title || "").trim().replace(/\s+/g, " ");
+  const text = String(title || "")
+    .trim()
+    .replace(/\s+/g, " ");
   return text || "未命名任務";
 }
 
 function formatTaskSectionByCategory(tasks) {
-  if (tasks.length === 0) return ["【本週任務】", "本週還沒有任務。加入一件想做的事就好。"].join("\n");
+  if (tasks.length === 0)
+    return ["【本週任務】", "本週還沒有任務。加入一件想做的事就好。"].join(
+      "\n",
+    );
 
   const lines = ["【本週任務】"];
   let taskNumber = 1;
 
   CATEGORY_OPTIONS.forEach(function (category) {
-    const categoryTasks = tasks.filter((task) => normalizeCategory(task.category) === category);
+    const categoryTasks = tasks.filter(
+      (task) => normalizeCategory(task.category) === category,
+    );
     if (categoryTasks.length === 0) return;
 
     lines.push("", `《${category}》`);
 
     if (category === "程式學習") {
-      [...SUBCATEGORY_OPTIONS, EMPTY_SUBCATEGORY].forEach(function (subCategory) {
-        const groupTasks = categoryTasks.filter(function (task) {
-          return normalizeSubCategory(task.subCategory, category) === subCategory;
-        });
+      [...SUBCATEGORY_OPTIONS, EMPTY_SUBCATEGORY].forEach(
+        function (subCategory) {
+          const groupTasks = categoryTasks.filter(function (task) {
+            return (
+              normalizeSubCategory(task.subCategory, category) === subCategory
+            );
+          });
 
-        if (groupTasks.length === 0) return;
+          if (groupTasks.length === 0) return;
 
-        // 純文字版也補上子分類小標題，和 Flex 版一致
-        const subLabel = getLineSubCategoryLabel(subCategory);
-        if (subLabel) lines.push(`  ［${subLabel}］`);
+          // 純文字版也補上子分類小標題，和 Flex 版一致
+          const subLabel = getLineSubCategoryLabel(subCategory);
+          if (subLabel) lines.push(`  ［${subLabel}］`);
 
-        groupTasks.forEach(function (task) {
-          const checkbox = task.done ? "✓ " : "";
-          lines.push(
-            `${taskNumber}. ${checkbox}${task.title}｜${normalizeSubCategory(task.subCategory, category)}｜${normalizeDifficulty(task.difficulty)}`
-          );
-          taskNumber += 1;
-        });
-      });
+          groupTasks.forEach(function (task) {
+            const checkbox = task.done ? "✓ " : "";
+            lines.push(
+              `${taskNumber}. ${checkbox}${task.title}｜${normalizeSubCategory(task.subCategory, category)}`,
+            );
+            taskNumber += 1;
+          });
+        },
+      );
       return;
     }
 
     categoryTasks.forEach(function (task) {
       const checkbox = task.done ? "✓ " : "";
-      lines.push(`${taskNumber}. ${checkbox}${task.title}｜${normalizeDifficulty(task.difficulty)}`);
+      lines.push(
+        `${taskNumber}. ${checkbox}${task.title}`,
+      );
       taskNumber += 1;
     });
   });
@@ -494,11 +719,18 @@ function formatTaskSectionByCategory(tasks) {
 
 function formatLineSection(title, items, emptyText) {
   if (items.length === 0) return [title, emptyText].join("\n");
-  return [title, ...items.map((item, index) => `${index + 1}. ${item.done ? "☑" : "☐"} ${item.title}`)].join("\n");
+  return [
+    title,
+    ...items.map(
+      (item, index) => `${index + 1}. ${item.done ? "☑" : "☐"} ${item.title}`,
+    ),
+  ].join("\n");
 }
 
 function formatTaskBoardForLine({ currentWeek, tasks, standards }) {
-  const weekTitle = currentWeek ? `第 ${currentWeek.weekNumber} 週｜${currentWeek.title}` : "本週清單";
+  const weekTitle = currentWeek
+    ? `第 ${currentWeek.weekNumber} 週｜${currentWeek.title}`
+    : "本週清單";
 
   return [
     "📋 Tiny Progress",
@@ -509,13 +741,15 @@ function formatTaskBoardForLine({ currentWeek, tasks, standards }) {
     "",
     formatTaskSectionByCategory(tasks),
     "",
-    formatLineSection("【本週驗收標準】", standards, "本週標準尚未成文。寫下一個方向，慢慢前進。"),
+    formatLineSection(
+      "【本週驗收標準】",
+      standards,
+      "本週標準尚未成文。寫下一個方向，慢慢前進。",
+    ),
     "",
     getLineCommandHintText(),
   ].join("\n");
 }
-
-
 
 const FLEX_COLORS = {
   cream: "#F8F4EA",
@@ -531,11 +765,11 @@ const FLEX_COLORS = {
 };
 
 // LINE 固定 5 張主卡：3 張日常操作卡由 server.js 產生，2 張主動推播由 Code.gs 產生。
-// server.js 這裡只保留日常的 3 張，避免再為難度、攻略額外長出新卡片。
+// server.js 這裡只保留日常的 3 張，避免再為攻略額外長出新卡片。
 const CARD_ACCENTS = {
-  allList: "#93B9D1",    // ① 本週清單
-  draw: "#6EB7B0",       // ② 抽一件
-  action: "#9B806B",     // ③ 事情操作
+  allList: "#93B9D1", // ① 本週清單
+  draw: "#6EB7B0", // ② 抽一件
+  action: "#9B806B", // ③ 事情操作
 };
 
 const LINE_TAG_PALETTE = [
@@ -567,12 +801,27 @@ function getCategoryFlexStyle(category, valueKey) {
   const normalizedCategory = normalizeCategory(category);
   const key = valueKey || normalizedCategory;
   const style = LINE_TAG_PALETTE[stableLineTagIndex(key, "category")];
-  return { backgroundColor: style.bg, textColor: style.text, borderColor: style.border, accentColor: style.accent };
+  return {
+    backgroundColor: style.bg,
+    textColor: style.text,
+    borderColor: style.border,
+    accentColor: style.accent,
+  };
 }
 
 const LINE_TAG_COLOR_FAMILIES = [
-  "green", "rose", "blue", "orange", "purple", "teal",
-  "yellow", "green", "orange", "blue", "green", "rose",
+  "green",
+  "rose",
+  "blue",
+  "orange",
+  "purple",
+  "teal",
+  "yellow",
+  "green",
+  "orange",
+  "blue",
+  "green",
+  "rose",
 ];
 
 function buildCuteSectionLabel(emoji, text, color, iconColor) {
@@ -606,7 +855,6 @@ function buildCuteSectionLabel(emoji, text, color, iconColor) {
     contents,
   };
 }
-
 
 function buildFlexTag(label, backgroundColor, textColor, options = {}) {
   return {
@@ -682,7 +930,6 @@ function buildCircleWeekMeta(currentWeek) {
   };
 }
 
-
 // 「本週清單」專用：Week 與日期放在同一列，日期和週次同色、同樣粗體。
 // Cycle 已放到 Tiny Progress 品牌列；其他卡片只顯示 Week，不顯示日期。
 function buildListCircleWeekMeta(currentWeek) {
@@ -728,27 +975,62 @@ function buildListCircleWeekMeta(currentWeek) {
   };
 }
 
-function buildFlexHeader(title, subtitle, headerAccessory, headerBadge, options = {}) {
+function buildFlexHeader(
+  title,
+  subtitle,
+  headerAccessory,
+  headerBadge,
+  options = {},
+) {
   const cycleNumber = Number(options.cycleNumber || 0);
-  const brandLabel = cycleNumber > 0 ? `Tiny Progress · Cycle ${cycleNumber}` : "Tiny Progress";
+  const brandLabel =
+    cycleNumber > 0 ? `Tiny Progress · Cycle ${cycleNumber}` : "Tiny Progress";
   const contents = [
     {
       type: "box",
       layout: "horizontal",
       alignItems: "center",
       contents: [
-        { type: "text", text: brandLabel, size: "xs", weight: "bold", color: FLEX_COLORS.brandText, flex: 1, wrap: false },
-        { type: "text", text: "∞", size: "lg", weight: "bold", color: FLEX_COLORS.brand, flex: 0 },
+        {
+          type: "text",
+          text: brandLabel,
+          size: "xs",
+          weight: "bold",
+          color: FLEX_COLORS.brandText,
+          flex: 1,
+          wrap: false,
+        },
+        {
+          type: "text",
+          text: "∞",
+          size: "lg",
+          weight: "bold",
+          color: FLEX_COLORS.brand,
+          flex: 0,
+        },
       ],
     },
   ];
 
   if (headerBadge) {
-    contents.push({ type: "box", layout: "horizontal", margin: "xs", contents: [headerBadge] });
+    contents.push({
+      type: "box",
+      layout: "horizontal",
+      margin: "xs",
+      contents: [headerBadge],
+    });
   }
 
   const titleContents = [
-    { type: "text", text: title, size: options.titleSize || "lg", weight: "bold", color: FLEX_COLORS.darkGreen, wrap: true, flex: 1 },
+    {
+      type: "text",
+      text: title,
+      size: options.titleSize || "lg",
+      weight: "bold",
+      color: FLEX_COLORS.darkGreen,
+      wrap: true,
+      flex: 1,
+    },
   ];
   if (headerAccessory) titleContents.push(headerAccessory);
 
@@ -762,12 +1044,17 @@ function buildFlexHeader(title, subtitle, headerAccessory, headerBadge, options 
   });
 
   if (subtitle) {
-    contents.push({ type: "text", text: subtitle, size: "xs", color: FLEX_COLORS.mutedText, wrap: true });
+    contents.push({
+      type: "text",
+      text: subtitle,
+      size: "xs",
+      color: FLEX_COLORS.mutedText,
+      wrap: true,
+    });
   }
 
   return { type: "box", layout: "vertical", spacing: "xs", contents };
 }
-
 
 function buildFlexInfoCard(contents, options = {}) {
   const cardContents = [];
@@ -777,8 +1064,8 @@ function buildFlexInfoCard(contents, options = {}) {
         options.emoji === undefined ? "•" : options.emoji,
         options.label || "Tiny Progress",
         options.labelColor || FLEX_COLORS.darkGreen,
-        options.iconColor || FLEX_COLORS.brand
-      )
+        options.iconColor || FLEX_COLORS.brand,
+      ),
     );
   }
   const card = {
@@ -796,7 +1083,6 @@ function buildFlexInfoCard(contents, options = {}) {
   }
   return card;
 }
-
 
 function buildSegmentedProgressBar(doneCount, totalCount, color) {
   const segments = Math.max(0, Number(totalCount || 0));
@@ -827,7 +1113,8 @@ function buildSegmentedProgressBar(doneCount, totalCount, color) {
       height: "8px",
       flex: 1,
       // 一件任務 = 一格；完成一件就亮一格。
-      backgroundColor: index < filled ? (color || FLEX_COLORS.greenFresh) : "#E7E5DF",
+      backgroundColor:
+        index < filled ? color || FLEX_COLORS.greenFresh : "#E7E5DF",
       cornerRadius: "999px",
       contents: [],
     })),
@@ -844,15 +1131,28 @@ function buildProgressBlock(label, doneCount, totalCount, color) {
         type: "box",
         layout: "horizontal",
         contents: [
-          { type: "text", text: label, size: "sm", color: FLEX_COLORS.mutedText, flex: 1 },
-          { type: "text", text: `${doneCount} / ${totalCount}`, size: "sm", color: FLEX_COLORS.darkGreen, weight: "bold", align: "end", flex: 0 },
+          {
+            type: "text",
+            text: label,
+            size: "sm",
+            color: FLEX_COLORS.mutedText,
+            flex: 1,
+          },
+          {
+            type: "text",
+            text: `${doneCount} / ${totalCount}`,
+            size: "sm",
+            color: FLEX_COLORS.darkGreen,
+            weight: "bold",
+            align: "end",
+            flex: 0,
+          },
         ],
       },
       buildSegmentedProgressBar(doneCount, totalCount, color),
     ],
   };
 }
-
 
 // 「本週清單」專用進度：移除灰色「本週進度」文字，只保留數字與進度條。
 function buildListProgressBlock(doneCount, totalCount, color) {
@@ -902,13 +1202,25 @@ function buildTaskFlexRow({ task, taskNumber }) {
       type: "box",
       layout: "horizontal",
       margin: "xs",
-      contents: [buildCategoryFlexTag(category, { valueKey: task.categoryId || category })],
+      contents: [
+        buildCategoryFlexTag(category, {
+          valueKey: task.categoryId || category,
+        }),
+      ],
     },
   ];
 
   const recurringMeta = getRecurringMetaText(task);
   if (recurringMeta) {
-    rowContents.push({ type: "text", text: recurringMeta, size: "xs", color: FLEX_COLORS.mutedText, margin: "xs", wrap: false, maxLines: 1 });
+    rowContents.push({
+      type: "text",
+      text: recurringMeta,
+      size: "xs",
+      color: FLEX_COLORS.mutedText,
+      margin: "xs",
+      wrap: false,
+      maxLines: 1,
+    });
   }
 
   return {
@@ -921,10 +1233,8 @@ function buildTaskFlexRow({ task, taskNumber }) {
   };
 }
 
-
 // 「清單」卡專用任務列：
-// 第一行 = 任務名稱＋難度；第二行 = 主題分類＋次分類。
-// 難度雖在第一行，但整張任務仍完整保留三層資訊。
+// 第一行 = 任務名稱；第二行 = 主題分類＋次分類。
 function buildListTaskFlexRow({ task, taskNumber }) {
   const row = buildTaskFlexRow({ task, taskNumber });
   row.contents.push({
@@ -933,15 +1243,21 @@ function buildListTaskFlexRow({ task, taskNumber }) {
     justifyContent: "flex-end",
     margin: "xs",
     contents: [
-      buildSoftActionPill("操作", linePostbackAction("操作", buildTpPostbackData("task_action", { id: task.id })), {
-        flex: 0,
-        width: "62px",
-      }),
+      buildSoftActionPill(
+        "操作",
+        linePostbackAction(
+          "操作",
+          buildTpPostbackData("task_action", { id: task.id }),
+        ),
+        {
+          flex: 0,
+          width: "62px",
+        },
+      ),
     ],
   });
   return row;
 }
-
 
 function buildListTaskRows(tasks) {
   const rows = [];
@@ -1014,10 +1330,19 @@ function buildListFooter() {
     spacing: "sm",
     contents: [
       buildActionPillRow([
-        buildSoftActionPill("抽一件", linePostbackAction("抽一件", buildTpPostbackData("draw"))),
-        buildSoftActionPill("＋ 新增", linePostbackAction("新增", buildTpPostbackData("add_prompt"), { inputOption: "openKeyboard" }), {
-          backgroundColor: FLEX_COLORS.paper,
-        }),
+        buildSoftActionPill(
+          "抽一件",
+          linePostbackAction("抽一件", buildTpPostbackData("draw")),
+        ),
+        buildSoftActionPill(
+          "＋ 新增",
+          linePostbackAction("新增", buildTpPostbackData("add_prompt"), {
+            inputOption: "openKeyboard",
+          }),
+          {
+            backgroundColor: FLEX_COLORS.paper,
+          },
+        ),
       ]),
     ],
   };
@@ -1032,39 +1357,88 @@ function buildTaskActionFooter(task, taskNumber) {
     spacing: "sm",
     contents: [
       buildActionPillRow([
-        buildSoftActionPill(primaryText, linePostbackAction(primaryText, buildTpPostbackData(primaryAction, { id: task.id })), {
-          backgroundColor: task.done ? "#F4F2ED" : FLEX_COLORS.brandSoft,
-        }),
-        buildSoftActionPill("編輯", linePostbackAction("編輯", buildTpPostbackData("edit_prompt", { id: task.id }), { inputOption: "openKeyboard" }), {
-          backgroundColor: FLEX_COLORS.paper,
-        }),
-        buildSoftActionPill("移週", linePostbackAction("移週", buildTpPostbackData("reschedule_choose", { id: task.id })), {
-          backgroundColor: FLEX_COLORS.paper,
-        }),
+        buildSoftActionPill(
+          primaryText,
+          linePostbackAction(
+            primaryText,
+            buildTpPostbackData(primaryAction, { id: task.id }),
+          ),
+          {
+            backgroundColor: task.done ? "#F4F2ED" : FLEX_COLORS.brandSoft,
+          },
+        ),
+        buildSoftActionPill(
+          "編輯",
+          linePostbackAction(
+            "編輯",
+            buildTpPostbackData("edit_prompt", { id: task.id }),
+            { inputOption: "openKeyboard" },
+          ),
+          {
+            backgroundColor: FLEX_COLORS.paper,
+          },
+        ),
+        buildSoftActionPill(
+          "移週",
+          linePostbackAction(
+            "移週",
+            buildTpPostbackData("reschedule_choose", { id: task.id }),
+          ),
+          {
+            backgroundColor: FLEX_COLORS.paper,
+          },
+        ),
       ]),
       buildActionPillRow([
-        buildSoftActionPill("刪除", linePostbackAction("刪除", buildTpPostbackData("delete_preview", { id: task.id })), {
-          backgroundColor: "#FBF3F1",
-          borderColor: "#E7CFC9",
-          textColor: "#8B5E57",
-        }),
-        buildSoftActionPill("回清單", linePostbackAction("回清單", buildTpPostbackData("list")), {
-          backgroundColor: FLEX_COLORS.paper,
-        }),
+        buildSoftActionPill(
+          "刪除",
+          linePostbackAction(
+            "刪除",
+            buildTpPostbackData("delete_preview", { id: task.id }),
+          ),
+          {
+            backgroundColor: "#FBF3F1",
+            borderColor: "#E7CFC9",
+            textColor: "#8B5E57",
+          },
+        ),
+        buildSoftActionPill(
+          "回清單",
+          linePostbackAction("回清單", buildTpPostbackData("list")),
+          {
+            backgroundColor: FLEX_COLORS.paper,
+          },
+        ),
       ]),
     ],
   };
 }
 
-
-function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, accentColor, headerAccessory, headerBadge, titleSize, cycleNumber }) {
+function buildBaseFlexBubble({
+  title,
+  subtitle,
+  bodyContents,
+  footerContents,
+  accentColor,
+  headerAccessory,
+  headerBadge,
+  titleSize,
+  cycleNumber,
+}) {
   const innerContents = [
-    buildFlexHeader(title, subtitle, headerAccessory, headerBadge, { titleSize, cycleNumber }),
+    buildFlexHeader(title, subtitle, headerAccessory, headerBadge, {
+      titleSize,
+      cycleNumber,
+    }),
     { type: "separator", margin: "md", color: FLEX_COLORS.beigeLine },
     ...bodyContents,
   ];
   if (footerContents) {
-    innerContents.push({ type: "separator", margin: "md", color: FLEX_COLORS.beigeLine });
+    innerContents.push({
+      type: "separator",
+      margin: "md",
+      color: FLEX_COLORS.beigeLine,
+    });
     innerContents.push(footerContents);
   }
   return {
@@ -1092,8 +1466,11 @@ function buildBaseFlexBubble({ title, subtitle, bodyContents, footerContents, ac
   };
 }
 
-
-function buildDrawOneTaskFallbackText({ selectedTask, taskNumber, unfinishedCount }) {
+function buildDrawOneTaskFallbackText({
+  selectedTask,
+  taskNumber,
+  unfinishedCount,
+}) {
   return [
     "Tiny Progress｜今天抽到",
     "",
@@ -1107,13 +1484,21 @@ function buildDrawOneTaskFallbackText({ selectedTask, taskNumber, unfinishedCoun
   ].join("\n");
 }
 
-
 function buildDrawEmptyFlexMessage(currentWeek) {
   const footerButtons = [
-    buildSoftActionPill("看清單", linePostbackAction("看清單", buildTpPostbackData("list"))),
-    buildSoftActionPill("＋ 新增", linePostbackAction("新增", buildTpPostbackData("add_prompt"), { inputOption: "openKeyboard" }), {
-      backgroundColor: FLEX_COLORS.paper,
-    }),
+    buildSoftActionPill(
+      "看清單",
+      linePostbackAction("看清單", buildTpPostbackData("list")),
+    ),
+    buildSoftActionPill(
+      "＋ 新增",
+      linePostbackAction("新增", buildTpPostbackData("add_prompt"), {
+        inputOption: "openKeyboard",
+      }),
+      {
+        backgroundColor: FLEX_COLORS.paper,
+      },
+    ),
   ];
 
   const bubble = buildBaseFlexBubble({
@@ -1124,17 +1509,34 @@ function buildDrawEmptyFlexMessage(currentWeek) {
     accentColor: CARD_ACCENTS.draw,
     bodyContents: [
       buildFlexInfoCard(
-        [{ type: "text", text: "本週任務都完成了。", size: "md", color: FLEX_COLORS.darkGreen, weight: "regular", wrap: true }],
-        { label: "今天做什麼", emoji: "○" }
+        [
+          {
+            type: "text",
+            text: "本週任務都完成了。",
+            size: "md",
+            color: FLEX_COLORS.darkGreen,
+            weight: "regular",
+            wrap: true,
+          },
+        ],
+        { label: "今天做什麼", emoji: "○" },
       ),
     ],
     footerContents: buildActionPillRow(footerButtons),
   });
-  return { type: "flex", altText: "Tiny Progress｜目前沒有任務可以抽，本週都完成了！", contents: bubble };
+  return {
+    type: "flex",
+    altText: "Tiny Progress｜目前沒有任務可以抽，本週都完成了！",
+    contents: bubble,
+  };
 }
 
-
-function buildDrawOneTaskFlexMessage({ currentWeek, selectedTask, taskNumber, unfinishedCount }) {
+function buildDrawOneTaskFlexMessage({
+  currentWeek,
+  selectedTask,
+  taskNumber,
+  unfinishedCount,
+}) {
   const bubble = buildBaseFlexBubble({
     title: "專注一件",
     subtitle: `還有 ${unfinishedCount} 件未完成`,
@@ -1144,7 +1546,7 @@ function buildDrawOneTaskFlexMessage({ currentWeek, selectedTask, taskNumber, un
     bodyContents: [
       buildFlexInfoCard(
         [buildTaskFlexRow({ task: selectedTask, taskNumber })],
-        { label: "今天抽到", emoji: "•" }
+        { label: "今天抽到", emoji: "•" },
       ),
     ],
     footerContents: {
@@ -1153,13 +1555,30 @@ function buildDrawOneTaskFlexMessage({ currentWeek, selectedTask, taskNumber, un
       spacing: "sm",
       contents: [
         buildActionPillRow([
-          buildSoftActionPill("完成", linePostbackAction("完成", buildTpPostbackData("task_done", { id: selectedTask.id }))),
-          buildSoftActionPill("換一件", linePostbackAction("換一件", buildTpPostbackData("draw")), {
-            backgroundColor: FLEX_COLORS.paper,
-          }),
-          buildSoftActionPill("更多", linePostbackAction("更多", buildTpPostbackData("task_action", { id: selectedTask.id })), {
-            backgroundColor: FLEX_COLORS.paper,
-          }),
+          buildSoftActionPill(
+            "完成",
+            linePostbackAction(
+              "完成",
+              buildTpPostbackData("task_done", { id: selectedTask.id }),
+            ),
+          ),
+          buildSoftActionPill(
+            "換一件",
+            linePostbackAction("換一件", buildTpPostbackData("draw")),
+            {
+              backgroundColor: FLEX_COLORS.paper,
+            },
+          ),
+          buildSoftActionPill(
+            "更多",
+            linePostbackAction(
+              "更多",
+              buildTpPostbackData("task_action", { id: selectedTask.id }),
+            ),
+            {
+              backgroundColor: FLEX_COLORS.paper,
+            },
+          ),
         ]),
       ],
     },
@@ -1171,119 +1590,114 @@ function buildDrawOneTaskFlexMessage({ currentWeek, selectedTask, taskNumber, un
   };
 }
 
-
 async function handleDrawOneTaskCommand() {
-  const board = await getTaskBoardForLine();
-  const unfinishedTasks = board.tasks.filter((task) => !task.done);
-  if (unfinishedTasks.length === 0) {
-    return {
-      replyText: ["Tiny Progress｜今天抽一件", "", "目前沒有任務可以抽。"].join("\n"),
-      replyMessages: [buildDrawEmptyFlexMessage(board.currentWeek)],
-    };
-  }
-  const selectedTask = unfinishedTasks[Math.floor(Math.random() * unfinishedTasks.length)];
-  const taskNumber = board.tasks.findIndex((task) => task.id === selectedTask.id) + 1;
-  const unfinishedCount = unfinishedTasks.length;
-  return {
-    replyText: buildDrawOneTaskFallbackText({ selectedTask, taskNumber, unfinishedCount }),
-    replyMessages: [buildDrawOneTaskFlexMessage({ currentWeek: board.currentWeek, selectedTask, taskNumber, unfinishedCount })],
-  };
+  const data = await loadWebState();
+  return scopeMessages(
+    [Cards.draw(data.state, { webUrl: TINY_PROGRESS_WEB_URL })],
+    data.state.cycle.number,
+  )[0];
 }
 
-
-
-function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
-  const taskDoneCount = tasks.filter((task) => task.done).length;
-  const taskRows = buildListTaskRows(tasks);
-  const bodyContents = [
-    buildFlexInfoCard([buildListProgressBlock(taskDoneCount, tasks.length, CARD_ACCENTS.allList)], { label: "本週概況", emoji: "○" }),
-  ];
-  if (tasks.length === 0) {
-    bodyContents.push(
-      buildFlexInfoCard(
-        [{ type: "text", text: "本週還沒有任務。", size: "md", color: FLEX_COLORS.darkGreen, weight: "regular", wrap: true }],
-        { label: "本週任務", emoji: "•" }
-      )
-    );
-  } else {
-    bodyContents.push(buildFlexInfoCard(taskRows, { label: "本週任務", emoji: "•" }));
-  }
-  const bubble = buildBaseFlexBubble({
-    title: "本週清單",
-    subtitle: currentWeek?.title ? currentWeek.title : "完整查看本週任務",
-    cycleNumber: currentWeek?.cycleNumber,
-    headerBadge: buildListCircleWeekMeta(currentWeek),
-    titleSize: "lg",
-    accentColor: CARD_ACCENTS.allList,
-    bodyContents,
-    footerContents: buildListFooter(),
-  });
-  return {
-    type: "flex",
-    altText: currentWeek ? `Tiny Progress · Cycle ${currentWeek.cycleNumber}｜Week ${currentWeek.weekNumber}｜任務 ${taskDoneCount}/${tasks.length}` : "Tiny Progress｜本週清單",
-    contents: bubble,
-  };
+async function buildAllListFlexMessage({ currentWeek, tasks, standards }) {
+  const data = await loadWebState(currentWeek?.cycleNumber);
+  return scopeMessages(
+    [
+      Cards.list(data.state, {
+        week: currentWeek?.weekNumber || D.currentWeek(data.state),
+        webUrl: TINY_PROGRESS_WEB_URL,
+      }),
+    ],
+    data.state.cycle.number,
+  )[0];
 }
-
 
 async function handleAllListFlexCommand() {
-  const board = await getTaskBoardForLine();
-
-  return {
-    replyText: formatTaskBoardForLine(board),
-    replyMessages: [buildAllListFlexMessage(board)],
-  };
+  const data = await loadWebState();
+  return scopeMessages(
+    [Cards.list(data.state, { webUrl: TINY_PROGRESS_WEB_URL })],
+    data.state.cycle.number,
+  )[0];
 }
 
-
 function buildTaskActionFlexMessage({ currentWeek, task, taskNumber }) {
-  const statusText = task.done ? "已完成" : "未完成";
-  const bubble = buildBaseFlexBubble({
-    title: "事情",
-    subtitle: statusText,
-    cycleNumber: currentWeek?.cycleNumber,
-    headerBadge: buildCircleWeekMeta(currentWeek),
-    accentColor: CARD_ACCENTS.action,
-    bodyContents: [
-      buildFlexInfoCard(
-        [buildTaskFlexRow({ task, taskNumber })],
-        { label: "目前狀態", emoji: task.done ? "✓" : "○" }
-      ),
-    ],
-    footerContents: buildTaskActionFooter(task, taskNumber),
-  });
-
   return {
-    type: "flex",
-    altText: `Tiny Progress｜${task.title}｜${statusText}`,
-    contents: bubble,
+    type: "text",
+    text: "「" + task.title + "」要做什麼？",
+    quickReply: {
+      items: [
+        ...(!task.done && !task.frequency
+          ? [
+              buildQuickReplyItem(
+                linePostbackAction(
+                  "移到其他週",
+                  buildTpPostbackData("reschedule_choose", { id: task.id }),
+                ),
+              ),
+            ]
+          : []),
+        buildQuickReplyItem(
+          linePostbackAction(
+            task.done ? "復原完成" : "完成",
+            buildTpPostbackData(task.done ? "task_undo" : "task_done", {
+              id: task.id,
+            }),
+          ),
+        ),
+        buildQuickReplyItem(
+          linePostbackAction(
+            "改名稱",
+            buildTpPostbackData("edit_prompt", { id: task.id }),
+          ),
+        ),
+        buildQuickReplyItem(
+          linePostbackAction(
+            "刪除",
+            buildTpPostbackData("delete_preview", { id: task.id }),
+          ),
+        ),
+      ],
+    },
   };
 }
 
 async function handleTaskActionCommand(numberText) {
   const taskNumber = Number(numberText);
   const board = await getTaskBoardForLine();
-  if (!Number.isInteger(taskNumber) || taskNumber <= 0 || !board.tasks[taskNumber - 1]) {
+  if (
+    !Number.isInteger(taskNumber) ||
+    taskNumber <= 0 ||
+    !board.tasks[taskNumber - 1]
+  ) {
     return {
       replyText: "目前找不到這件事情，已重新開啟本週清單。",
-      replyMessages: [buildAllListFlexMessage(board)],
+      replyMessages: [await buildAllListFlexMessage(board)],
     };
   }
 
   const task = board.tasks[taskNumber - 1];
   return {
     replyText: `Tiny Progress｜${task.title}｜${task.done ? "已完成" : "未完成"}`,
-    replyMessages: [buildTaskActionFlexMessage({ currentWeek: board.currentWeek, task, taskNumber })],
+    replyMessages: [
+      buildTaskActionFlexMessage({
+        currentWeek: board.currentWeek,
+        task,
+        taskNumber,
+      }),
+    ],
   };
 }
 
 async function handleTaskDoneClick(numberText, done) {
   const taskNumber = Number(numberText);
   const board = await getTaskBoardForLine();
-  if (!Number.isInteger(taskNumber) || taskNumber <= 0 || !board.tasks[taskNumber - 1]) {
+  if (
+    !Number.isInteger(taskNumber) ||
+    taskNumber <= 0 ||
+    !board.tasks[taskNumber - 1]
+  ) {
     return {
       replyText: "目前找不到這件事情，已重新開啟本週清單。",
-      replyMessages: [buildAllListFlexMessage(board)],
+      replyMessages: [await buildAllListFlexMessage(board)],
     };
   }
 
@@ -1301,42 +1715,31 @@ async function handleTaskDoneClick(numberText, done) {
   };
 }
 
-
-function buildConfirmFlexMessage({ title, subtitle, task, confirmLabel, confirmAction, cancelAction }) {
-  const body = [];
-  if (task) {
-    body.push(buildFlexInfoCard([
-      buildTaskFlexRow({ task, taskNumber: "" }),
-    ], { label: "這件事情", emoji: "•" }));
-  }
-  const bubble = buildBaseFlexBubble({
-    title,
-    subtitle,
-    cycleNumber: task && task.cycleNumber,
-    accentColor: CARD_ACCENTS.action,
-    bodyContents: body.length ? body : [buildFlexInfoCard([{ type: "text", text: subtitle || "請確認", size: "sm", color: FLEX_COLORS.darkGreen, wrap: true }])],
-    footerContents: buildActionPillRow([
-      buildSoftActionPill(confirmLabel || "確定", confirmAction),
-      buildSoftActionPill("取消", cancelAction, { backgroundColor: FLEX_COLORS.paper }),
-    ]),
-  });
-  return { type: "flex", altText: `Tiny Progress｜${title}`, contents: bubble };
+function buildConfirmFlexMessage({
+  title,
+  subtitle,
+  task,
+  confirmLabel,
+  confirmAction,
+  cancelAction,
+}) {
+  return {
+    type: "text",
+    text: [title, subtitle, task?.title].filter(Boolean).join("\n"),
+    quickReply: {
+      items: [
+        buildQuickReplyItem(confirmAction),
+        buildQuickReplyItem(cancelAction),
+      ],
+    },
+  };
 }
 
 function buildStatusMiniCard(title, subtitle, task, actionLabel, action) {
-  const body = task ? [buildFlexInfoCard([
-    { type: "text", text: task.title || "未命名事情", size: "md", color: FLEX_COLORS.darkGreen, wrap: true },
-  ], { label: subtitle || "已更新", emoji: "✓" })] : [];
-  const footer = action ? buildActionPillRow([
-    buildSoftActionPill(actionLabel, action),
-    buildSoftActionPill("回清單", linePostbackAction("回清單", buildTpPostbackData("list")), { backgroundColor: FLEX_COLORS.paper }),
-  ]) : buildActionPillRow([
-    buildSoftActionPill("回清單", linePostbackAction("回清單", buildTpPostbackData("list"))),
-  ]);
   return {
-    type: "flex",
-    altText: `Tiny Progress｜${title}`,
-    contents: buildBaseFlexBubble({ title, subtitle: subtitle || "", accentColor: CARD_ACCENTS.action, bodyContents: body, footerContents: footer }),
+    type: "text",
+    text: [title, subtitle, task?.title].filter(Boolean).join("\n"),
+    ...(action ? { quickReply: { items: [buildQuickReplyItem(action)] } } : {}),
   };
 }
 
@@ -1351,15 +1754,31 @@ function buildReasonPromptMessage({ kind, task, targetWeek }) {
     baseParams.cycle = targetWeek.cycleNumber;
     baseParams.week = targetWeek.weekNumber;
   }
-  const items = common.map((reason) => buildQuickReplyItem(
-    linePostbackAction(reason, buildTpPostbackData(reasonActionName, { ...baseParams, reason }))
-  ));
-  items.push(buildQuickReplyItem(
-    linePostbackAction("自己寫", buildTpPostbackData("reason_custom", baseParams), { inputOption: "openKeyboard" })
-  ));
-  items.push(buildQuickReplyItem(
-    linePostbackAction("取消", buildTpPostbackData("pending_cancel", { id: task.id }))
-  ));
+  const items = common.map((reason) =>
+    buildQuickReplyItem(
+      linePostbackAction(
+        reason,
+        buildTpPostbackData(reasonActionName, { ...baseParams, reason }),
+      ),
+    ),
+  );
+  items.push(
+    buildQuickReplyItem(
+      linePostbackAction(
+        "自己寫",
+        buildTpPostbackData("reason_custom", baseParams),
+        { inputOption: "openKeyboard" },
+      ),
+    ),
+  );
+  items.push(
+    buildQuickReplyItem(
+      linePostbackAction(
+        "取消",
+        buildTpPostbackData("pending_cancel", { id: task.id }),
+      ),
+    ),
+  );
   return {
     type: "text",
     text: isDelete
@@ -1371,17 +1790,22 @@ function buildReasonPromptMessage({ kind, task, targetWeek }) {
 
 function buildRescheduleChoicesMessage(task, core) {
   const current = core.context.currentWeek;
-  const max = Number(core.context.maxPlannableWeek || (current && current.weekNumber) || 0);
+  const max = Number(
+    core.context.maxPlannableWeek || (current && current.weekNumber) || 0,
+  );
   const immediateNext = Number(task.scheduledWeekNumber || task.weekNumber) + 1;
   const cycleNumber = Number(task.scheduledCycleNumber || task.cycleNumber);
-  const choices = (core.weeks || []).filter((week) => {
-    const w = Number(week.weekNumber);
-    if (Number(week.cycleNumber) !== cycleNumber) return false;
-    if (w === Number(task.scheduledWeekNumber || task.weekNumber)) return false;
-    if (week.archived) return false;
-    if (current && w < Number(current.weekNumber)) return false;
-    return w <= max || w === immediateNext;
-  }).slice(0, 12);
+  const choices = (core.weeks || [])
+    .filter((week) => {
+      const w = Number(week.weekNumber);
+      if (Number(week.cycleNumber) !== cycleNumber) return false;
+      if (w === Number(task.scheduledWeekNumber || task.weekNumber))
+        return false;
+      if (week.archived) return false;
+      if (current && w < Number(current.weekNumber)) return false;
+      return w <= max || w === immediateNext;
+    })
+    .slice(0, 12);
 
   if (!choices.length) {
     return { type: "text", text: "目前沒有可以移動的 Week。" };
@@ -1390,15 +1814,27 @@ function buildRescheduleChoicesMessage(task, core) {
     type: "text",
     text: `把「${task.title}」移到哪一週？`,
     quickReply: {
-      items: choices.map((week) => buildQuickReplyItem(
-        linePostbackAction(`Week ${week.weekNumber}`, buildTpPostbackData("reschedule_preview", {
-          id: task.id,
-          cycle: week.cycleNumber,
-          week: week.weekNumber,
-        }))
-      )).concat([
-        buildQuickReplyItem(linePostbackAction("取消", buildTpPostbackData("pending_cancel", { id: task.id }))),
-      ]),
+      items: choices
+        .map((week) =>
+          buildQuickReplyItem(
+            linePostbackAction(
+              `Week ${week.weekNumber}`,
+              buildTpPostbackData("reschedule_preview", {
+                id: task.id,
+                cycle: week.cycleNumber,
+                week: week.weekNumber,
+              }),
+            ),
+          ),
+        )
+        .concat([
+          buildQuickReplyItem(
+            linePostbackAction(
+              "取消",
+              buildTpPostbackData("pending_cancel", { id: task.id }),
+            ),
+          ),
+        ]),
     },
   };
 }
@@ -1412,7 +1848,6 @@ async function createSimpleTaskFromLine(title) {
     title: String(title || "").trim(),
     category: DEFAULT_CATEGORY,
     subCategory: DEFAULT_SUBCATEGORY,
-    difficulty: DEFAULT_DIFFICULTY,
     cycleNumber: current.cycleNumber,
     weekNumber: current.weekNumber,
     scheduledCycleNumber: current.cycleNumber,
@@ -1430,7 +1865,12 @@ async function handleTinyProgressPostback({ sourceKey, rawData }) {
   if (action === "task_action") {
     const { task, currentWeek } = await getTaskContextById(data.id);
     if (!task) return handleAllListFlexCommand();
-    return { replyText: `Tiny Progress｜${task.title}`, replyMessages: [buildTaskActionFlexMessage({ currentWeek, task, taskNumber: "" })] };
+    return {
+      replyText: `Tiny Progress｜${task.title}`,
+      replyMessages: [
+        buildTaskActionFlexMessage({ currentWeek, task, taskNumber: "" }),
+      ],
+    };
   }
 
   if (action === "task_done" || action === "task_undo") {
@@ -1439,35 +1879,81 @@ async function handleTinyProgressPostback({ sourceKey, rawData }) {
     if (!task) return handleAllListFlexCommand();
     let updated;
     if (task.frequency) {
-      updated = await gasPost(done ? "complete-occurrence" : "correct-occurrence", { id: task.id });
+      updated = await gasPost(
+        done ? "complete-occurrence" : "correct-occurrence",
+        { id: task.id },
+      );
     } else {
-      updated = await gasPost(done ? "complete-task" : "correct-completion", { id: task.id });
+      updated = await gasPost(done ? "complete-task" : "correct-completion", {
+        id: task.id,
+      });
     }
     const normalized = normalizeItem(updated);
-    return { replyText: `${normalized.title}｜${done ? "已完成" : "已改回未完成"}`, replyMessages: [buildTaskActionFlexMessage({ currentWeek, task: normalized, taskNumber: "" })] };
+    return {
+      replyText: `${normalized.title}｜${done ? "已完成" : "已改回未完成"}`,
+      replyMessages: [
+        buildTaskActionFlexMessage({
+          currentWeek,
+          task: normalized,
+          taskNumber: "",
+        }),
+      ],
+    };
   }
 
   if (action === "add_prompt") {
-    await gasPost("line-pending-set", { userId: sourceKey, pending: { kind: "add_title" }, ttlSeconds: TP_LINE_PENDING_TTL_SECONDS });
-    return { type: "text", text: "要新增什麼事情？\n直接在輸入框打名稱即可，10 分鐘內有效。" };
+    await gasPost("line-pending-set", {
+      userId: sourceKey,
+      pending: { kind: "add_title" },
+      ttlSeconds: TP_LINE_PENDING_TTL_SECONDS,
+    });
+    return {
+      type: "text",
+      text: "要新增什麼事情？\n直接在輸入框打名稱即可，10 分鐘內有效。",
+    };
   }
   if (action === "add_submit") {
     const title = String(data.title || "").trim();
     if (!title) return "事情名稱不能是空白。";
     const created = await createSimpleTaskFromLine(title);
-    return { replyText: `已新增：${created.title}`, replyMessages: [buildTaskActionFlexMessage({ currentWeek: (await fetchWeekContextFromGoogleSheets()).currentWeek, task: created, taskNumber: "" })] };
+    return {
+      replyText: `已新增：${created.title}`,
+      replyMessages: [
+        buildTaskActionFlexMessage({
+          currentWeek: (await fetchWeekContextFromGoogleSheets()).currentWeek,
+          task: created,
+          taskNumber: "",
+        }),
+      ],
+    };
   }
 
   if (action === "edit_prompt") {
     const { task } = await getTaskContextById(data.id);
     if (!task) return "找不到這件事情。";
-    await gasPost("line-pending-set", { userId: sourceKey, pending: { kind: "edit_title", id: task.id }, ttlSeconds: TP_LINE_PENDING_TTL_SECONDS });
-    return { type: "text", text: `要把「${task.title}」改成什麼？\n直接輸入新的名稱，或輸入「取消」。` };
+    await gasPost("line-pending-set", {
+      userId: sourceKey,
+      pending: { kind: "edit_title", id: task.id },
+      ttlSeconds: TP_LINE_PENDING_TTL_SECONDS,
+    });
+    return {
+      type: "text",
+      text: `要把「${task.title}」改成什麼？\n直接輸入新的名稱，或輸入「取消」。`,
+    };
   }
   if (action === "edit_submit") {
     const title = String(data.title || "").trim();
     const updated = await updateItemToGoogleSheets(data.id, { title });
-    return { replyText: `已修改：${updated.title}`, replyMessages: [buildTaskActionFlexMessage({ currentWeek: (await fetchWeekContextFromGoogleSheets()).currentWeek, task: updated, taskNumber: "" })] };
+    return {
+      replyText: `已修改：${updated.title}`,
+      replyMessages: [
+        buildTaskActionFlexMessage({
+          currentWeek: (await fetchWeekContextFromGoogleSheets()).currentWeek,
+          task: updated,
+          taskNumber: "",
+        }),
+      ],
+    };
   }
 
   if (action === "delete_preview") {
@@ -1475,78 +1961,170 @@ async function handleTinyProgressPostback({ sourceKey, rawData }) {
     if (!task) return "找不到這件事情。";
     return {
       replyText: `確定刪除「${task.title}」？`,
-      replyMessages: [buildConfirmFlexMessage({
-        title: "確認刪除",
-        subtitle: "刪除後會留下原因與紀錄",
-        task,
-        confirmLabel: "確定",
-        confirmAction: linePostbackAction("確定", buildTpPostbackData("delete_reason_prompt", { id: task.id }), { inputOption: "openKeyboard" }),
-        cancelAction: linePostbackAction("取消", buildTpPostbackData("pending_cancel", { id: task.id })),
-      })],
+      replyMessages: [
+        buildConfirmFlexMessage({
+          title: "確認刪除",
+          subtitle: "刪除後會留下原因與紀錄",
+          task,
+          confirmLabel: "確定",
+          confirmAction: linePostbackAction(
+            "確定",
+            buildTpPostbackData("delete_reason_prompt", { id: task.id }),
+            { inputOption: "openKeyboard" },
+          ),
+          cancelAction: linePostbackAction(
+            "取消",
+            buildTpPostbackData("pending_cancel", { id: task.id }),
+          ),
+        }),
+      ],
     };
   }
   if (action === "delete_reason_prompt") {
     const { task } = await getTaskContextById(data.id);
     if (!task) return "找不到這件事情。";
-    await gasPost("line-pending-set", { userId: sourceKey, pending: { kind: "delete_reason", id: task.id }, ttlSeconds: TP_LINE_PENDING_TTL_SECONDS });
-    return { replyText: "請選或輸入刪除原因", replyMessages: [buildReasonPromptMessage({ kind: "delete", task })] };
+    await gasPost("line-pending-set", {
+      userId: sourceKey,
+      pending: { kind: "delete_reason", id: task.id },
+      ttlSeconds: TP_LINE_PENDING_TTL_SECONDS,
+    });
+    return {
+      replyText: "請選或輸入刪除原因",
+      replyMessages: [buildReasonPromptMessage({ kind: "delete", task })],
+    };
   }
   if (action === "delete_reason") {
     const reason = String(data.reason || "").trim();
-    const deleted = normalizeItem(await gasPost("cancel-task", { id: data.id, reason }));
+    const deleted = normalizeItem(
+      await gasPost("cancel-task", { id: data.id, reason }),
+    );
     await gasPost("line-pending-clear", { userId: sourceKey });
     return {
       replyText: `已刪除：${deleted.title}`,
-      replyMessages: [buildStatusMiniCard("已刪除", `原因：${reason}`, deleted, "復原", linePostbackAction("復原", buildTpPostbackData("task_restore", { id: deleted.id })))],
+      replyMessages: [
+        buildStatusMiniCard(
+          "已刪除",
+          `原因：${reason}`,
+          deleted,
+          "復原",
+          linePostbackAction(
+            "復原",
+            buildTpPostbackData("task_restore", { id: deleted.id }),
+          ),
+        ),
+      ],
     };
   }
   if (action === "task_restore") {
-    const restored = normalizeItem(await gasPost("restore-cancelled-task", { id: data.id }));
-    return { replyText: `已復原：${restored.title}`, replyMessages: [buildStatusMiniCard("已復原", "事情已回到原本的 Week", restored)] };
+    const restored = normalizeItem(
+      await gasPost("restore-cancelled-task", { id: data.id }),
+    );
+    return {
+      replyText: `已復原：${restored.title}`,
+      replyMessages: [
+        buildStatusMiniCard("已復原", "事情已回到原本的 Week", restored),
+      ],
+    };
   }
 
   if (action === "reschedule_choose") {
     const { core, task } = await getTaskContextById(data.id);
     if (!task) return "找不到這件事情。";
-    return { replyText: `選擇「${task.title}」要移到的 Week`, replyMessages: [buildRescheduleChoicesMessage(task, core)] };
+    return {
+      replyText: `選擇「${task.title}」要移到的 Week`,
+      replyMessages: [buildRescheduleChoicesMessage(task, core)],
+    };
   }
   if (action === "reschedule_preview") {
     const { core, task } = await getTaskContextById(data.id);
     if (!task) return "找不到這件事情。";
-    const targetWeek = (core.weeks || []).find((w) => Number(w.cycleNumber) === Number(data.cycle) && Number(w.weekNumber) === Number(data.week));
+    const targetWeek = (core.weeks || []).find(
+      (w) =>
+        Number(w.cycleNumber) === Number(data.cycle) &&
+        Number(w.weekNumber) === Number(data.week),
+    );
     if (!targetWeek) return "找不到目標 Week。";
     return {
       replyText: `確定移到 Week ${targetWeek.weekNumber}？`,
-      replyMessages: [buildConfirmFlexMessage({
-        title: "確認移動",
-        subtitle: `移到 Week ${targetWeek.weekNumber}`,
-        task,
-        confirmLabel: "確定",
-        confirmAction: linePostbackAction("確定", buildTpPostbackData("reschedule_reason_prompt", { id: task.id, cycle: targetWeek.cycleNumber, week: targetWeek.weekNumber }), { inputOption: "openKeyboard" }),
-        cancelAction: linePostbackAction("取消", buildTpPostbackData("pending_cancel", { id: task.id })),
-      })],
+      replyMessages: [
+        buildConfirmFlexMessage({
+          title: "確認移動",
+          subtitle: `移到 Week ${targetWeek.weekNumber}`,
+          task,
+          confirmLabel: "確定",
+          confirmAction: linePostbackAction(
+            "確定",
+            buildTpPostbackData("reschedule_reason_prompt", {
+              id: task.id,
+              cycle: targetWeek.cycleNumber,
+              week: targetWeek.weekNumber,
+            }),
+            { inputOption: "openKeyboard" },
+          ),
+          cancelAction: linePostbackAction(
+            "取消",
+            buildTpPostbackData("pending_cancel", { id: task.id }),
+          ),
+        }),
+      ],
     };
   }
   if (action === "reschedule_reason_prompt") {
     const { core, task } = await getTaskContextById(data.id);
     if (!task) return "找不到這件事情。";
-    const targetWeek = (core.weeks || []).find((w) => Number(w.cycleNumber) === Number(data.cycle) && Number(w.weekNumber) === Number(data.week));
+    const targetWeek = (core.weeks || []).find(
+      (w) =>
+        Number(w.cycleNumber) === Number(data.cycle) &&
+        Number(w.weekNumber) === Number(data.week),
+    );
     if (!targetWeek) return "找不到目標 Week。";
-    await gasPost("line-pending-set", { userId: sourceKey, pending: { kind: "reschedule_reason", id: task.id, cycle: targetWeek.cycleNumber, week: targetWeek.weekNumber }, ttlSeconds: TP_LINE_PENDING_TTL_SECONDS });
-    return { replyText: "請選或輸入調整原因", replyMessages: [buildReasonPromptMessage({ kind: "reschedule", task, targetWeek })] };
+    await gasPost("line-pending-set", {
+      userId: sourceKey,
+      pending: {
+        kind: "reschedule_reason",
+        id: task.id,
+        cycle: targetWeek.cycleNumber,
+        week: targetWeek.weekNumber,
+      },
+      ttlSeconds: TP_LINE_PENDING_TTL_SECONDS,
+    });
+    return {
+      replyText: "請選或輸入調整原因",
+      replyMessages: [
+        buildReasonPromptMessage({ kind: "reschedule", task, targetWeek }),
+      ],
+    };
   }
   if (action === "reschedule_reason") {
     const reason = String(data.reason || "").trim();
-    const moved = normalizeItem(await gasPost("reschedule-task", {
-      id: data.id,
-      target: { cycleNumber: Number(data.cycle), weekNumber: Number(data.week) },
-      reason,
-    }));
+    const moved = normalizeItem(
+      await gasPost("reschedule-task", {
+        id: data.id,
+        target: {
+          cycleNumber: Number(data.cycle),
+          weekNumber: Number(data.week),
+        },
+        reason,
+      }),
+    );
     await gasPost("line-pending-clear", { userId: sourceKey });
-    return { replyText: `已移到 Week ${moved.scheduledWeekNumber}`, replyMessages: [buildStatusMiniCard("已移動", `Week ${moved.scheduledWeekNumber} · ${reason}`, moved)] };
+    return {
+      replyText: `已移到 Week ${moved.scheduledWeekNumber}`,
+      replyMessages: [
+        buildStatusMiniCard(
+          "已移動",
+          `Week ${moved.scheduledWeekNumber} · ${reason}`,
+          moved,
+        ),
+      ],
+    };
   }
 
-  if (action === "reason_custom") return { type: "text", text: "直接在輸入框寫原因即可。輸入「取消」可以中止。" };
+  if (action === "reason_custom")
+    return {
+      type: "text",
+      text: "直接在輸入框寫原因即可。輸入「取消」可以中止。",
+    };
   if (action === "pending_cancel") {
     await gasPost("line-pending-clear", { userId: sourceKey });
     return { type: "text", text: "已取消，資料沒有變動。" };
@@ -1563,27 +2141,42 @@ function buildLineTextMessage(text) {
 }
 
 function getFallbackTextFromReplyMessages(replyMessages) {
-  const textMessage = replyMessages.find((message) => message && message.type === "text" && message.text);
+  const textMessage = replyMessages.find(
+    (message) => message && message.type === "text" && message.text,
+  );
   if (textMessage) return textMessage.text;
 
-  const flexMessage = replyMessages.find((message) => message && message.type === "flex" && message.altText);
+  const flexMessage = replyMessages.find(
+    (message) => message && message.type === "flex" && message.altText,
+  );
   if (flexMessage) return flexMessage.altText;
 
   return "Tiny Progress 已回覆。";
 }
 
 function normalizeLineReplyResult(replyResult) {
-  if (replyResult && typeof replyResult === "object" && typeof replyResult.type === "string") {
+  if (
+    replyResult &&
+    typeof replyResult === "object" &&
+    typeof replyResult.type === "string"
+  ) {
     return {
-      replyText: replyResult.text || replyResult.altText || "Tiny Progress 已回覆。",
+      replyText:
+        replyResult.text || replyResult.altText || "Tiny Progress 已回覆。",
       replyMessages: [replyResult],
     };
   }
 
-  if (replyResult && typeof replyResult === "object" && Array.isArray(replyResult.replyMessages)) {
+  if (
+    replyResult &&
+    typeof replyResult === "object" &&
+    Array.isArray(replyResult.replyMessages)
+  ) {
     const replyMessages = replyResult.replyMessages;
     return {
-      replyText: replyResult.replyText || getFallbackTextFromReplyMessages(replyMessages),
+      replyText:
+        replyResult.replyText ||
+        getFallbackTextFromReplyMessages(replyMessages),
       replyMessages,
     };
   }
@@ -1595,7 +2188,9 @@ function normalizeLineReplyResult(replyResult) {
     };
   }
 
-  const replyText = String(replyResult || "Tiny Progress 目前沒有可回覆的內容。");
+  const replyText = String(
+    replyResult || "Tiny Progress 目前沒有可回覆的內容。",
+  );
   return {
     replyText,
     replyMessages: [buildLineTextMessage(replyText)],
@@ -1623,7 +2218,11 @@ async function replyToLine(replyToken, replyResult) {
   });
 
   if (!lineResponse.ok) {
-    console.error("LINE Reply API 回覆失敗：", lineResponse.status, await lineResponse.text());
+    console.error(
+      "LINE Reply API 回覆失敗：",
+      lineResponse.status,
+      await lineResponse.text(),
+    );
   }
 }
 
@@ -1647,7 +2246,6 @@ async function handleGuideCommand() {
   return getGuideText();
 }
 
-
 function parseCreateText({ userText, command }) {
   let rawText = userText.replace(new RegExp(`^${command}\\s*`), "").trim();
   rawText = rawText.replace(/^[：:]/, "").trim();
@@ -1657,7 +2255,6 @@ function parseCreateText({ userText, command }) {
       title: "",
       category: DEFAULT_CATEGORY,
       subCategory: DEFAULT_SUBCATEGORY,
-      difficulty: DEFAULT_DIFFICULTY,
     };
   }
 
@@ -1669,41 +2266,48 @@ function parseCreateText({ userText, command }) {
   const title = parts[0] || "";
   const category = parts[1] || DEFAULT_CATEGORY;
   let subCategory = DEFAULT_SUBCATEGORY;
-  let difficulty = DEFAULT_DIFFICULTY;
 
   if (normalizeCategory(category) === "程式學習") {
-    if (DIFFICULTY_OPTIONS.includes(parts[2])) {
-      difficulty = parts[2];
-    } else {
-      subCategory = parts[2] || DEFAULT_SUBCATEGORY;
-      difficulty = parts[3] || DEFAULT_DIFFICULTY;
-    }
+    subCategory = parts[2] || DEFAULT_SUBCATEGORY;
   } else {
     subCategory = EMPTY_SUBCATEGORY;
-    difficulty = parts[2] || DEFAULT_DIFFICULTY;
   }
 
-  return { title, category, subCategory, difficulty };
+  return { title, category, subCategory };
 }
 
-async function handleCreateCommand({ userText, command, type, label, example }) {
+async function handleCreateCommand({
+  userText,
+  command,
+  type,
+  label,
+  example,
+}) {
   const parsed = parseCreateText({ userText, command });
   const displayLabel = getDisplayLabel(label);
 
   if (!parsed.title) {
-    return [`這次加入還缺少${displayLabel}內容，資料沒有變動。`, "", `例：${command} ${example}`].join("\n");
+    return [
+      `這次加入還缺少${displayLabel}內容，資料沒有變動。`,
+      "",
+      `例：${command} ${example}`,
+    ].join("\n");
   }
 
   let category;
   let subCategory;
-  let difficulty;
 
   try {
     category = normalizeCategory(parsed.category);
     subCategory = normalizeSubCategory(parsed.subCategory, category);
-    difficulty = normalizeDifficulty(parsed.difficulty);
   } catch (error) {
-    return ["分類、子分類或難度需要再確認，資料沒有變動。", "", error.message, "", "例：新增任務 練習 CSS｜程式學習｜練習｜適中"].join("\n");
+    return [
+      "分類或子分類需要再確認，資料沒有變動。",
+      "",
+      error.message,
+      "",
+      "例：新增任務 練習 CSS｜程式學習｜練習",
+    ].join("\n");
   }
 
   const currentWeekNumber = await getCurrentWeekNumberFromGoogleSheets();
@@ -1712,7 +2316,6 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
     title: parsed.title,
     category,
     subCategory,
-    difficulty,
     weekNumber: currentWeekNumber,
   });
 
@@ -1729,7 +2332,12 @@ async function handleCreateCommand({ userText, command, type, label, example }) 
     ].join("\n");
   }
 
-  return ["Tiny Progress 已新增本週驗收標準：", `☐ ${createdItem.title || parsed.title}`, "", "可以輸入「清單」查看目前清單。"].join("\n");
+  return [
+    "Tiny Progress 已新增本週驗收標準：",
+    `☐ ${createdItem.title || parsed.title}`,
+    "",
+    "可以輸入「清單」查看目前清單。",
+  ].join("\n");
 }
 
 async function findItemByNumber({ type, numberText, label }) {
@@ -1738,7 +2346,13 @@ async function findItemByNumber({ type, numberText, label }) {
 
   if (!Number.isInteger(itemNumber) || itemNumber <= 0) {
     return {
-      error: [`還缺少正確的${displayLabel}編號，資料沒有變動。`, "", "可以這樣輸入：", `完成${label}3`, `完成第三個${label}`].join("\n"),
+      error: [
+        `還缺少正確的${displayLabel}編號，資料沒有變動。`,
+        "",
+        "可以這樣輸入：",
+        `完成${label}3`,
+        `完成第三個${label}`,
+      ].join("\n"),
     };
   }
 
@@ -1747,7 +2361,11 @@ async function findItemByNumber({ type, numberText, label }) {
 
   if (!targetItem) {
     return {
-      error: [`目前找不到第 ${itemNumber} 個${displayLabel}。`, "", "可以先輸入「清單」確認編號。"].join("\n"),
+      error: [
+        `目前找不到第 ${itemNumber} 個${displayLabel}。`,
+        "",
+        "可以先輸入「清單」確認編號。",
+      ].join("\n"),
     };
   }
 
@@ -1763,7 +2381,12 @@ async function handleDoneCommand({ numberText, type, label, done }) {
   const actionText = done ? "已完成" : "已恢復未完成";
   const displayLabel = getDisplayLabel(label);
 
-  return [`${actionText}第 ${result.itemNumber} 個${displayLabel}：`, `${checkbox} ${updatedItem.title || result.item.title}`, "", "Tiny Progress"].join("\n");
+  return [
+    `${actionText}第 ${result.itemNumber} 個${displayLabel}：`,
+    `${checkbox} ${updatedItem.title || result.item.title}`,
+    "",
+    "Tiny Progress",
+  ].join("\n");
 }
 
 async function handleDeleteCommand({ numberText, type, label }) {
@@ -1772,14 +2395,23 @@ async function handleDeleteCommand({ numberText, type, label }) {
   if (type !== "task") return "這個內容請到 Tiny Progress 網頁處理。";
   return {
     replyText: `確定刪除「${result.item.title}」？`,
-    replyMessages: [buildConfirmFlexMessage({
-      title: "確認刪除",
-      subtitle: "刪除後會留下原因與紀錄",
-      task: result.item,
-      confirmLabel: "確定",
-      confirmAction: linePostbackAction("確定", buildTpPostbackData("delete_reason_prompt", { id: result.item.id }), { inputOption: "openKeyboard" }),
-      cancelAction: linePostbackAction("取消", buildTpPostbackData("pending_cancel", { id: result.item.id })),
-    })],
+    replyMessages: [
+      buildConfirmFlexMessage({
+        title: "確認刪除",
+        subtitle: "刪除後會留下原因與紀錄",
+        task: result.item,
+        confirmLabel: "確定",
+        confirmAction: linePostbackAction(
+          "確定",
+          buildTpPostbackData("delete_reason_prompt", { id: result.item.id }),
+          { inputOption: "openKeyboard" },
+        ),
+        cancelAction: linePostbackAction(
+          "取消",
+          buildTpPostbackData("pending_cancel", { id: result.item.id }),
+        ),
+      }),
+    ],
   };
 }
 
@@ -1790,8 +2422,15 @@ async function handleEditCommand({ numberText, newTitle, type, label }) {
   const displayLabel = getDisplayLabel(label);
 
   if (newTitle && newTitle.trim()) {
-    const updatedItem = await updateItemToGoogleSheets(result.item.id, { title: newTitle.trim() });
-    return [`已修改第 ${result.itemNumber} 個${displayLabel}：`, updatedItem.title || newTitle.trim(), "", "已更新內容。"].join("\\n");
+    const updatedItem = await updateItemToGoogleSheets(result.item.id, {
+      title: newTitle.trim(),
+    });
+    return [
+      `已修改第 ${result.itemNumber} 個${displayLabel}：`,
+      updatedItem.title || newTitle.trim(),
+      "",
+      "已更新內容。",
+    ].join("\\n");
   }
 
   if (type === "task") {
@@ -1802,10 +2441,23 @@ async function handleEditCommand({ numberText, newTitle, type, label }) {
 }
 
 function parseFlexibleNumber(numberText) {
-  const text = String(numberText || "").trim().replace(/兩/g, "二");
+  const text = String(numberText || "")
+    .trim()
+    .replace(/兩/g, "二");
   if (/^\d+$/.test(text)) return Number(text);
 
-  const digitMap = { 零: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  const digitMap = {
+    零: 0,
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+  };
 
   if (text.length === 1 && digitMap[text] !== undefined) return digitMap[text];
 
@@ -1820,15 +2472,28 @@ function parseFlexibleNumber(numberText) {
   return null;
 }
 
-function buildLineOperationCommand(actionText, targetText, numberText, newTitle) {
+function buildLineOperationCommand(
+  actionText,
+  targetText,
+  numberText,
+  newTitle,
+) {
   const number = parseFlexibleNumber(numberText);
 
   if (!Number.isInteger(number) || number <= 0) {
-    return { error: "還缺少正確編號，資料沒有變動。可以這樣輸入：完成第 3 個任務" };
+    return {
+      error: "還缺少正確編號，資料沒有變動。可以這樣輸入：完成第 3 個任務",
+    };
   }
 
   const isTask = targetText.includes("任務");
-  const actionMap = { 完成: "done", 已完成: "done", 取消: "cancel", 修改: "edit", 刪除: "delete" };
+  const actionMap = {
+    完成: "done",
+    已完成: "done",
+    取消: "cancel",
+    修改: "edit",
+    刪除: "delete",
+  };
 
   return {
     action: actionMap[actionText],
@@ -1840,11 +2505,17 @@ function buildLineOperationCommand(actionText, targetText, numberText, newTitle)
 }
 
 function parseLineOperationCommand(userText) {
-  let match = userText.match(/^(完成|已完成|取消|修改|刪除)\s*(任務|完成標準|標準)\s*(\d+|[零一二三四五六七八九十兩]+)(?:\s+(.+))?$/);
-  if (match) return buildLineOperationCommand(match[1], match[2], match[3], match[4]);
+  let match = userText.match(
+    /^(完成|已完成|取消|修改|刪除)\s*(任務|完成標準|標準)\s*(\d+|[零一二三四五六七八九十兩]+)(?:\s+(.+))?$/,
+  );
+  if (match)
+    return buildLineOperationCommand(match[1], match[2], match[3], match[4]);
 
-  match = userText.match(/^(完成|已完成|取消|修改|刪除)\s*第?\s*(\d+|[零一二三四五六七八九十兩]+)\s*個?\s*(任務|完成標準|標準)(?:\s+(.+))?$/);
-  if (match) return buildLineOperationCommand(match[1], match[3], match[2], match[4]);
+  match = userText.match(
+    /^(完成|已完成|取消|修改|刪除)\s*第?\s*(\d+|[零一二三四五六七八九十兩]+)\s*個?\s*(任務|完成標準|標準)(?:\s+(.+))?$/,
+  );
+  if (match)
+    return buildLineOperationCommand(match[1], match[3], match[2], match[4]);
 
   return null;
 }
@@ -1868,14 +2539,24 @@ function getUnknownCommandText() {
 
 async function handleLineTextCommand({ sourceKey, userText }) {
   if (String(userText || "").startsWith(TP_POSTBACK_PREFIX)) {
-    return handleTinyProgressPostback({ sourceKey, rawData: String(userText).slice(TP_POSTBACK_PREFIX.length) });
+    return handleTinyProgressPostback({
+      sourceKey,
+      rawData: String(userText).slice(TP_POSTBACK_PREFIX.length),
+    });
   }
-  if (["攻略", "說明", "help", "Help"].includes(userText)) return handleGuideCommand();
-  if (["抽一件", "抽任務", "隨機任務", "今天做什麼"].includes(userText)) return handleDrawOneTaskCommand();
-  if (userText === "清單" || userText === "全部清單") return handleAllListFlexCommand();
+  if (["攻略", "說明", "help", "Help"].includes(userText))
+    return handleGuideCommand();
+  if (["抽一件", "抽任務", "隨機任務", "今天做什麼"].includes(userText))
+    return handleDrawOneTaskCommand();
+  if (userText === "清單" || userText === "全部清單")
+    return handleAllListFlexCommand();
 
-  // 舊的難度文字入口保留相容，但不再產生獨立難度卡，一律回到同一張本週清單。
-  if (["簡單任務", "簡單", "適中任務", "適中", "困難任務", "困難"].includes(userText)) {
+  // 舊的難度文字指令（簡單／適中／困難）已無難度分類，入口保留相容，一律回到同一張本週清單。
+  if (
+    ["簡單任務", "簡單", "適中任務", "適中", "困難任務", "困難"].includes(
+      userText,
+    )
+  ) {
     return handleAllListFlexCommand();
   }
 
@@ -1886,44 +2567,110 @@ async function handleLineTextCommand({ sourceKey, userText }) {
   if (actionMatch) return handleTaskDoneClick(actionMatch[1], false);
 
   if (userText.startsWith("新增一個任務")) {
-    return handleCreateCommand({ userText, command: "新增一個任務", type: "task", label: "任務", example: "練習 LINE Bot" });
+    return handleCreateCommand({
+      userText,
+      command: "新增一個任務",
+      type: "task",
+      label: "任務",
+      example: "練習 LINE Bot",
+    });
   }
 
   if (userText.startsWith("新增任務")) {
-    return handleCreateCommand({ userText, command: "新增任務", type: "task", label: "任務", example: "練習 LINE Bot" });
+    return handleCreateCommand({
+      userText,
+      command: "新增任務",
+      type: "task",
+      label: "任務",
+      example: "練習 LINE Bot",
+    });
   }
 
   if (userText.startsWith("新增一個完成標準")) {
-    return handleCreateCommand({ userText, command: "新增一個完成標準", type: "standard", label: "完成標準", example: "本週能說明一個學到的觀念" });
+    return handleCreateCommand({
+      userText,
+      command: "新增一個完成標準",
+      type: "standard",
+      label: "完成標準",
+      example: "本週能說明一個學到的觀念",
+    });
   }
 
   if (userText.startsWith("新增一個標準")) {
-    return handleCreateCommand({ userText, command: "新增一個標準", type: "standard", label: "完成標準", example: "本週能說明一個學到的觀念" });
+    return handleCreateCommand({
+      userText,
+      command: "新增一個標準",
+      type: "standard",
+      label: "完成標準",
+      example: "本週能說明一個學到的觀念",
+    });
   }
 
   if (userText.startsWith("新增標準")) {
-    return handleCreateCommand({ userText, command: "新增標準", type: "standard", label: "完成標準", example: "本週能說明一個學到的觀念" });
+    return handleCreateCommand({
+      userText,
+      command: "新增標準",
+      type: "standard",
+      label: "完成標準",
+      example: "本週能說明一個學到的觀念",
+    });
   }
 
   const operation = parseLineOperationCommand(userText);
 
   if (operation) {
     if (operation.error) return operation.error;
-    if (operation.type === "task" && operation.action === "done") return handleTaskDoneClick(operation.numberText, true);
-    if (operation.type === "task" && operation.action === "cancel") return handleTaskDoneClick(operation.numberText, false);
-    if (operation.action === "done") return handleDoneCommand({ numberText: operation.numberText, type: operation.type, label: operation.label, done: true });
-    if (operation.action === "cancel") return handleDoneCommand({ numberText: operation.numberText, type: operation.type, label: operation.label, done: false });
-    if (operation.action === "edit") return handleEditCommand({ sourceKey, numberText: operation.numberText, newTitle: operation.newTitle, type: operation.type, label: operation.label });
-    if (operation.action === "delete") return handleDeleteCommand({ numberText: operation.numberText, type: operation.type, label: operation.label });
+    if (operation.type === "task" && operation.action === "done")
+      return handleTaskDoneClick(operation.numberText, true);
+    if (operation.type === "task" && operation.action === "cancel")
+      return handleTaskDoneClick(operation.numberText, false);
+    if (operation.action === "done")
+      return handleDoneCommand({
+        numberText: operation.numberText,
+        type: operation.type,
+        label: operation.label,
+        done: true,
+      });
+    if (operation.action === "cancel")
+      return handleDoneCommand({
+        numberText: operation.numberText,
+        type: operation.type,
+        label: operation.label,
+        done: false,
+      });
+    if (operation.action === "edit")
+      return handleEditCommand({
+        sourceKey,
+        numberText: operation.numberText,
+        newTitle: operation.newTitle,
+        type: operation.type,
+        label: operation.label,
+      });
+    if (operation.action === "delete")
+      return handleDeleteCommand({
+        numberText: operation.numberText,
+        type: operation.type,
+        label: operation.label,
+      });
   }
 
-  if (["完成", "已完成", "取消", "修改", "刪除", "新增", "操作", "改回未完成"].some((prefix) => userText.startsWith(prefix))) {
+  if (
+    [
+      "完成",
+      "已完成",
+      "取消",
+      "修改",
+      "刪除",
+      "新增",
+      "操作",
+      "改回未完成",
+    ].some((prefix) => userText.startsWith(prefix))
+  ) {
     return getFormatReminderText();
   }
 
   return getUnknownCommandText();
 }
-
 
 // ==================== HTTP API ====================
 
@@ -1934,133 +2681,203 @@ app.get("/", (req, res) => {
 app.post("/gas-queue", async (req, res) => {
   try {
     const { source, queueId, userId, messageText } = req.body || {};
-    if (source !== "gas_queue") return res.status(400).json({ ok: false, message: "source 必須是 gas_queue" });
-    if (!queueId || !userId) return res.status(400).json({ ok: false, message: "缺少 queueId 或 userId" });
+    if (source !== "gas_queue")
+      return res
+        .status(400)
+        .json({ ok: false, message: "source 必須是 gas_queue" });
+    if (!queueId || !userId)
+      return res
+        .status(400)
+        .json({ ok: false, message: "缺少 queueId 或 userId" });
+    if (String(userId).trim() !== ACCESS.owner)
+      return res.status(403).json({ ok: false, message: "LINE 使用者未授權" });
     const userText = String(messageText || "").trim();
-    if (!userText) return res.status(400).json({ ok: false, message: "缺少 messageText" });
-    const replyResult = await handleLineTextCommand({ sourceKey: String(userId).trim(), userText });
+    if (!userText)
+      return res.status(400).json({ ok: false, message: "缺少 messageText" });
+    const replyResult = await routeLineCommand({
+      sourceKey: String(userId).trim(),
+      userText,
+      eventId: String(queueId),
+    });
     const normalizedReply = normalizeLineReplyResult(replyResult);
-    res.json({ ok: true, queueId, replyText: normalizedReply.replyText, replyMessages: normalizedReply.replyMessages });
+    res.json({
+      ok: true,
+      queueId,
+      replyText: normalizedReply.replyText,
+      replyMessages: normalizedReply.replyMessages,
+    });
   } catch (error) {
     console.error("處理 /gas-queue 發生錯誤：", error);
-    res.status(500).json({ ok: false, message: "處理 GAS queue 訊息失敗", error: error.message });
+    res.status(500).json({
+      ok: false,
+      message: "處理 GAS queue 訊息失敗",
+      error: error.message,
+    });
   }
 });
 
 app.post("/line/webhook", async (req, res) => {
-  const events = req.body.events || [];
-  for (const event of events) {
-    try {
-      const sourceKey = getLineSourceKey(event);
-      let replyResult = null;
-      if (event.type === "postback") {
-        replyResult = await handleTinyProgressPostback({ sourceKey, rawData: String((event.postback || {}).data || "") });
-      } else if (event.type === "message" && event.message && event.message.type === "text") {
-        const consumed = await gasPost("line-pending-consume", { userId: sourceKey, text: event.message.text.trim() });
-        const userText = consumed && consumed.messageText ? consumed.messageText : event.message.text.trim();
-        replyResult = await handleLineTextCommand({ sourceKey, userText });
-      } else {
-        continue;
-      }
-      await replyToLine(event.replyToken, replyResult);
-    } catch (error) {
-      console.error("處理 LINE Webhook 發生錯誤：", error);
-      if (event.replyToken) await replyToLine(event.replyToken, "Tiny Progress 剛剛卡住了，資料沒有變動。請稍後再試一次。");
-    }
+  try {
+    if (!Array.isArray(req.body.events))
+      return res.status(400).json({ message: "events 格式不正確" });
+    const events = req.body.events.filter(
+      (e) => e.source?.type === "user" && e.source.userId === ACCESS.owner,
+    );
+    if (events.length)
+      await gasPostWithTimeout("line-ingress", { events }, 55000);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(503).json({ message: "接收暫時失敗，LINE 可以重送" });
   }
-  res.status(200).send("OK");
 });
 
 app.get("/core", async (req, res) => {
-  try { res.json(await fetchCoreFromGoogleSheets()); }
-  catch (error) { res.status(500).json({ message: "讀取核心資料失敗", error: error.message }); }
+  try {
+    res.json(await fetchCoreFromGoogleSheets());
+  } catch (error) {
+    res.status(500).json({ message: "讀取核心資料失敗", error: error.message });
+  }
 });
 
 app.get("/week-context", async (req, res) => {
-  try { res.json(await fetchWeekContextFromGoogleSheets()); }
-  catch (error) { res.status(500).json({ message: "讀取週次資料失敗", error: error.message }); }
+  try {
+    res.json(await fetchWeekContextFromGoogleSheets());
+  } catch (error) {
+    res.status(500).json({ message: "讀取週次資料失敗", error: error.message });
+  }
 });
 
 app.get("/weeks", async (req, res) => {
-  try { res.json((await gasGet("weeks")).weeks || []); }
-  catch (error) { res.status(500).json({ message: "讀取 Weeks 失敗", error: error.message }); }
+  try {
+    res.json((await gasGet("weeks")).weeks || []);
+  } catch (error) {
+    res.status(500).json({ message: "讀取 Weeks 失敗", error: error.message });
+  }
 });
 
 app.get("/cycles", async (req, res) => {
-  try { res.json((await gasGet("cycles")).cycles || []); }
-  catch (error) { res.status(500).json({ message: "讀取 Cycles 失敗", error: error.message }); }
+  try {
+    res.json((await gasGet("cycles")).cycles || []);
+  } catch (error) {
+    res.status(500).json({ message: "讀取 Cycles 失敗", error: error.message });
+  }
 });
 
 app.patch("/weeks/current-plan", async (req, res) => {
-  try { res.json(await gasPost("update-current-week-plan", req.body || {})); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "更新本週主題失敗", error: error.message }); }
+  try {
+    res.json(await gasPost("update-current-week-plan", req.body || {}));
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "更新本週主題失敗", error: error.message });
+  }
 });
 
 app.patch("/weeks/:cycleNumber/:weekNumber/plan", async (req, res) => {
   try {
-    res.json(await gasPost("update-week-plan", {
-      cycleNumber: Number(req.params.cycleNumber),
-      weekNumber: Number(req.params.weekNumber),
-      ...(req.body || {}),
-    }));
+    res.json(
+      await gasPost("update-week-plan", {
+        cycleNumber: Number(req.params.cycleNumber),
+        weekNumber: Number(req.params.weekNumber),
+        ...(req.body || {}),
+      }),
+    );
   } catch (error) {
-    res.status(getApiErrorStatus(error)).json({ message: "儲存安排失敗", error: error.message });
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "儲存安排失敗", error: error.message });
   }
 });
 
 app.post("/weeks/postpone-current", async (req, res) => {
-  try { res.json(await gasPost("postpone-current-week", req.body || {})); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "本週順延失敗", error: error.message }); }
+  try {
+    res.json(await gasPost("postpone-current-week", req.body || {}));
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "本週順延失敗", error: error.message });
+  }
 });
 
 // 舊前端相容入口：V2 不再手動結案。
 app.post("/weeks/complete-current", (req, res) => {
-  res.status(409).json({ message: "Week 會依日期自動前進，不需要手動完成整週。" });
+  res
+    .status(409)
+    .json({ message: "Week 會依日期自動前進，不需要手動完成整週。" });
 });
 
 app.post("/cycles", async (req, res) => {
-  try { res.status(201).json(await gasPost("create-cycle", req.body || {})); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "建立 Cycle 失敗", error: error.message }); }
+  try {
+    res.status(201).json(await gasPost("create-cycle", req.body || {}));
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "建立 Cycle 失敗", error: error.message });
+  }
 });
 
 app.patch("/cycles/:cycleNumber/theme", async (req, res) => {
   try {
-    res.json(await gasPost("update-cycle-theme", {
-      cycleNumber: Number(req.params.cycleNumber),
-      theme: String(req.body?.theme || "").trim(),
-    }));
+    res.json(
+      await gasPost("update-cycle-theme", {
+        cycleNumber: Number(req.params.cycleNumber),
+        theme: String(req.body?.theme || "").trim(),
+      }),
+    );
   } catch (error) {
-    res.status(getApiErrorStatus(error)).json({ message: "更新本輪主題失敗", error: error.message });
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "更新本輪主題失敗", error: error.message });
   }
 });
 
 app.patch("/cycles/:cycleNumber/start-date", async (req, res) => {
   try {
-    res.json(await gasPost("change-cycle-start", { cycleNumber: Number(req.params.cycleNumber), ...(req.body || {}) }));
+    res.json(
+      await gasPost("change-cycle-start", {
+        cycleNumber: Number(req.params.cycleNumber),
+        ...(req.body || {}),
+      }),
+    );
   } catch (error) {
-    res.status(getApiErrorStatus(error)).json({ message: "修改 Cycle 開始日期失敗", error: error.message });
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "修改 Cycle 開始日期失敗", error: error.message });
   }
 });
 
 app.get("/items", async (req, res) => {
-  try { res.json(await fetchItemsFromGoogleSheets()); }
-  catch (error) { res.status(500).json({ message: "讀取任務失敗", error: error.message }); }
+  try {
+    res.json(await fetchItemsFromGoogleSheets());
+  } catch (error) {
+    res.status(500).json({ message: "讀取任務失敗", error: error.message });
+  }
 });
 
 app.post("/items", async (req, res) => {
   try {
     const body = req.body || {};
     if (!body.title) return res.status(400).json({ message: "title 必填" });
-    const created = await createItemToGoogleSheets({ type: body.type || "task", ...body });
+    const created = await createItemToGoogleSheets({
+      type: body.type || "task",
+      ...body,
+    });
     res.status(201).json(created);
   } catch (error) {
-    res.status(getApiErrorStatus(error)).json({ message: "新增任務失敗", error: error.message });
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "新增任務失敗", error: error.message });
   }
 });
 
 app.patch("/items/:id", async (req, res) => {
-  try { res.json(await updateItemToGoogleSheets(req.params.id, req.body || {})); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "更新任務失敗", error: error.message }); }
+  try {
+    res.json(await updateItemToGoogleSheets(req.params.id, req.body || {}));
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "更新任務失敗", error: error.message });
+  }
 });
 
 app.delete("/items/:id/draft", async (req, res) => {
@@ -2068,44 +2885,101 @@ app.delete("/items/:id/draft", async (req, res) => {
     const result = await gasPost("remove-draft-task", { id: req.params.id });
     res.json({ message: "草稿任務已移除", ...(result || {}) });
   } catch (error) {
-    res.status(getApiErrorStatus(error)).json({ message: "移除草稿任務失敗", error: error.message });
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "移除草稿任務失敗", error: error.message });
   }
 });
 
 app.post("/items/:id/complete", async (req, res) => {
-  try { res.json(normalizeItem(await gasPost("complete-task", { id: req.params.id }))); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "完成任務失敗", error: error.message }); }
+  try {
+    res.json(
+      normalizeItem(await gasPost("complete-task", { id: req.params.id })),
+    );
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "完成任務失敗", error: error.message });
+  }
 });
 
 app.post("/items/:id/correct-completion", async (req, res) => {
-  try { res.json(normalizeItem(await gasPost("correct-completion", { id: req.params.id }))); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "更正完成狀態失敗", error: error.message }); }
+  try {
+    res.json(
+      normalizeItem(await gasPost("correct-completion", { id: req.params.id })),
+    );
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "更正完成狀態失敗", error: error.message });
+  }
 });
 
 app.post("/items/:id/cancel", async (req, res) => {
-  try { res.json(normalizeItem(await gasPost("cancel-task", { id: req.params.id, ...(req.body || {}) }))); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "刪除任務失敗", error: error.message }); }
+  try {
+    res.json(
+      normalizeItem(
+        await gasPost("cancel-task", {
+          id: req.params.id,
+          ...(req.body || {}),
+        }),
+      ),
+    );
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "刪除任務失敗", error: error.message });
+  }
 });
 
 app.post("/items/:id/delete", async (req, res) => {
-  try { res.json(normalizeItem(await gasPost("cancel-task", { id: req.params.id, ...(req.body || {}) }))); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "刪除任務失敗", error: error.message }); }
+  try {
+    res.json(
+      normalizeItem(
+        await gasPost("cancel-task", {
+          id: req.params.id,
+          ...(req.body || {}),
+        }),
+      ),
+    );
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "刪除任務失敗", error: error.message });
+  }
 });
 
 app.post("/items/:id/reschedule", async (req, res) => {
-  try { res.json(normalizeItem(await gasPost("reschedule-task", { id: req.params.id, ...(req.body || {}) }))); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "調整時間失敗", error: error.message }); }
+  try {
+    res.json(
+      normalizeItem(
+        await gasPost("reschedule-task", {
+          id: req.params.id,
+          ...(req.body || {}),
+        }),
+      ),
+    );
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "調整時間失敗", error: error.message });
+  }
 });
 
 app.post("/items/:id/replan", async (req, res) => {
   try {
-    const result = await gasPost("replan-task", { id: req.params.id, ...(req.body || {}) });
+    const result = await gasPost("replan-task", {
+      id: req.params.id,
+      ...(req.body || {}),
+    });
     res.json({
       original: normalizeItem(result?.original || {}),
       newTasks: (result?.newTasks || []).map(normalizeItem),
     });
   } catch (error) {
-    res.status(getApiErrorStatus(error)).json({ message: "重新整理失敗", error: error.message });
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "重新整理失敗", error: error.message });
   }
 });
 
@@ -2114,46 +2988,217 @@ app.delete("/items/:id", async (req, res) => {
     const item = await deleteItemFromGoogleSheets(req.params.id);
     res.json({ message: "任務已刪除並保留紀錄", id: item.id, item });
   } catch (error) {
-    res.status(getApiErrorStatus(error)).json({ message: "刪除任務失敗", error: error.message });
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "刪除任務失敗", error: error.message });
   }
 });
 
 app.get("/categories", async (req, res) => {
-  try { res.json((await gasGet("categories")).categories || []); }
-  catch (error) { res.status(500).json({ message: "讀取分類失敗", error: error.message }); }
+  try {
+    res.json((await gasGet("categories")).categories || []);
+  } catch (error) {
+    res.status(500).json({ message: "讀取分類失敗", error: error.message });
+  }
 });
 
 app.post("/categories", async (req, res) => {
-  try { res.status(201).json(await gasPost("create-category", { category: req.body || {} })); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "新增分類失敗", error: error.message }); }
+  try {
+    res
+      .status(201)
+      .json(await gasPost("create-category", { category: req.body || {} }));
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "新增分類失敗", error: error.message });
+  }
 });
 
 app.patch("/categories/:id", async (req, res) => {
-  try { res.json(await gasPost("update-category", { id: req.params.id, updates: req.body || {} })); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "更新分類失敗", error: error.message }); }
+  try {
+    res.json(
+      await gasPost("update-category", {
+        id: req.params.id,
+        updates: req.body || {},
+      }),
+    );
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "更新分類失敗", error: error.message });
+  }
 });
 
 app.get("/history", async (req, res) => {
-  try { res.json((await gasGet("history")).history || []); }
-  catch (error) { res.status(500).json({ message: "讀取 History 失敗", error: error.message }); }
+  try {
+    res.json((await gasGet("history")).history || []);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "讀取 History 失敗", error: error.message });
+  }
 });
 
 app.get("/reviews/:cycleNumber", async (req, res) => {
-  try { res.json((await gasGet("review", { cycleNumber: Number(req.params.cycleNumber) })).review); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "讀取 Cycle 總結失敗", error: error.message }); }
+  try {
+    res.json(
+      (await gasGet("review", { cycleNumber: Number(req.params.cycleNumber) }))
+        .review,
+    );
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "讀取 Cycle 總結失敗", error: error.message });
+  }
 });
 
 app.get("/retrospectives", async (req, res) => {
-  try { res.json((await gasGet("retrospectives")).retrospectives || []); }
-  catch (error) { res.status(500).json({ message: "讀取 Weekly Review 失敗", error: error.message }); }
+  try {
+    res.json((await gasGet("retrospectives")).retrospectives || []);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "讀取 Weekly Review 失敗", error: error.message });
+  }
 });
 
 app.post("/retrospectives", async (req, res) => {
-  try { res.json(await gasPost("submit-retrospective", { retro: req.body || {} })); }
-  catch (error) { res.status(getApiErrorStatus(error)).json({ message: "送出 Weekly Review 失敗", error: error.message }); }
+  try {
+    res.json(await gasPost("submit-retrospective", { retro: req.body || {} }));
+  } catch (error) {
+    res
+      .status(getApiErrorStatus(error))
+      .json({ message: "送出 Weekly Review 失敗", error: error.message });
+  }
 });
 
-app.listen(PORT, () => {
-  console.log(`Tiny Progress V2 後端啟動：http://localhost:${PORT}`);
-  startQueueRetryScheduler();
-});
+if (require.main === module)
+  app.listen(PORT, () => {
+    console.log(`Tiny Progress V2 後端啟動：http://localhost:${PORT}`);
+    startQueueRetryScheduler();
+  });
+module.exports = {
+  app,
+  gasPost,
+  gasGet,
+  loadWebState,
+  routeLineCommand,
+  scopeMessages,
+};
+
+async function loadWebState(cycle) {
+  const data = await gasPost("web-read", { cycle });
+  const before = JSON.stringify(data.state);
+  D.advance(data.state);
+  if (before !== JSON.stringify(data.state))
+    return gasPost("web-save", {
+      state: data.state,
+      expectedRevision: data.revision,
+      mutationId: crypto.randomUUID(),
+    });
+  return data;
+}
+function scopeMessages(messages, cycle) {
+  for (const msg of messages) {
+    const walk = (node) => {
+      if (!node || typeof node !== "object") return;
+      if (node.type === "postback" && node.data) {
+        const p = new URLSearchParams(node.data);
+        if (p.has("a")) {
+          p.set("cycle", cycle);
+          node.data = p.toString();
+        }
+      }
+      for (const v of Object.values(node))
+        if (v && typeof v === "object")
+          Array.isArray(v) ? v.forEach(walk) : walk(v);
+    };
+    walk(msg);
+  }
+  return messages;
+}
+async function routeLineCommand(input) {
+  return LINE_CONTEXT.run({ id: input.eventId, seq: 0 }, () =>
+    tpRouteLineCommand(input),
+  );
+}
+async function tpRouteLineCommand({ sourceKey, userText, eventId }) {
+  const postback = userText.startsWith(TP_POSTBACK_PREFIX)
+    ? userText.slice(TP_POSTBACK_PREFIX.length)
+    : null;
+  const params = postback ? new URLSearchParams(postback) : null;
+  if (params && !params.has("a"))
+    return handleLineTextCommand({ sourceKey, userText });
+  const commands = [
+    "清單",
+    "全部清單",
+    "本週",
+    "本週清單",
+    "看本週",
+    "抽一件",
+    "抽任務",
+    "足跡",
+    "本週足跡",
+    "週一",
+    "新增",
+    "取消",
+    "取消修改",
+    "說明",
+    "help",
+    "攻略",
+  ];
+  const data = await gasPost("line-state-read", { eventId });
+  if (data.cached) return data.cached;
+  if (
+    !params &&
+    !commands.includes(userText) &&
+    !data.state._pending?.[sourceKey]
+  )
+    return handleLineTextCommand({ sourceKey, userText });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const current = attempt
+      ? await gasPost("line-state-read", { eventId })
+      : data;
+    if (current.cached) return current.cached;
+    let next = D.clone(current.state),
+      messages;
+    try {
+      if (
+        params?.has("cycle") &&
+        Number(params.get("cycle")) !== next.cycle.number
+      )
+        D.fail("這是上一輪卡片，請重新輸入「清單」");
+      messages = Bot.respond(
+        next,
+        {
+          source: { type: "user", userId: sourceKey },
+          ...(params
+            ? { postback: { data: postback } }
+            : {
+                message: { text: userText === "全部清單" ? "清單" : userText },
+              }),
+        },
+        { webUrl: TINY_PROGRESS_WEB_URL },
+      );
+      D.validate(next);
+    } catch (e) {
+      next = D.clone(current.state);
+      messages = [
+        Cards.quick(e.status ? e.message : "操作暫時失敗，請重新查看清單", [
+          { label: "看本週", a: "list" },
+        ]),
+      ];
+    }
+    scopeMessages(messages, next.cycle.number);
+    try {
+      return await gasPost("line-state-save", {
+        state: next,
+        expectedRevision: current.revision,
+        eventId,
+        messages,
+      });
+    } catch (e) {
+      if (e.status !== 409 || attempt === 2) throw e;
+    }
+  }
+}
