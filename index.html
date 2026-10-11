@@ -30,8 +30,7 @@
         <span id="syncStatus" role="status">尚未連線</span
         ><button type="button" id="connectionSettings">連線設定</button>
         <div id="syncActions" hidden>
-          <button type="button" id="downloadDraft">下載草稿</button
-          ><button type="button" id="retrySync">重試同步</button
+          <button type="button" id="retrySync">重試同步</button
           ><button type="button" id="reloadCloud">載入最新資料</button>
         </div>
       </div>
@@ -48,6 +47,11 @@
             <p class="home-lede" id="homeLede">
               一件一件完成，讓這週留下自己的樣子
             </p>
+            <div class="home-mode-control" role="group" aria-label="切換週與每日檢視">
+              <button type="button" data-mode="week" aria-pressed="true">整週</button>
+              <button type="button" data-mode="day" aria-pressed="false">每日</button>
+              <span>同一週的不同檢視</span>
+            </div>
           </div>
 
           <div class="preview-bar" id="previewBar" hidden>
@@ -229,42 +233,6 @@
                 管理 Cycle
               </button>
             </div>
-            <div class="setting-block soft-card">
-              <div class="setting-block-head">
-                <span
-                  ><strong>資料與備份</strong
-                  ><small>網頁與 LINE 共用同一份雲端資料</small></span
-                >
-              </div>
-              <div class="backup-actions">
-                <button type="button" id="exportData" class="secondary-button">
-                  下載完整備份</button
-                ><button type="button" id="exportLegacy" class="text-button">
-                  下載舊本機資料</button
-                ><button type="button" id="importLegacy" class="text-button">
-                  匯入舊本機資料
-                </button>
-              </div>
-              <p class="dialog-help">
-                舊本機資料只可匯入空白雲端。原有 Sheets
-                舊表不會被覆蓋，歷史原始資料也包含在完整備份中。
-              </p>
-            </div>
-            <div class="setting-row soft-card mode-card">
-              <div class="setting-copy">
-                <strong>首頁想怎麼看</strong
-                ><small>兩種視角底層都還是同一個 Week</small>
-              </div>
-              <div class="mode-options">
-                <button type="button" data-mode="week" class="mode-opt">
-                  <b>整週看</b><small>一次看到這週所有事情</small>
-                </button>
-                <button type="button" data-mode="day" class="mode-opt">
-                  <b>每天看</b><small>從本週挑進今天</small>
-                </button>
-              </div>
-            </div>
-
             <div class="setting-row soft-card toggle-setting">
               <span
                 ><strong>完成後小記</strong
@@ -303,11 +271,9 @@
             <div class="setting-block soft-card">
               <div class="setting-block-head">
                 <span
-                  ><strong>重複習慣</strong
-                  ><small>每天做，或設定每週目標次數</small></span
-                ><button class="text-button" id="addRecurringBtn" type="button">
-                  ＋ 新增
-                </button>
+                  ><strong>重複習慣管理</strong
+                  ><small>建立請在首頁加入；在這裡調整頻率或暫停</small></span
+                >
               </div>
               <div id="recurringList" class="manage-list"></div>
             </div>
@@ -516,7 +482,10 @@
             type="text"
             maxlength="200" /></label
         ><label class="dialog-label"
-          >分類<select id="recurringCategory"></select></label
+          >分類<select id="recurringCategory"></select
+        ></label
+        ><label class="dialog-label"
+          >想前進的方向<select id="recurringGoal"></select></label
         ><label class="dialog-label"
           >頻率<select id="recurringFrequency">
             <option value="daily">每天</option>
@@ -713,9 +682,6 @@
         <p id="connectionMessage" role="status"></p>
         <button class="primary-button" type="submit">登入並載入</button
         ><a id="demoLink" class="text-button" href="?demo=1">先看看示範</a
-        ><button id="downloadGateDraft" type="button" class="text-button">
-          下載本機草稿
-        </button>
         <p class="dialog-help">
           密碼不會寫進網頁檔案。示範模式不會修改你的正式資料。
         </p>

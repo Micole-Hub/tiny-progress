@@ -116,13 +116,6 @@ app.put("/api/state", async (req, res) => {
     res.status(e.status || 400).json({ message: e.message });
   }
 });
-app.post("/api/import-local", async (req, res) => {
-  try {
-    res.json(await gasPost("web-import", req.body));
-  } catch (e) {
-    res.status(e.status || 400).json({ message: e.message });
-  }
-});
 app.post("/internal/reminders", async (req, res) => {
   try {
     const due = await gasPost("reminder-claim");

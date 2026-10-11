@@ -389,7 +389,7 @@
     ])
       if (!s[k] || typeof s[k] !== "object" || Array.isArray(s[k]))
         fail("設定格式不正確：" + k);
-    if (JSON.stringify(s).length > 1500000) fail("資料過大，請先匯出備份");
+    if (JSON.stringify(s).length > 1500000) fail("資料量超過可儲存上限");
     return s;
   }
   const PUBLIC_KEYS = [

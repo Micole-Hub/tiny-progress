@@ -1,11 +1,10 @@
-/* Version-checked cloud saves. Failed/conflicting drafts remain downloadable. */
+/* Version-checked cloud saves with local recovery for failed drafts. */
 window.TPConnection = (() => {
   "use strict";
   const D = window.TPDomain,
     demo = new URLSearchParams(location.search).get("demo") === "1";
   const CACHE = "tiny-progress-v28-cache",
     DEMO = "tiny-progress-v28-demo",
-    LEGACY = "tiny-progress-v25-6-state",
     META = "tiny-progress-v28-sync";
   let adapter,
     base = "",
@@ -40,7 +39,7 @@ window.TPConnection = (() => {
       };
       localStorage.setItem(META, JSON.stringify(recovery));
     } catch {
-      status("草稿空間不足，請下載備份", true);
+      status("草稿空間不足，請清理瀏覽器空間後重試同步", true);
     }
   }
   const status = (message, error = false) => {
@@ -59,19 +58,8 @@ window.TPConnection = (() => {
     try {
       localStorage.setItem(demo ? DEMO : CACHE, JSON.stringify(s));
     } catch {
-      status("儲存空間不足，請立即下載備份", true);
+      status("儲存空間不足，請清理瀏覽器空間後重試同步", true);
     }
-  }
-  function download(value, name) {
-    const blob = new Blob([JSON.stringify(value, null, 2)], {
-        type: "application/json",
-      }),
-      url = URL.createObjectURL(blob),
-      a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   async function request(path, { method = "GET", body } = {}) {
     const res = await fetch(base + path, {
@@ -158,9 +146,9 @@ window.TPConnection = (() => {
       paused = true;
       status(
         error.status === 409
-          ? "其他裝置有更新，草稿已保留。請下載草稿後載入最新資料。"
+          ? "其他裝置有更新，草稿已保留在本機。可重試同步，或載入雲端資料並放棄本機未同步修改。"
           : error.status === 401
-            ? "登入已過期，請重新登入。草稿已保留。"
+            ? "登入已過期，請重新登入後重試同步。草稿已保留在本機。"
             : "尚未同步：" + error.message,
         true,
       );
@@ -211,14 +199,10 @@ window.TPConnection = (() => {
       url = document.querySelector("#serverUrl"),
       password = document.querySelector("#webPassword"),
       message = document.querySelector("#connectionMessage");
-    document.querySelector("#downloadDraft").onclick = () =>
-      download(adapter.get(), "tiny-progress-draft.json");
-    document.querySelector("#downloadGateDraft").onclick = () =>
-      download(adapter.get(), "tiny-progress-draft.json");
     document.querySelector("#reloadCloud").onclick = async () => {
       if (
         !confirm(
-          "載入雲端最新資料會替換目前畫面。請先下載尚未同步的草稿，確定繼續？",
+          "載入雲端最新資料會取代目前畫面，並放棄本機尚未同步的修改。確定繼續？",
         )
       )
         return;
@@ -234,37 +218,7 @@ window.TPConnection = (() => {
     };
     document.querySelector("#connectionSettings").onclick = () => {
       locked(true);
-      message.textContent = "重新登入前可先下載草稿。";
-    };
-    document.querySelector("#exportData").onclick = () =>
-      download(
-        {
-          version: D.VERSION,
-          exportedAt: new Date().toISOString(),
-          state: adapter.get(),
-        },
-        "tiny-progress-backup.json",
-      );
-    document.querySelector("#exportLegacy").onclick = () =>
-      download(read(LEGACY) || {}, "tiny-progress-old-browser-backup.json");
-    document.querySelector("#importLegacy").onclick = async () => {
-      const old = read(LEGACY);
-      if (!old) return adapter.toast("這個瀏覽器沒有舊資料");
-      if (demo) return adapter.toast("示範模式不匯入正式資料");
-      if (!ready || inflight || dirty()) return adapter.toast("請先完成同步");
-      if (!confirm("只會匯入到空白雲端，不會覆蓋既有資料。要繼續嗎？")) return;
-      try {
-        const data = await request("/api/import-local", {
-          method: "POST",
-          body: { state: old },
-        });
-        revision = data.revision;
-        baseline = serialize(data.state);
-        adapter.replace(data.state);
-        status("匯入完成");
-      } catch (e) {
-        adapter.toast(e.message);
-      }
+      message.textContent = "登入後會自動載入資料；本機未同步草稿會保留並重試同步。";
     };
     document.querySelector("#demoLink").href = location.pathname + "?demo=1";
     form.onsubmit = async (e) => {
@@ -276,7 +230,7 @@ window.TPConnection = (() => {
         const selected = serverBase(url.value.trim());
         if (recovery?.dirty && recovery.base !== selected)
           throw new Error(
-            "有另一個伺服器的未同步草稿，請先回原伺服器同步或下載草稿",
+            "有另一個伺服器的未同步草稿，請先回原伺服器完成同步",
           );
         base = selected;
         auth = "";
@@ -372,8 +326,7 @@ window.TPConnection = (() => {
   async function manage(path, options = {}) {
     if (demo) throw new Error("示範模式不會變更正式週期");
     await flush();
-    if (dirty() || inflight || paused)
-      throw new Error("請先完成同步或下載草稿");
+    if (dirty() || inflight || paused) throw new Error("請先完成同步");
     return request(path, options);
   }
   async function selectCycle(cycle) {

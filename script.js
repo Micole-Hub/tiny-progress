@@ -731,8 +731,8 @@ function renderHome() {
     if (weekly.length)
       html +=
         taskSectionLabel(
-          "本週習慣・今天已排",
-          "未排日期的次數請在整週檢視管理",
+          "本週習慣・排到今天",
+          "這次完成仍計入本週目標",
         ) + weekly.join("");
     if (!daily.length && !planned.length && !weekly.length)
       html = `<div class="empty-note">今天還沒有放進事情</div>`;
@@ -987,6 +987,10 @@ function openTaskCard(t, row) {
     else showToast("這週已封存，可以到 History 查看");
     return;
   }
+  if (isRecurring(t) && t.frequency === "weekly" && actionOccIds.length === 1) {
+    openEditTask(t);
+    return;
+  }
   if (rowDone) {
     openCompletionRecord(t);
     return;
@@ -1215,11 +1219,23 @@ function renderFocusPool() {
   pool.hidden = false;
   const choices = [];
   activeTasks(week).forEach((t) => {
-    if (!isRecurring(t) && !t.done && t.focusDate !== state.selectedDate)
+    if (!isRecurring(t) && !t.done && t.focusDate !== state.selectedDate) {
       choices.push({ t, occ: null, label: "放進這天", meta: "" });
+      return;
+    }
+    if (isRecurring(t) && t.frequency === "weekly")
+      t.occurrences.forEach((occ, index) => {
+        if (!occ.done && !occ.date)
+          choices.push({
+            t,
+            occ,
+            label: "放進這天",
+            meta: `每週習慣 · 第 ${index + 1} 次`,
+          });
+      });
   });
   pool.innerHTML =
-    `<div class="focus-pool-head"><span>這週還有</span><small>尚未排日期；安排日期後仍屬於本週</small></div>` +
+    `<div class="focus-pool-head"><span>這週還有</span><small>安排到某一天後仍屬於本週</small></div>` +
     (choices.length
       ? choices
           .map(
@@ -2184,9 +2200,11 @@ function historyDetailHtml(
   return `<div class="history-detail-head"><span>Week ${week}${archived ? " · 已封存" : ""}</span><button class="text-button" type="button" data-close-history>收起</button></div><h3>這週留下來的進度</h3><div class="history-section"><p class="field-label">完成 ${count} 次</p>${daily ? `<p class="daily-line">${esc(daily)}</p>` : ""}${completed.length ? completed.map(line).join("") : `<div class="empty-note">這週還沒有完成紀錄</div>`}</div>${left}${replanned.length ? `<div class="history-section"><p class="field-label">移到其他週</p>${replanned.map((x) => `<div class="history-line history-change"><span>→</span><span>${esc(x)}</span></div>`).join("")}</div>` : ""}${deleted.length ? `<div class="history-section"><p class="field-label">刪除</p>${deleted.map((x) => `<div class="history-line history-delete"><span>×</span><span>${esc(x)}</span></div>`).join("")}</div>` : ""}${reviewBlock}${encouragement}`;
 }
 function renderSettings() {
-  $$("[data-mode]").forEach((b) =>
-    b.classList.toggle("active", b.dataset.mode === state.mode),
-  );
+  $$("[data-mode]").forEach((b) => {
+    const selected = b.dataset.mode === state.mode;
+    b.classList.toggle("active", selected);
+    b.setAttribute("aria-pressed", String(selected));
+  });
   $("#completionNoteToggle").checked = state.preferences.completionNote;
   $("#weeklyReflectionToggle").checked = state.preferences.weeklyReflection;
   $("#lineToggle").checked = state.preferences.lineEnabled;
@@ -2275,7 +2293,10 @@ function openEditTask(t) {
           `<option value="${dates[k]}" ${dates[k] === editDate ? "selected" : ""}>週${dayLabel(dates[k])} ${Number(dates[k].slice(8))}</option>`,
       )
       .join("");
-  $("#editTaskTimesWrap").hidden = !isRecurring(t) || t.frequency !== "weekly";
+  $("#editTaskTimesWrap").hidden =
+    !isRecurring(t) ||
+    t.frequency !== "weekly" ||
+    Boolean(editingTaskOccurrenceId);
   $("#editTaskTimes").innerHTML = timesOptions(t.targetCount || 2);
   $("#editTaskDialog").showModal();
 }
@@ -2309,6 +2330,13 @@ function openRecurringDialog(id = null) {
   $("#recurringDialogTitle").textContent = r ? "編輯重複習慣" : "新增重複習慣";
   $("#recurringTitleInput").value = r?.title || "";
   $("#recurringCategory").innerHTML = categoryOptions(r?.categoryId || "");
+  $("#recurringGoal").innerHTML =
+    `<option value="">不連結方向</option>` +
+    state.cycle.goals
+      .map(
+        (g) => `<option ${g === (r?.goal || "") ? "selected" : ""}>${esc(g)}</option>`,
+      )
+      .join("");
   $("#recurringFrequency").value = r?.frequency || "weekly";
   $("#recurringTimes").innerHTML = timesOptions(r?.timesPerWeek || 2);
   renderRecurringFields();
@@ -2562,9 +2590,6 @@ function bindStaticEvents() {
   $$("[data-mode]").forEach((b) =>
     b.addEventListener("click", () => {
       state.mode = b.dataset.mode;
-      if (state.mode === "day") {
-        state.selectedDate = defaultDateForWeek(state.selectedWeek);
-      }
       renderAll();
     }),
   );
@@ -2674,15 +2699,24 @@ function bindStaticEvents() {
     if (!t || !guardWeekEditable(t.week)) return;
     const title = $("#editTaskTitle").value.trim();
     if (!title) return showToast("名稱不能空白");
-    t.title = title;
-    t.goal = $("#editTaskGoal").value;
-    t.categoryId = $("#editTaskCategory").value;
+    const goal = $("#editTaskGoal").value,
+      categoryId = $("#editTaskCategory").value,
+      rule =
+        isRecurring(t) && editingTaskOccurrenceId
+          ? state.recurringRules.find((x) => x.id === t.recurringRuleId)
+          : null;
+    if (rule) {
+      Object.assign(rule, { title, goal, categoryId });
+      state.tasks
+        .filter((x) => x.recurringRuleId === rule.id && !isWeekArchived(x.week))
+        .forEach((x) => Object.assign(x, { title, goal, categoryId }));
+    } else Object.assign(t, { title, goal, categoryId });
     const dateValue = $("#editTaskDate").value;
     if (editingTaskOccurrenceId && isRecurring(t)) {
       const o = t.occurrences.find((x) => x.id === editingTaskOccurrenceId);
       if (o) o.date = dateValue;
     } else if (!isRecurring(t)) t.focusDate = dateValue;
-    if (isRecurring(t) && t.frequency === "weekly")
+    if (isRecurring(t) && t.frequency === "weekly" && !editingTaskOccurrenceId)
       resizeRecurringTask(t, Number($("#editTaskTimes").value));
     $("#editTaskDialog").close();
     renderAll();
@@ -2774,7 +2808,6 @@ function bindStaticEvents() {
     renderAll();
   });
 
-  $("#addRecurringBtn").addEventListener("click", () => openRecurringDialog());
   $("#recurringFrequency").addEventListener("change", renderRecurringFields);
   $("#recurringForm").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -2783,15 +2816,17 @@ function bindStaticEvents() {
     const frequency = $("#recurringFrequency").value,
       times =
         frequency === "daily" ? 7 : Number($("#recurringTimes").value || 2),
-      categoryId = $("#recurringCategory").value;
+      categoryId = $("#recurringCategory").value,
+      goal = $("#recurringGoal").value;
     if (editingRecurringId) {
       const r = state.recurringRules.find((x) => x.id === editingRecurringId);
-      Object.assign(r, { title, frequency, timesPerWeek: times, categoryId });
+      Object.assign(r, { title, frequency, timesPerWeek: times, categoryId, goal });
       state.tasks
         .filter((t) => t.recurringRuleId === r.id && !isWeekArchived(t.week))
         .forEach((t) => {
           t.title = title;
           t.categoryId = categoryId;
+          t.goal = goal;
           t.frequency = frequency;
           resizeRecurringTask(t, times);
           if (frequency === "daily") {
@@ -2945,10 +2980,16 @@ function renderTutorial() {
     .map((i) => `<i class="${i === tutStep ? "on" : ""}"></i>`)
     .join("");
   $("#tutBack").hidden = tutStep === 0;
-  $("#tutNext").textContent = tutStep === 3 ? "開始使用" : "下一步";
+  $("#tutNext").textContent =
+    tutStep === 3
+      ? "開始使用"
+      : tutStep === 0
+        ? "繼續完整教學"
+        : "下一步";
   $("#tutSkip").hidden = tutStep === 3;
+  $("#tutSkip").textContent = tutStep === 0 ? "先開始使用" : "略過教學";
   if (tutStep === 0) {
-    body.innerHTML = `<div class="tut-pane"><svg class="tut-art" viewBox="0 0 160 120" aria-hidden="true"><ellipse cx="80" cy="106" rx="46" ry="8" fill="rgba(120,100,80,.18)"/><path class="tut-stem" d="M80 104C80 90 78 76 82 58" pathLength="1"/><path class="tut-leaf l1" d="M82 62C96 52 108 54 114 60C106 70 92 70 82 62Z"/><path class="tut-leaf l2" d="M81 76C68 66 56 68 50 74C58 84 72 84 81 76Z"/><circle class="tut-seed" cx="80" cy="102" r="6"/></svg><h3>歡迎來到 Tiny Progress</h3><p>每完成一件小事，就長一片葉子。<br>葉子慢慢多了，就是一棵屬於你的樹。</p></div>`;
+    body.innerHTML = `<div class="tut-pane"><svg class="tut-art" viewBox="0 0 160 120" aria-hidden="true"><ellipse cx="80" cy="106" rx="46" ry="8" fill="rgba(120,100,80,.18)"/><path class="tut-stem" d="M80 104C80 90 78 76 82 58" pathLength="1"/><path class="tut-leaf l1" d="M82 62C96 52 108 54 114 60C106 70 92 70 82 62Z"/><path class="tut-leaf l2" d="M81 76C68 66 56 68 50 74C58 84 72 84 81 76Z"/><circle class="tut-seed" cx="80" cy="102" r="6"/></svg><h3>歡迎來到 Tiny Progress</h3><p>每完成一件小事，就長一片葉子。<br>先加入本週事項就能開始；方向和目標之後再設定也可以。</p></div>`;
   } else if (tutStep === 1) {
     body.innerHTML = `<div class="tut-pane"><h3>你想往哪裡走？</h3><p>先寫下 1 到 3 個大方向，之後隨時可以改。</p><div class="tut-dirs">${tutDraft.map((d, i) => `<div class="tut-dir" style="--c:${d.color}"><i class="color-dot"></i><div><input data-tut-name="${i}" value="${esc(d.name)}" placeholder="方向名稱" maxlength="12"><input data-tut-outcome="${i}" value="${esc(d.outcome)}" placeholder="做到什麼算完成" maxlength="40"></div></div>`).join("")}</div>${tutDraft.length < 3 ? `<button class="text-button" type="button" id="tutAddDir">＋ 再加一個方向</button>` : ""}</div>`;
     $$("[data-tut-name]").forEach((el) =>
