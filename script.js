@@ -298,6 +298,7 @@ const flyingKeys = new Set(),
 let actionOccIds = [],
   dupAllowed = false,
   pendingNoteOccId = "",
+  pendingNoteOccIds = [],
   historySelected = null,
   footprintWeek = null,
   quickAddDate = "";
@@ -503,7 +504,7 @@ function renderAll() {
 function renderHeader() {
   $("#historyCycleLabel").textContent = `Cycle ${state.cycle.number}`;
   $("#homeEyebrow").textContent =
-    `Cycle ${state.cycle.number} · Week ${CURRENT_WEEK} / 12`;
+    `Cycle ${state.cycle.number} · Week ${state.selectedWeek} / 12 · ${state.mode === "day" ? "每日檢視" : "整週檢視"}`;
 }
 function directionLeafCounts() {
   const counts = {},
@@ -680,10 +681,8 @@ function renderHome() {
   const entry = $("#footprintEntry");
   entry.hidden = footprintWeek === viewWeek;
   $("#homeTitle").textContent = dayMode
-    ? isToday
-      ? "今天也長一點"
-      : `${formatShortDate(state.selectedDate)} 也長一點`
-    : "這週慢慢長大";
+    ? `Week ${viewWeek} · ${isToday ? "今天" : `週${dayLabel(state.selectedDate)} ${formatShortDate(state.selectedDate)}`}`
+    : `Week ${viewWeek} · 這週慢慢長大`;
   $("#homeLede").textContent = dayMode
     ? "今天完成的每一件，都會長進這週的樹"
     : "一件一件完成，讓這週留下自己的樣子";
@@ -697,9 +696,9 @@ function renderHome() {
   $("#workHint").textContent = archived
     ? "這週已封存，完整紀錄留在 History"
     : dayMode
-      ? "只是安排哪天做，還是算這一週"
+      ? "選擇本週中的一天；事情仍屬於本週"
       : "事情以 Week 為主，完成一次就長一片葉子";
-  $("#quickTitle").placeholder = dayMode ? "這天想加入什麼" : "這週想加入什麼";
+  $("#quickTitle").placeholder = "加入本週事項";
   $("#weekStrip").hidden = dayMode;
   $("#dayStrip").hidden = !dayMode;
   dayMode ? renderDayStrip() : renderWeekStrip();
@@ -707,44 +706,53 @@ function renderHome() {
 
   let html = "";
   if (dayMode) {
-    const rows = [],
-      daily = [];
+    const planned = [],
+      daily = [],
+      weekly = [];
     activeTasks(viewWeek).forEach((t) => {
       if (isRecurring(t)) {
         if (t.frequency === "daily") {
           const g = t.occurrences.filter((o) => o.date === state.selectedDate);
           if (g.length) daily.push({ t, g });
         } else {
-          // 每週 N 次不是先建立 N 張日期任務。日模式永遠只顯示同一張日常小事卡，
-          // 尚未完成的下一次會在這張卡上直接記錄，因此同一天也可以完成兩次。
+          // 每週目標只在排定的日期出現；未排日期的次數留在整週檢視管理。
           const dated = t.occurrences.filter(
             (o) => o.date === state.selectedDate,
           );
-          const free = !taskDone(t)
-            ? t.occurrences.find((o) => !o.done && !o.date)
-            : null;
-          const g = free ? [...dated, free] : dated;
-          if (g.length) rows.push(taskRow(t, g));
+          if (dated.length) weekly.push(taskRow(t, dated));
         }
       } else if (t.focusDate === state.selectedDate)
-        rows.push(taskRow(t, null));
+        planned.push(taskRow(t, null));
     });
-    html =
-      (daily.length ? dailyStripHtml(daily) : "") +
-      (rows.join("") ||
-        (daily.length
-          ? ""
-          : `<div class="empty-note">今天還沒有放進事情</div>`));
+    html = daily.length ? dailyStripHtml(daily) : "";
+    if (planned.length)
+      html +=
+        taskSectionLabel("今天安排", "只安排在這一天的事情") +
+        planned.join("");
+    if (weekly.length)
+      html +=
+        taskSectionLabel(
+          "本週習慣・今天已排",
+          "未排日期的次數請在整週檢視管理",
+        ) + weekly.join("");
+    if (!daily.length && !planned.length && !weekly.length)
+      html = `<div class="empty-note">今天還沒有放進事情</div>`;
   } else {
     const tasks = activeTasks(viewWeek),
       ordinary = tasks.filter((t) => !isRecurring(t)),
       pending = ordinary.filter((t) => !taskDone(t)),
       finished = ordinary.filter(taskDone),
       routine = tasks.filter(isRecurring);
-    html = pending.map((t) => taskRow(t, null)).join("");
+    html = pending.length
+      ? taskSectionLabel("本週安排", "這週想完成的事情") +
+        pending.map((t) => taskRow(t, null)).join("")
+      : "";
     if (routine.length)
       html +=
-        `<div class="task-section-label">日常小事 <small>分開記錄次數</small></div>` +
+        taskSectionLabel(
+          "重複習慣",
+          "整週按「完成」會記滿本週全部次數",
+        ) +
         routine.map((t) => taskRow(t, null)).join("");
     if (finished.length)
       html += `<details class="completed-tasks"><summary>已完成 ${finished.length} 件</summary>${finished.map((t) => taskRow(t, null)).join("")}</details>`;
@@ -879,22 +887,32 @@ function taskRow(t, occ) {
       `<span class="repeat-dots"><span class="dots">${group.map((o) => `<i class="${o.done ? "on" : ""}"></i>`).join("")}</span></span>`,
     );
   const circleDone =
-    isRecurring(t) && t.frequency === "daily" && !group
-      ? Boolean(t.occurrences.find((o) => o.date === TODAY)?.done)
+    isRecurring(t) &&
+    t.frequency === "daily" &&
+    !group &&
+    state.mode === "day"
+      ? Boolean(
+          t.occurrences.find((o) => o.date === state.selectedDate)?.done,
+        )
       : completed;
   const checkLabel = circleDone
     ? "改回未完成"
     : isRecurring(t) && state.mode === "day" && occurrenceDoneCount(t) > 0
       ? "再完成一次"
-      : "完成";
+      : isRecurring(t) && state.mode === "week"
+        ? "完成本週全部次數"
+        : "完成";
   return `<article class="task-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}" tabindex="0" aria-label="${completed ? "查看完成紀錄" : "編輯"}：${esc(t.title)}">
     <button class="task-check" type="button" aria-label="${checkLabel}">${circleDone ? "✓" : ""}</button>
     <div class="task-main"><p class="task-title">${esc(t.title)}</p>${meta.length ? `<div class="task-meta">${meta.join("")}</div>` : ""}</div>
     <button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button>
   </article>`;
 }
+function taskSectionLabel(title, hint) {
+  return `<div class="task-section-label"><span>${esc(title)}</span><small>${esc(hint)}</small></div>`;
+}
 function dailyStripHtml(items) {
-  return `<div class="daily-strip"><p class="daily-label">每天要做</p><div class="daily-card-list">${items
+  return `<div class="daily-strip"><p class="daily-label">每日習慣</p><div class="daily-card-list">${items
     .map(({ t, g }) => {
       const done = g.every((o) => o.done),
         color = taskColor(t);
@@ -921,10 +939,17 @@ function openTaskActions(t, row) {
   const rowDone = pool.length > 0 && pool.every((o) => o.done);
   $("#actionTaskTitle").textContent = t.title;
   $("#toggleTaskDoneBtn").hidden = archived;
-  $("#toggleTaskDoneBtn").textContent = rowDone ? "改回未完成" : "完成";
+  $("#toggleTaskDoneBtn").textContent =
+    isRecurring(t) && state.mode === "week" && !actionOccIds.length
+      ? rowDone
+        ? "改回本週未完成"
+        : "完成本週全部次數"
+      : rowDone
+        ? "改回未完成"
+        : "完成";
   $("#replanTaskBtn").hidden =
     archived || isRecurring(t) || taskDone(t) || t.week >= 12;
-  $("#editTaskBtn").hidden = archived;
+  $("#editTaskBtn").hidden = archived || !rowDone;
   $("#editTaskBtn").textContent = "編輯";
   $("#deleteTaskBtn").hidden = archived;
   $("#completionRecordBtn").hidden =
@@ -1008,7 +1033,9 @@ function toggleTaskCompletion(t, occIds, fromRect) {
   let becameComplete = false,
     leafKey = "",
     leafOccId = "",
-    bulkLeafKeys = [];
+    bulkLeafKeys = [],
+    completedOccIds = [],
+    bulkWeekAction = false;
   const inTree = t.week === treeWeek();
   if (isRecurring(t)) {
     const pool =
@@ -1017,48 +1044,100 @@ function toggleTaskCompletion(t, occIds, fromRect) {
         : t.frequency === "daily"
           ? t.occurrences.filter((o) => o.date === TODAY)
           : t.occurrences;
-    const occ =
-      pool.find((o) => !o.done) || [...pool].reverse().find((o) => o.done);
-    if (!occ) {
-      showToast("這張日常卡今天沒有待記錄的次數");
-      return;
-    }
-    leafKey = `${t.id}:${occ.id}`;
-    leafOccId = occ.id;
-    if (occ.done) {
-      if (inTree) queueFall(t.week, leafKey, taskColor(t));
-      occ.done = false;
-      occ.doneDate = "";
-      occ.note = "";
-      occ.noteEnabledAtCompletion = undefined;
-      if (t.frequency === "weekly") occ.date = "";
-      state.events.push({
-        type: "uncomplete",
-        taskId: t.id,
-        title: t.title,
-        week: t.week,
-        date: TODAY,
-        occurrenceId: occ.id,
+    const weekBulk = state.mode === "week" && !occIds?.length;
+    if (weekBulk) {
+      bulkWeekAction = true;
+      const allDone = t.occurrences.every((o) => o.done);
+      let removedCount = 0;
+      t.occurrences.forEach((o) => {
+        if (allDone ? o.done : !o.done) {
+          const key = `${t.id}:${o.id}`;
+          if (allDone) {
+            if (inTree)
+              queueFall(t.week, key, taskColor(t), removedCount * 90);
+            removedCount++;
+            o.done = false;
+            o.doneDate = "";
+            o.note = "";
+            o.noteEnabledAtCompletion = undefined;
+            state.events.push({
+              type: "uncomplete",
+              taskId: t.id,
+              title: t.title,
+              week: t.week,
+              date: TODAY,
+              occurrenceId: o.id,
+            });
+          } else {
+            o.done = true;
+            o.doneDate = TODAY;
+            o.noteEnabledAtCompletion = Boolean(
+              state.preferences.completionNote,
+            );
+            completedOccIds.push(o.id);
+            bulkLeafKeys.push(key);
+            state.events.push({
+              type: "complete",
+              taskId: t.id,
+              title: t.title,
+              week: t.week,
+              date: TODAY,
+              occurrenceId: o.id,
+              color: taskColor(t),
+            });
+          }
+        }
       });
-      state.footprintDeferred[t.week] = false;
+      if (allDone) state.footprintDeferred[t.week] = false;
+      else becameComplete = completedOccIds.length > 0;
+      leafKey = bulkLeafKeys[0] || "";
+      leafOccId = completedOccIds[0] || "";
+      syncTaskDone(t);
     } else {
-      if (t.frequency === "weekly" && !occ.date && state.mode === "day")
-        occ.date = state.selectedDate;
-      occ.done = true;
-      occ.doneDate = TODAY;
-      occ.noteEnabledAtCompletion = Boolean(state.preferences.completionNote);
-      becameComplete = true;
-      state.events.push({
-        type: "complete",
-        taskId: t.id,
-        title: t.title,
-        week: t.week,
-        date: TODAY,
-        occurrenceId: occ.id,
-        color: taskColor(t),
-      });
+      const occ =
+        pool.find((o) => !o.done) || [...pool].reverse().find((o) => o.done);
+      if (!occ) {
+        showToast("這張日常卡今天沒有待記錄的次數");
+        return;
+      }
+      leafKey = `${t.id}:${occ.id}`;
+      leafOccId = occ.id;
+      if (occ.done) {
+        if (inTree) queueFall(t.week, leafKey, taskColor(t));
+        occ.done = false;
+        occ.doneDate = "";
+        occ.note = "";
+        occ.noteEnabledAtCompletion = undefined;
+        if (t.frequency === "weekly") occ.date = "";
+        state.events.push({
+          type: "uncomplete",
+          taskId: t.id,
+          title: t.title,
+          week: t.week,
+          date: TODAY,
+          occurrenceId: occ.id,
+        });
+        state.footprintDeferred[t.week] = false;
+      } else {
+        if (t.frequency === "weekly" && !occ.date && state.mode === "day")
+          occ.date = state.selectedDate;
+        occ.done = true;
+        occ.doneDate = TODAY;
+        occ.noteEnabledAtCompletion = Boolean(state.preferences.completionNote);
+        completedOccIds.push(occ.id);
+        becameComplete = true;
+        state.events.push({
+          type: "complete",
+          taskId: t.id,
+          title: t.title,
+          week: t.week,
+          date: TODAY,
+          occurrenceId: occ.id,
+          color: taskColor(t),
+        });
+      }
+      syncTaskDone(t);
     }
-    syncTaskDone(t);
   } else {
     leafKey = String(t.id);
     if (t.done) {
@@ -1095,19 +1174,30 @@ function toggleTaskCompletion(t, occIds, fromRect) {
     if (becameComplete && state.preferences.completionNote) {
       pendingNoteTaskId = t.id;
       pendingNoteOccId = leafOccId;
+      pendingNoteOccIds = completedOccIds;
       $("#noteTaskTitle").textContent = t.title;
       $("#completionNoteInput").value = "";
       $("#completionNoteDialog").showModal();
     } else {
       showToast(
-        becameComplete ? (inTree ? "又長出一片了" : "完成了") : "已改回未完成",
+        becameComplete
+          ? bulkWeekAction
+            ? "本週習慣已全部完成"
+            : inTree
+              ? "又長出一片了"
+              : "完成了"
+          : bulkWeekAction
+            ? "本週習慣已全部改回未完成"
+            : "已改回未完成",
       );
       if (becameComplete) maybeOpenFootprint(t.week, 650);
     }
   };
   if (becameComplete && inTree) {
-    const fly = Boolean(fromRect) && motionOk();
+    const fly = !bulkLeafKeys.length && Boolean(fromRect) && motionOk();
     if (fly) flyingKeys.add(leafKey);
+    else if (bulkLeafKeys.length)
+      bulkLeafKeys.forEach((key) => growKeys.add(key));
     else growKeys.add(leafKey);
     renderAll();
     if (fly) launchLeaf(leafKey, taskColor(t), fromRect, finish);
@@ -1131,7 +1221,7 @@ function renderFocusPool() {
       choices.push({ t, occ: null, label: "放進這天", meta: "" });
   });
   pool.innerHTML =
-    `<div class="focus-pool-head"><span>這週還有</span><small>只是安排哪天做，還是算這一週</small></div>` +
+    `<div class="focus-pool-head"><span>這週還有</span><small>尚未排日期；安排日期後仍屬於本週</small></div>` +
     (choices.length
       ? choices
           .map(
@@ -2145,7 +2235,7 @@ function renderRecurringList() {
             `<div class="manage-row"><span class="color-dot" style="--c:${categoryById(r.categoryId)?.color || NEUTRAL_LEAF}"></span><div><strong>${esc(r.title)}</strong><small>${r.frequency === "daily" ? "每天" : `每週 ${r.timesPerWeek} 次`}</small></div><label class="mini-switch"><input type="checkbox" data-rule-active="${r.id}" ${r.active ? "checked" : ""}><i></i></label><button class="text-button" type="button" data-edit-rule="${r.id}">編輯</button></div>`,
         )
         .join("")
-    : `<div class="empty-note">還沒有日常小事</div>`;
+    : `<div class="empty-note">還沒有重複習慣</div>`;
   $$("[data-rule-active]").forEach((i) =>
     i.addEventListener("change", () => {
       const r = state.recurringRules.find((x) => x.id === i.dataset.ruleActive);
@@ -2239,7 +2329,7 @@ function openReplanTask(t) {
 function openRecurringDialog(id = null) {
   editingRecurringId = id;
   const r = id ? state.recurringRules.find((x) => x.id === id) : null;
-  $("#recurringDialogTitle").textContent = r ? "編輯日常小事" : "新增日常小事";
+  $("#recurringDialogTitle").textContent = r ? "編輯重複習慣" : "新增重複習慣";
   $("#recurringTitleInput").value = r?.title || "";
   $("#recurringCategory").innerHTML = categoryOptions(r?.categoryId || "");
   $("#recurringFrequency").value = r?.frequency || "weekly";
@@ -2544,8 +2634,9 @@ function bindStaticEvents() {
     }
     const categoryId = $("#quickCategory").value,
       goal = $("#quickGoal").value,
-      scheduledDate = state.mode === "day" ? quickAddDate : "";
-    if ($("#quickRepeat").checked) {
+      scheduledDate = state.mode === "day" ? quickAddDate : "",
+      isRepeat = $("#quickRepeat").checked;
+    if (isRepeat) {
       const frequency = $("#quickFrequency").value,
         times = frequency === "daily" ? 7 : Number($("#quickTimes").value || 2);
       const rule = {
@@ -2576,11 +2667,14 @@ function bindStaticEvents() {
     e.currentTarget.reset();
     quickAddDate = "";
     $("#quickRepeatFields").hidden = true;
+    $("#quickTimesWrap").hidden = true;
     $("#moreFields").hidden = true;
     $("#moreToggle").textContent = "＋ 更多設定";
     renderAll();
     showToast(
-      state.mode === "day" && !scheduledDate
+      isRepeat
+        ? "已加入本週習慣"
+        : state.mode === "day" && !scheduledDate
         ? "已經放進這週了"
         : state.mode === "day"
           ? `已安排到 ${formatShortDate(scheduledDate)}`
@@ -2676,6 +2770,7 @@ function bindStaticEvents() {
     const week = t?.week;
     pendingNoteTaskId = null;
     pendingNoteOccId = "";
+    pendingNoteOccIds = [];
     showToast("這片葉子已經留下來了");
     if (week) maybeOpenFootprint(week, 420);
   });
@@ -2687,11 +2782,16 @@ function bindStaticEvents() {
         o =
           pendingNoteOccId &&
           t.occurrences?.find((x) => x.id === pendingNoteOccId);
-      if (o) o.note = v;
+      if (pendingNoteOccIds.length) {
+        t.occurrences
+          .filter((x) => pendingNoteOccIds.includes(x.id))
+          .forEach((x) => (x.note = v));
+      } else if (o) o.note = v;
       else t.note = v;
     }
     pendingNoteTaskId = null;
     pendingNoteOccId = "";
+    pendingNoteOccIds = [];
     saveState();
     showToast("完成紀錄存好了");
     if (week) maybeOpenFootprint(week, 420);
@@ -2755,7 +2855,7 @@ function bindStaticEvents() {
       });
     $("#recurringDialog").close();
     renderAll();
-    showToast("日常小事已更新");
+    showToast("重複習慣已更新");
   });
   $("#addCategoryBtn").addEventListener("click", () => openCategoryDialog());
   $("#categoryForm").addEventListener("submit", (e) => {

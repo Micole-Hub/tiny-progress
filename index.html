@@ -137,6 +137,28 @@
                   ＋
                 </button>
               </div>
+              <div class="repeat-box quick-type-box">
+                <label class="repeat-row">
+                  <span
+                    ><strong>重複習慣</strong
+                    ><small>關閉時加入一般本週事項；開啟後設定重複頻率</small></span
+                  >
+                  <input type="checkbox" id="quickRepeat" />
+                </label>
+                <div class="repeat-fields" id="quickRepeatFields" hidden>
+                  <label
+                    ><span>頻率</span
+                    ><select id="quickFrequency">
+                      <option value="daily">每天</option>
+                      <option value="weekly">每週</option>
+                    </select></label
+                  >
+                  <label id="quickTimesWrap" hidden
+                    ><span>每週幾次</span
+                    ><select id="quickTimes"></select
+                  ></label>
+                </div>
+              </div>
               <button
                 class="more-toggle"
                 type="button"
@@ -154,28 +176,6 @@
                   ><span>分類</span
                   ><select id="quickCategory"></select
                 ></label>
-                <div class="field-wide repeat-box">
-                  <label class="repeat-row">
-                    <span
-                      ><strong>日常小事</strong
-                      ><small>每天做，或每週想做幾次</small></span
-                    >
-                    <input type="checkbox" id="quickRepeat" />
-                  </label>
-                  <div class="repeat-fields" id="quickRepeatFields" hidden>
-                    <label
-                      ><span>頻率</span
-                      ><select id="quickFrequency">
-                        <option value="daily">每天</option>
-                        <option value="weekly">每週</option>
-                      </select></label
-                    >
-                    <label id="quickTimesWrap" hidden
-                      ><span>每週幾次</span
-                      ><select id="quickTimes"></select
-                    ></label>
-                  </div>
-                </div>
               </div>
             </form>
 
@@ -312,8 +312,8 @@
             <div class="setting-block soft-card">
               <div class="setting-block-head">
                 <span
-                  ><strong>日常小事</strong
-                  ><small>每天做，或每週想做幾次</small></span
+                  ><strong>重複習慣</strong
+                  ><small>每天做，或設定每週目標次數</small></span
                 ><button class="text-button" id="addRecurringBtn" type="button">
                   ＋ 新增
                 </button>
@@ -517,8 +517,8 @@
 
     <dialog id="recurringDialog">
       <form method="dialog" class="dialog-card" id="recurringForm">
-        <p class="eyebrow">日常小事</p>
-        <h3 id="recurringDialogTitle">新增日常小事</h3>
+        <p class="eyebrow">重複習慣</p>
+        <h3 id="recurringDialogTitle">新增重複習慣</h3>
         <label class="dialog-label"
           >名稱<input
             id="recurringTitleInput"

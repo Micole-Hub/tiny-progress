@@ -547,6 +547,17 @@ button {
 .dialog-label textarea:focus {
   border-color: var(--green);
 }
+.quick-type-box {
+  margin-top: 10px;
+}
+.quick-type-box .repeat-fields select {
+  width: 100%;
+  height: 40px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+}
 .primary-button,
 .secondary-button {
   min-height: 42px;
