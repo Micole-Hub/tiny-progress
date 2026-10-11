@@ -300,8 +300,7 @@ let actionOccIds = [],
   pendingNoteOccId = "",
   pendingNoteOccIds = [],
   historySelected = null,
-  footprintWeek = null,
-  quickAddDate = "";
+  footprintWeek = null;
 let actionTaskId = null,
   actionOccurrenceId = null,
   pendingNoteTaskId = null,
@@ -797,7 +796,6 @@ function renderHome() {
     : "0%";
   $("#quickAddForm").hidden = archived;
   renderQuickOptions();
-  renderQuickDateField();
 }
 function applyRowFeedback() {
   const rows = (id) => $$(`#taskList [data-task-id="${id}"]`);
@@ -1257,27 +1255,6 @@ function renderQuickOptions() {
     state.cycle.goals.map((g) => `<option>${esc(g)}</option>`).join("");
   $("#quickCategory").innerHTML = categoryOptions();
   $("#quickTimes").innerHTML = timesOptions(2);
-}
-function renderQuickDateField() {
-  const field = $("#quickDateField"),
-    options = $("#quickDateOptions");
-  if (!field || !options) return;
-  const isSingleDay = state.mode === "day" && !$("#quickRepeat").checked;
-  field.hidden = !isSingleDay;
-  if (!isSingleDay) return;
-  const dates = weekDateMap(state.selectedWeek),
-    all = Object.values(dates);
-  if (quickAddDate && !all.includes(quickAddDate)) quickAddDate = "";
-  $("#quickDate").value = quickAddDate;
-  const unscheduled = `<button type="button" class="quick-date quick-date-unscheduled ${quickAddDate ? "" : "sel"}" data-quick-date=""><span>這週還有</span><strong>未排日期</strong></button>`;
-  options.innerHTML =
-    unscheduled +
-    Object.keys(dates)
-      .map((k) => {
-        const date = dates[k];
-        return `<button type="button" class="quick-date ${date === quickAddDate ? "sel" : ""} ${date === TODAY ? "today" : ""}" data-quick-date="${date}"><span>週${dayLabel(dates[k])}</span><strong>${Number(date.slice(8))}</strong></button>`;
-      })
-      .join("");
 }
 function categoryOptions(selected = "") {
   return (
@@ -2542,7 +2519,6 @@ function bindStaticEvents() {
     if (!b || b.disabled) return;
     state.selectedWeek = Number(b.dataset.week);
     state.selectedDate = defaultDateForWeek(state.selectedWeek);
-    quickAddDate = "";
     treeIntro = true;
     renderAll();
     b.scrollIntoView({
@@ -2558,7 +2534,6 @@ function bindStaticEvents() {
       if (nav.disabled || !canEnterWeek(week)) return;
       state.selectedWeek = week;
       state.selectedDate = defaultDateForWeek(week);
-      quickAddDate = "";
       treeIntro = true;
       renderAll();
       return;
@@ -2568,19 +2543,9 @@ function bindStaticEvents() {
     state.selectedDate = b.dataset.date;
     renderAll();
   });
-  $("#quickDateOptions").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-quick-date]");
-    if (!b) return;
-    quickAddDate = b.dataset.quickDate;
-    $("#quickDate").value = quickAddDate;
-    $$("#quickDateOptions [data-quick-date]").forEach((x) =>
-      x.classList.toggle("sel", x === b),
-    );
-  });
   $("#returnCurrentWeekBtn").addEventListener("click", () => {
     state.selectedWeek = CURRENT_WEEK;
     state.selectedDate = currentWeekDefaultDate();
-    quickAddDate = "";
     treeIntro = true;
     renderAll();
   });
@@ -2599,7 +2564,6 @@ function bindStaticEvents() {
       state.mode = b.dataset.mode;
       if (state.mode === "day") {
         state.selectedDate = defaultDateForWeek(state.selectedWeek);
-        quickAddDate = "";
       }
       renderAll();
     }),
@@ -2615,7 +2579,6 @@ function bindStaticEvents() {
   });
   $("#quickRepeat").addEventListener("change", () => {
     $("#quickRepeatFields").hidden = !$("#quickRepeat").checked;
-    renderQuickDateField();
   });
   $("#quickFrequency").addEventListener("change", () => {
     $("#quickTimesWrap").hidden = $("#quickFrequency").value !== "weekly";
@@ -2634,7 +2597,7 @@ function bindStaticEvents() {
     }
     const categoryId = $("#quickCategory").value,
       goal = $("#quickGoal").value,
-      scheduledDate = state.mode === "day" ? quickAddDate : "",
+      scheduledDate = state.mode === "day" ? state.selectedDate : "",
       isRepeat = $("#quickRepeat").checked;
     if (isRepeat) {
       const frequency = $("#quickFrequency").value,
@@ -2665,7 +2628,6 @@ function bindStaticEvents() {
       });
     state.footprintDeferred[targetWeek] = false;
     e.currentTarget.reset();
-    quickAddDate = "";
     $("#quickRepeatFields").hidden = true;
     $("#quickTimesWrap").hidden = true;
     $("#moreFields").hidden = true;
@@ -2674,8 +2636,6 @@ function bindStaticEvents() {
     showToast(
       isRepeat
         ? "已加入本週習慣"
-        : state.mode === "day" && !scheduledDate
-        ? "已經放進這週了"
         : state.mode === "day"
           ? `已安排到 ${formatShortDate(scheduledDate)}`
           : "已經放進這週了",
