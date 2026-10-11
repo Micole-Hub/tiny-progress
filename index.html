@@ -27,13 +27,12 @@
         </a>
       </header>
       <details class="sync-panel" id="syncPanel">
-        <summary id="syncStatus" role="status">本機已保存</summary>
+        <summary id="syncStatus" role="status">同步尚未設定</summary>
         <div class="sync-panel-content">
-          <p>登入後可與 LINE 共用進度；沒登入也能先使用。</p>
+          <p>登入後會自動同步；離線時會在網路恢復後補上。</p>
           <button type="button" id="connectionSettings">設定雲端同步</button>
           <div id="syncActions" hidden>
-            <button type="button" id="retrySync">重試同步</button
-            ><button type="button" id="reloadCloud">載入雲端資料</button>
+            <button type="button" id="retrySync">重試同步</button>
           </div>
         </div>
       </details>
@@ -98,8 +97,8 @@
                 <h2 id="workTitle">這週想完成什麼</h2>
                 <p id="workHint">完成一件，就替這週多留下一片葉子</p>
               </div>
-              <div class="progress-number" aria-label="本週完成進度">
-                <small>本週完成</small><strong id="doneCount">0</strong
+              <div class="progress-number" aria-label="本週任務完成進度">
+                <small>本週任務</small><strong id="doneCount">0</strong
                 ><span>/</span><span id="totalCount">0</span><span>項</span>
               </div>
             </div>
@@ -116,6 +115,13 @@
               hidden
             ></div>
             <div class="task-list" id="taskList" aria-live="polite"></div>
+            <section class="habit-tracker" id="habitTracker" hidden>
+              <div class="habit-tracker-head">
+                <strong id="habitTrackerTitle">習慣追蹤</strong>
+                <small id="habitTrackerHint"></small>
+              </div>
+              <div class="habit-list" id="habitList" aria-live="polite"></div>
+            </section>
 
             <form class="quick-add" id="quickAddForm">
               <div class="quick-row">

@@ -15,6 +15,7 @@ window.TPConnection = (() => {
     inflight = false,
     paused = false,
     unboundDraft = false,
+    conflictRetries = 0,
     timer;
   let pendingSave = null,
     selectedCycle = null;
@@ -27,6 +28,139 @@ window.TPConnection = (() => {
   };
   let recovery = read(META);
   const serialize = (s) => JSON.stringify(D.publicState(s));
+  const MISSING = Symbol("missing");
+  function equal(a, b) {
+    if (a === MISSING || b === MISSING) return a === b;
+    if (a === b) return true;
+    if (!a || !b || typeof a !== "object" || typeof b !== "object")
+      return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    if (Array.isArray(a))
+      return (
+        a.length === b.length &&
+        a.every((value, index) => equal(value, b[index]))
+      );
+    const ak = Object.keys(a).sort(),
+      bk = Object.keys(b).sort();
+    return (
+      ak.length === bk.length &&
+      ak.every((key, index) => key === bk[index] && equal(a[key], b[key]))
+    );
+  }
+  const copy = (value) =>
+    value === MISSING ? MISSING : JSON.parse(JSON.stringify(value));
+  function arrayKey(path) {
+    const key = path.at(-1);
+    if (
+      ["tasks", "categories", "recurringRules", "directions", "occurrences"].includes(
+        key,
+      )
+    )
+      return (item) =>
+        item && typeof item === "object" && item.id !== undefined
+          ? String(item.id)
+          : null;
+    if (key === "archivedWeeks")
+      return (item) =>
+        item && typeof item === "object" && item.week !== undefined
+          ? String(item.week)
+          : null;
+    if (key === "completed")
+      return (item) =>
+        item && typeof item === "object" && item.key !== undefined
+          ? String(item.key)
+          : null;
+    return null;
+  }
+  function mergeValue(baseValue, localValue, remoteValue, path = []) {
+    if (equal(localValue, baseValue)) return copy(remoteValue);
+    if (equal(remoteValue, baseValue) || equal(localValue, remoteValue))
+      return copy(localValue);
+    if (
+      path.at(-1) === "events" &&
+      Array.isArray(localValue) &&
+      Array.isArray(remoteValue)
+    ) {
+      const merged = remoteValue.map(copy);
+      for (const event of localValue)
+        if (!merged.some((existing) => equal(existing, event)))
+          merged.push(copy(event));
+      return merged;
+    }
+    if (
+      [baseValue, localValue, remoteValue].every(
+        (value) =>
+          value === MISSING ||
+          (value !== null && typeof value === "object" && !Array.isArray(value)),
+      )
+    ) {
+      const result = {};
+      const keys = new Set(
+        [baseValue, localValue, remoteValue].flatMap((value) =>
+          value === MISSING ? [] : Object.keys(value),
+        ),
+      );
+      for (const key of keys) {
+        const value = mergeValue(
+          baseValue === MISSING || !Object.hasOwn(baseValue, key)
+            ? MISSING
+            : baseValue[key],
+          localValue === MISSING || !Object.hasOwn(localValue, key)
+            ? MISSING
+            : localValue[key],
+          remoteValue === MISSING || !Object.hasOwn(remoteValue, key)
+            ? MISSING
+            : remoteValue[key],
+          [...path, key],
+        );
+        if (value !== MISSING) result[key] = value;
+      }
+      return result;
+    }
+    if (
+      [baseValue, localValue, remoteValue].every(
+        (value) => value === MISSING || Array.isArray(value),
+      )
+    ) {
+      const identity = arrayKey(path);
+      if (identity) {
+        const arrays = [baseValue, localValue, remoteValue].map((value) =>
+          value === MISSING ? [] : value,
+        );
+        const entries = arrays.flat();
+        const keys = arrays.every((array) => array.every((item) => identity(item)))
+          ? [...new Set(entries.map(identity))]
+          : null;
+        if (keys) {
+          const get = (array, key) => array.find((item) => identity(item) === key);
+          const [baseArray, localArray, remoteArray] = arrays;
+          const result = [];
+          for (const key of keys) {
+            const baseItem = get(baseArray, key) ?? MISSING;
+            const localItem = get(localArray, key) ?? MISSING;
+            const remoteItem = get(remoteArray, key) ?? MISSING;
+            if (baseItem !== MISSING && localItem === MISSING) continue;
+            if (baseItem !== MISSING && remoteItem === MISSING) {
+              if (!equal(localItem, baseItem)) result.push(copy(localItem));
+              continue;
+            }
+            const value = mergeValue(
+              baseItem,
+              localItem,
+              remoteItem,
+              [...path, key],
+            );
+            if (value !== MISSING) result.push(value);
+          }
+          return result;
+        }
+      }
+    }
+    return copy(localValue);
+  }
+  function mergeStates(baseState, localState, remoteState) {
+    return mergeValue(baseState, localState, remoteState);
+  }
   const dirty = () => ready && serialize(adapter.get()) !== baseline;
   function remember() {
     if (demo || !ready) return;
@@ -103,31 +237,24 @@ window.TPConnection = (() => {
       await flush();
       return;
     }
-    if (
-      !force &&
-      recovery?.dirty &&
-      (recovery.base !== base || unboundDraft)
-    ) {
-      if (
-        confirm(
-          "本機有尚未同步的修改。\n\n按「確定」會以本機資料更新雲端；按「取消」會改用雲端資料並放棄本機修改。",
-        )
-      ) {
-        revision = data.revision;
-        baseline = serialize(data.state);
-        pendingSave = {
-          expectedRevision: revision,
-          mutationId: crypto.randomUUID(),
-          state: JSON.parse(serialize(adapter.get())),
-        };
-        unboundDraft = false;
-        paused = false;
-        ready = true;
-        locked(false);
-        status("正在同步保留的本機修改…");
+    if (!force && recovery?.dirty && (recovery.base !== base || unboundDraft)) {
+      const baseState = JSON.parse(recovery.baseline || serialize(D.empty()));
+      const merged = mergeStates(baseState, adapter.get(), data.state);
+      D.validate(merged);
+      adapter.replace(merged);
+      revision = data.revision;
+      baseline = serialize(data.state);
+      pendingSave = null;
+      unboundDraft = false;
+      paused = false;
+      ready = true;
+      locked(false);
+      remember();
+      if (dirty()) {
+        status("正在合併並同步更新…");
         await flush();
-        return;
-      }
+      } else status("已同步");
+      return;
     }
     unboundDraft = false;
     revision = data.revision;
@@ -182,19 +309,52 @@ window.TPConnection = (() => {
       cache(adapter.get());
       status("已同步");
     } catch (error) {
-      paused = true;
-      status(
-        error.status === 409
-          ? "其他裝置有更新，草稿已保留在本機。可重試同步，或載入雲端資料並放棄本機未同步修改。"
-          : error.status === 401
-            ? "登入已過期，請重新登入後重試同步。草稿已保留在本機。"
-            : "尚未同步：" + error.message,
-        true,
-      );
+      if (error.status === 409) {
+        try {
+          const data = await request(
+            "/api/state" + (selectedCycle ? "?cycle=" + selectedCycle : ""),
+          );
+          D.validate(data.state);
+          const baseState = JSON.parse(baseline || serialize(D.empty()));
+          const merged = mergeStates(baseState, adapter.get(), data.state);
+          D.validate(merged);
+          adapter.replace(merged);
+          revision = data.revision;
+          baseline = serialize(data.state);
+          pendingSave = null;
+          conflictRetries++;
+          paused = false;
+          status("正在合併其他裝置的更新…");
+          remember();
+        } catch (mergeError) {
+          paused = true;
+          status(
+            "同步遇到多裝置更新，修改仍已保留；請稍後重試。" +
+              (mergeError.message ? ` ${mergeError.message}` : ""),
+            true,
+          );
+        }
+      } else {
+        paused = true;
+        const offline = !navigator.onLine;
+        status(
+          offline
+            ? "目前離線，恢復網路後會自動同步"
+            : error.status === 401
+              ? "登入已過期，請重新設定同步。修改仍已保留。"
+              : "同步失敗，修改仍已保留：" + error.message,
+          true,
+        );
+      }
     } finally {
       inflight = false;
       remember();
-      if (!paused && dirty()) timer = setTimeout(flush, 100);
+      if (!paused && dirty()) {
+        const delay = conflictRetries
+          ? Math.min(500 * 2 ** Math.min(conflictRetries, 5), 15000)
+          : 100;
+        timer = setTimeout(flush, delay);
+      } else if (!dirty()) conflictRetries = 0;
     }
   }
   function save(s) {
@@ -203,7 +363,7 @@ window.TPConnection = (() => {
     if (!ready) return;
     remember();
     if (!base || !auth || unboundDraft) {
-      status("已儲存在本機・登入後同步");
+      status("同步尚未設定");
       return;
     }
     clearTimeout(timer);
@@ -242,33 +402,20 @@ window.TPConnection = (() => {
       url = document.querySelector("#serverUrl"),
       password = document.querySelector("#webPassword"),
       message = document.querySelector("#connectionMessage");
-    document.querySelector("#reloadCloud").onclick = async () => {
-      if (
-        !confirm(
-          "載入雲端最新資料會取代目前畫面，並放棄本機尚未同步的修改。確定繼續？",
-        )
-      )
-        return;
-      try {
-        unboundDraft = false;
-        await reload(true);
-      } catch (e) {
-        status(e.message, true);
-      }
-    };
     document.querySelector("#retrySync").onclick = () => {
       paused = false;
-      flush();
+      if (dirty() || pendingSave) flush();
+      else refresh();
     };
     document.querySelector("#connectionSettings").onclick = () => {
       locked(true);
       message.textContent =
-        "登入只用來連接雲端與 LINE；你可以先離線使用，本機資料會保留。";
+        "登入後，網頁與 LINE 會自動共用資料；暫時離線時會在恢復網路後自動同步。";
     };
     document.querySelector("#continueOffline").onclick = () => {
       locked(false);
       status(
-        dirty() ? "本機有尚未同步的修改" : "已儲存在本機・尚未登入同步",
+        dirty() ? "等待網路恢復後同步" : "同步尚未設定",
       );
     };
     document.querySelector("#demoLink").href = location.pathname + "?demo=1";
@@ -318,11 +465,7 @@ window.TPConnection = (() => {
     pendingSave = recovery?.pendingSave || null;
     ready = true;
     locked(false);
-    status(
-      recovery?.dirty
-        ? "本機有尚未同步的修改"
-        : "已儲存在本機・尚未登入同步",
-    );
+    status(recovery?.dirty ? "等待網路恢復後同步" : "同步尚未設定");
     url.value =
       window.TP_CONFIG?.API_BASE_URL ||
       localStorage.getItem("tp-v28-server") ||
@@ -336,9 +479,17 @@ window.TPConnection = (() => {
         message.textContent = "正在載入…";
         await reload();
         message.textContent = "";
-      } catch {
-        message.textContent = "雲端暫時無法連線；仍可繼續使用本機資料。";
-        status("目前離線，變更會保留在本機", true);
+      } catch (error) {
+        message.textContent =
+          error.status === 401
+            ? "登入已過期，請重新登入；本機修改仍會保留。"
+            : "雲端暫時無法連線；仍可繼續使用，恢復網路後會自動同步。";
+        status(
+          error.status === 401
+            ? "登入已過期，請重新設定同步。修改仍已保留。"
+            : "目前離線，恢復網路後會自動同步",
+          error.status === 401,
+        );
       }
     }
     const refresh = async () => {
@@ -377,21 +528,25 @@ window.TPConnection = (() => {
           status("已同步 LINE 的最新進度");
         }
       } catch {
-        status("目前離線，變更會保留在本機", true);
+        status("目前離線，恢復網路後會自動同步", true);
       }
     };
     setInterval(refresh, 30000);
     window.addEventListener("focus", refresh);
+    window.addEventListener("offline", () => {
+      if (base && auth) status("目前離線，恢復網路後會自動同步");
+    });
     window.addEventListener("online", () => {
       if (!base || !auth) {
-        status("已儲存在本機・登入後同步");
+        status("同步尚未設定");
         return;
       }
       paused = false;
       if (unboundDraft) {
-        reload().catch(() => status("目前離線，變更會保留在本機", true));
+        reload().catch(() => status("目前離線，恢復網路後會自動同步", true));
         return;
       }
+      status("網路已恢復，正在同步…");
       flush().then(refresh);
     });
   }

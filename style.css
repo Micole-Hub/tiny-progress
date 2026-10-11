@@ -389,6 +389,83 @@ button {
   display: grid;
   gap: 10px;
 }
+.habit-tracker {
+  margin-top: 18px;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.54);
+}
+.habit-tracker-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+.habit-tracker-head strong {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.habit-tracker-head small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.habit-list {
+  display: grid;
+}
+.habit-row {
+  --c: #c8d0ba;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+  outline: none;
+}
+.habit-row:first-child {
+  border-top: 0;
+}
+.habit-row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--c) 55%, white);
+  outline-offset: 2px;
+}
+.habit-row.done {
+  opacity: 0.62;
+}
+.habit-row .task-check {
+  width: 25px;
+  height: 25px;
+  min-width: 25px;
+  min-height: 25px;
+  font-size: 12px;
+}
+.habit-main {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 9px;
+}
+.habit-main strong {
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.habit-main span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.habit-row .task-more {
+  width: 30px;
+  height: 30px;
+}
 .task-row {
   --c: #c8d0ba;
   display: grid;

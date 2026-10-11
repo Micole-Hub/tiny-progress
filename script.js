@@ -503,7 +503,7 @@ function renderAll() {
 function renderHeader() {
   $("#historyCycleLabel").textContent = `Cycle ${state.cycle.number}`;
   $("#homeEyebrow").textContent =
-    `Cycle ${state.cycle.number} · Week ${state.selectedWeek} / 12 · ${state.mode === "day" ? "每日檢視" : "整週檢視"}`;
+    `Cycle ${state.cycle.number} · ${state.mode === "day" ? "每日檢視" : "整週檢視"}`;
 }
 function directionLeafCounts() {
   const counts = {},
@@ -696,7 +696,7 @@ function renderHome() {
     ? "這週已封存，完整紀錄留在 History"
     : dayMode
       ? "選擇本週中的一天；事情仍屬於本週"
-      : "事情以 Week 為主，完成一次就長一片葉子";
+      : "把這週要完成的具體任務放在這裡";
   $("#quickTitle").placeholder = "加入本週事項";
   $("#weekStrip").hidden = dayMode;
   $("#dayStrip").hidden = !dayMode;
@@ -704,14 +704,16 @@ function renderHome() {
   renderTreeHome();
 
   let html = "";
+  let habitHtml = "";
   if (dayMode) {
-    const entries = [];
+    const entries = [],
+      habits = [];
     activeTasks(viewWeek).forEach((t) => {
       if (isRecurring(t)) {
         const dated = t.occurrences.filter(
           (o) => o.date === state.selectedDate,
         );
-        if (dated.length) entries.push(taskRow(t, dated));
+        if (dated.length) habits.push(habitRow(t, dated));
       } else if (t.focusDate === state.selectedDate)
         entries.push(taskRow(t, null));
     });
@@ -719,22 +721,38 @@ function renderHome() {
       ? taskSectionLabel("今天安排", "完成後也會計入本週進度") +
         entries.join("")
       : `<div class="empty-note">今天還沒有放進事情</div>`;
+    habitHtml = habits.join("");
   } else {
     const tasks = activeTasks(viewWeek),
-      pending = tasks.filter((t) => !taskDone(t)),
-      finished = tasks.filter(taskDone);
+      regular = tasks.filter((t) => !isRecurring(t)),
+      pending = regular.filter((t) => !taskDone(t)),
+      finished = regular.filter(taskDone),
+      habits = tasks.filter(isRecurring);
     html = pending.length
-      ? taskSectionLabel("本週安排", "本週需要完成的項目") +
+      ? taskSectionLabel("本週任務", "本週需要完成的項目") +
         pending.map((t) => taskRow(t, null)).join("")
       : "";
     if (finished.length)
-      html += `<details class="completed-tasks"><summary>已完成項目</summary>${finished.map((t) => taskRow(t, null)).join("")}</details>`;
-    if (!tasks.length)
-      html = `<div class="empty-note">這一週還沒有放進事情</div>`;
+      html += `<details class="completed-tasks"><summary>已完成任務</summary>${finished.map((t) => taskRow(t, null)).join("")}</details>`;
+    habitHtml = habits.map((t) => habitRow(t, null)).join("");
+    if (!regular.length)
+      html = habits.length
+        ? ""
+        : `<div class="empty-note">這一週還沒有放進事情</div>`;
   }
   const list = $("#taskList");
   list.innerHTML = html;
   [...list.querySelectorAll("[data-task-id]")].forEach((el, i) =>
+    el.style.setProperty("--i", i),
+  );
+  const habitTracker = $("#habitTracker");
+  habitTracker.hidden = !habitHtml || archived;
+  $("#habitTrackerTitle").textContent = dayMode ? "今天的習慣" : "習慣追蹤";
+  $("#habitTrackerHint").textContent = dayMode
+    ? "完成次數會計入本週"
+    : "固定重複的事，集中記錄在這裡";
+  $("#habitList").innerHTML = habitHtml;
+  [...$("#habitList").querySelectorAll("[data-task-id]")].forEach((el, i) =>
     el.style.setProperty("--i", i),
   );
   const listKey = `${state.mode}|${viewWeek}|${state.selectedDate}`;
@@ -748,8 +766,9 @@ function renderHome() {
   renderFocusPool();
   applyRowFeedback();
 
-  const done = currentCompletedUnits(viewWeek),
-    total = currentTotalUnits(viewWeek);
+  const ordinary = activeTasks(viewWeek).filter((t) => !isRecurring(t)),
+    done = ordinary.filter(taskDone).length,
+    total = ordinary.length;
   const dc = $("#doneCount");
   if (prevDone !== null && prevDone !== done) {
     dc.classList.remove("bump");
@@ -761,9 +780,11 @@ function renderHome() {
   $("#totalCount").textContent = total;
   $("#progressSummary").textContent = total
     ? done === total
-      ? "本週安排都完成了"
-      : "本週還有 " + (total - done) + " 項待完成"
-    : "先加入一件想做的事情";
+      ? "本週任務都完成了"
+      : "本週還有 " + (total - done) + " 項任務待完成"
+    : activeTasks(viewWeek).some(isRecurring)
+      ? "習慣已在下方追蹤"
+      : "先加入一件本週任務";
   $("#progressFill").style.width = total
     ? `${Math.round((done / total) * 100)}%`
     : "0%";
@@ -771,7 +792,8 @@ function renderHome() {
   renderQuickOptions();
 }
 function applyRowFeedback() {
-  const rows = (id) => $$(`#taskList [data-task-id="${id}"]`);
+  const rows = (id) =>
+    $$(`#taskList [data-task-id="${id}"], #habitList [data-task-id="${id}"]`);
   if (justToggled) {
     const { id, occId, done } = justToggled;
     justToggled = null;
@@ -843,12 +865,6 @@ function taskRow(t, occ) {
     meta.push(
       `<span class="chip" style="--c:${color}">${esc(cat.name)}</span>`,
     );
-  if (isRecurring(t)) {
-    const count = occurrenceDoneCount(t);
-    meta.push(
-      `<span class="repeat-dots">↻ ${t.frequency === "daily" ? "每天" : "每週"} · ${count}/${t.targetCount}</span>`,
-    );
-  }
   const circleDone =
     isRecurring(t) &&
     t.frequency === "daily" &&
@@ -868,6 +884,24 @@ function taskRow(t, occ) {
   return `<article class="task-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}" tabindex="0" aria-label="${completed ? "查看完成紀錄" : "編輯"}：${esc(t.title)}">
     <button class="task-check" type="button" aria-label="${checkLabel}">${circleDone ? "✓" : ""}</button>
     <div class="task-main"><p class="task-title">${esc(t.title)}</p>${meta.length ? `<div class="task-meta">${meta.join("")}</div>` : ""}</div>
+    <button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button>
+  </article>`;
+}
+function habitRow(t, occ) {
+  const group = Array.isArray(occ) ? occ : null,
+    color = taskColor(t),
+    count = occurrenceDoneCount(t),
+    completed = group
+      ? group.every((o) => o.done)
+      : t.occurrences.every((o) => o.done);
+  const label = completed
+    ? "改回未完成"
+    : group
+      ? "完成這次習慣"
+      : "完成本週全部次數";
+  return `<article class="habit-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}" tabindex="0" aria-label="${completed ? "查看完成紀錄" : "編輯"}：${esc(t.title)}">
+    <button class="task-check" type="button" aria-label="${label}">${completed ? "✓" : ""}</button>
+    <div class="habit-main"><strong>${esc(t.title)}</strong><span>${t.frequency === "daily" ? "每天" : "每週"} · ${count}/${t.targetCount}</span></div>
     <button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button>
   </article>`;
 }
@@ -954,7 +988,7 @@ function openTaskCard(t, row) {
   openTaskEditor(t);
 }
 function bindTaskRows() {
-  $$("#taskList .task-check").forEach((b) =>
+  $$("#taskList .task-check, #habitList .task-check").forEach((b) =>
     b.addEventListener("click", (e) => {
       e.stopPropagation();
       const row = b.closest("[data-task-id]"),
@@ -970,7 +1004,7 @@ function bindTaskRows() {
       openTaskActions(t, row);
     }),
   );
-  $$("#taskList .task-row").forEach((row) => {
+  $$("#taskList .task-row, #habitList .habit-row").forEach((row) => {
     const open = () => {
       const t = state.tasks.find((x) => x.id === Number(row.dataset.taskId));
       openTaskCard(t, row);
@@ -1179,24 +1213,25 @@ function renderFocusPool() {
       choices.push({ t, occ: null, label: "放進這天", meta: "" });
       return;
     }
-    if (isRecurring(t) && t.frequency === "weekly")
-      t.occurrences.forEach((occ, index) => {
-        if (!occ.done && !occ.date)
-          choices.push({
-            t,
-            occ,
-            label: "放進這天",
-            meta: `每週習慣 · 第 ${index + 1} 次`,
-          });
-      });
+    if (isRecurring(t) && t.frequency === "weekly") {
+      const remaining = t.occurrences.filter((occ) => !occ.done && !occ.date);
+      if (remaining.length)
+        choices.push({
+          t,
+          occ: null,
+          weekly: true,
+          label: "安排一次",
+          meta: `每週習慣 · 尚有 ${remaining.length} 次`,
+        });
+    }
   });
   pool.innerHTML =
     `<div class="focus-pool-head"><span>這週還有</span><small>安排到某一天後仍屬於本週</small></div>` +
     (choices.length
       ? choices
           .map(
-            ({ t, occ, label, meta }) =>
-              `<div class="focus-choice" style="--c:${taskColor(t)}"><i></i><span>${esc(t.title)}${meta ? `<small> · ${esc(meta)}</small>` : ""}</span><button class="text-button" type="button" data-focus-task="${t.id}" ${occ ? `data-focus-occ="${occ.id}"` : ""}>${label}</button></div>`,
+            ({ t, occ, weekly, label, meta }) =>
+              `<div class="focus-choice" style="--c:${taskColor(t)}"><i></i><span>${esc(t.title)}${meta ? `<small> · ${esc(meta)}</small>` : ""}</span><button class="text-button" type="button" data-focus-task="${t.id}" ${occ ? `data-focus-occ="${occ.id}"` : ""} ${weekly ? `data-focus-weekly="true"` : ""}>${label}</button></div>`,
           )
           .join("")
       : `<div class="empty-note">這週目前沒有其他還沒安排日期的事情</div>`);
@@ -1206,6 +1241,9 @@ function renderFocusPool() {
       if (!guardWeekEditable(t.week)) return;
       if (b.dataset.focusOcc) {
         const o = t.occurrences.find((x) => x.id === b.dataset.focusOcc);
+        if (o) o.date = state.selectedDate;
+      } else if (b.dataset.focusWeekly) {
+        const o = t.occurrences.find((x) => !x.done && !x.date);
         if (o) o.date = state.selectedDate;
       } else t.focusDate = state.selectedDate;
       state.events.push({
