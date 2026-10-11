@@ -705,56 +705,30 @@ function renderHome() {
 
   let html = "";
   if (dayMode) {
-    const planned = [],
-      daily = [],
-      weekly = [];
+    const entries = [];
     activeTasks(viewWeek).forEach((t) => {
       if (isRecurring(t)) {
-        if (t.frequency === "daily") {
-          const g = t.occurrences.filter((o) => o.date === state.selectedDate);
-          if (g.length) daily.push({ t, g });
-        } else {
-          // 每週目標只在排定的日期出現；未排日期的次數留在整週檢視管理。
-          const dated = t.occurrences.filter(
-            (o) => o.date === state.selectedDate,
-          );
-          if (dated.length) weekly.push(taskRow(t, dated));
-        }
+        const dated = t.occurrences.filter(
+          (o) => o.date === state.selectedDate,
+        );
+        if (dated.length) entries.push(taskRow(t, dated));
       } else if (t.focusDate === state.selectedDate)
-        planned.push(taskRow(t, null));
+        entries.push(taskRow(t, null));
     });
-    html = daily.length ? dailyStripHtml(daily) : "";
-    if (planned.length)
-      html +=
-        taskSectionLabel("今天安排", "只安排在這一天的事情") +
-        planned.join("");
-    if (weekly.length)
-      html +=
-        taskSectionLabel(
-          "本週習慣・排到今天",
-          "這次完成仍計入本週目標",
-        ) + weekly.join("");
-    if (!daily.length && !planned.length && !weekly.length)
-      html = `<div class="empty-note">今天還沒有放進事情</div>`;
+    html = entries.length
+      ? taskSectionLabel("今天安排", "完成後也會計入本週進度") +
+        entries.join("")
+      : `<div class="empty-note">今天還沒有放進事情</div>`;
   } else {
     const tasks = activeTasks(viewWeek),
-      ordinary = tasks.filter((t) => !isRecurring(t)),
-      pending = ordinary.filter((t) => !taskDone(t)),
-      finished = ordinary.filter(taskDone),
-      routine = tasks.filter(isRecurring);
+      pending = tasks.filter((t) => !taskDone(t)),
+      finished = tasks.filter(taskDone);
     html = pending.length
-      ? taskSectionLabel("本週安排", "這週想完成的事情") +
+      ? taskSectionLabel("本週安排", "本週需要完成的項目") +
         pending.map((t) => taskRow(t, null)).join("")
       : "";
-    if (routine.length)
-      html +=
-        taskSectionLabel(
-          "重複習慣",
-          "整週按「完成」會記滿本週全部次數",
-        ) +
-        routine.map((t) => taskRow(t, null)).join("");
     if (finished.length)
-      html += `<details class="completed-tasks"><summary>已完成 ${finished.length} 件</summary>${finished.map((t) => taskRow(t, null)).join("")}</details>`;
+      html += `<details class="completed-tasks"><summary>已完成項目</summary>${finished.map((t) => taskRow(t, null)).join("")}</details>`;
     if (!tasks.length)
       html = `<div class="empty-note">這一週還沒有放進事情</div>`;
   }
@@ -774,9 +748,8 @@ function renderHome() {
   renderFocusPool();
   applyRowFeedback();
 
-  const ordinary = activeTasks(viewWeek).filter((t) => !isRecurring(t)),
-    done = ordinary.filter(taskDone).length,
-    total = ordinary.length;
+  const done = currentCompletedUnits(viewWeek),
+    total = currentTotalUnits(viewWeek);
   const dc = $("#doneCount");
   if (prevDone !== null && prevDone !== done) {
     dc.classList.remove("bump");
@@ -788,8 +761,8 @@ function renderHome() {
   $("#totalCount").textContent = total;
   $("#progressSummary").textContent = total
     ? done === total
-      ? "一般事情都完成了"
-      : "還有 " + (total - done) + " 件待完成"
+      ? "本週安排都完成了"
+      : "本週還有 " + (total - done) + " 項待完成"
     : "先加入一件想做的事情";
   $("#progressFill").style.width = total
     ? `${Math.round((done / total) * 100)}%`
@@ -870,20 +843,12 @@ function taskRow(t, occ) {
     meta.push(
       `<span class="chip" style="--c:${color}">${esc(cat.name)}</span>`,
     );
-  if (isRecurring(t) && !group) {
+  if (isRecurring(t)) {
     const count = occurrenceDoneCount(t);
     meta.push(
-      `<span class="repeat-dots"><span>↻ ${t.frequency === "daily" ? "每天" : `每週 ${t.targetCount} 次`} · ${count}/${t.targetCount}</span><span class="dots">${Array.from({ length: t.targetCount }, (_, i) => `<i class="${i < count ? "on" : ""}"></i>`).join("")}</span></span>`,
+      `<span class="repeat-dots">↻ ${t.frequency === "daily" ? "每天" : "每週"} · ${count}/${t.targetCount}</span>`,
     );
-  } else if (isRecurring(t) && group && t.frequency === "weekly") {
-    const count = occurrenceDoneCount(t);
-    meta.push(
-      `<span class="repeat-dots"><span>↻ 每週 ${t.targetCount} 次 · 本週 ${count}/${t.targetCount}</span><span class="dots">${Array.from({ length: t.targetCount }, (_, i) => `<i class="${i < count ? "on" : ""}"></i>`).join("")}</span></span>`,
-    );
-  } else if (group && group.length > 1)
-    meta.push(
-      `<span class="repeat-dots"><span class="dots">${group.map((o) => `<i class="${o.done ? "on" : ""}"></i>`).join("")}</span></span>`,
-    );
+  }
   const circleDone =
     isRecurring(t) &&
     t.frequency === "daily" &&
@@ -908,15 +873,6 @@ function taskRow(t, occ) {
 }
 function taskSectionLabel(title, hint) {
   return `<div class="task-section-label"><span>${esc(title)}</span><small>${esc(hint)}</small></div>`;
-}
-function dailyStripHtml(items) {
-  return `<div class="daily-strip"><p class="daily-label">每日習慣</p><div class="daily-card-list">${items
-    .map(({ t, g }) => {
-      const done = g.every((o) => o.done),
-        color = taskColor(t);
-      return `<article class="task-row daily-fixed-row ${done ? "done" : ""}" data-task-id="${t.id}" data-occurrence-ids="${g.map((o) => o.id).join(",")}" style="--c:${color}" tabindex="0" aria-label="${done ? "查看完成紀錄" : "編輯"}：${esc(t.title)}"><button class="task-check" type="button" aria-label="${done ? "改回未完成" : "完成"}">${done ? "✓" : ""}</button><div class="task-main"><p class="task-title">${esc(t.title)}</p><div class="task-meta"><span>每天</span></div></div><button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button></article>`;
-    })
-    .join("")}</div></div>`;
 }
 function setTaskActionContext(t, row) {
   actionTaskId = t.id;

@@ -14,6 +14,7 @@ window.TPConnection = (() => {
     baseline = "",
     inflight = false,
     paused = false,
+    unboundDraft = false,
     timer;
   let pendingSave = null,
     selectedCycle = null;
@@ -48,7 +49,9 @@ window.TPConnection = (() => {
       el.textContent = message;
       el.classList.toggle("error", error);
     }
-    document.querySelector("#syncActions").hidden = !error;
+    const actions = document.querySelector("#syncActions");
+    actions.hidden = !error;
+    if (error) document.querySelector("#syncPanel").open = true;
   };
   const locked = (value) => {
     document.querySelector(".app-shell").inert = value;
@@ -89,7 +92,7 @@ window.TPConnection = (() => {
       "/api/state" + (selectedCycle ? "?cycle=" + selectedCycle : ""),
     );
     D.validate(data.state);
-    if (!force && recovery?.dirty && recovery.base === base) {
+    if (!force && recovery?.dirty && recovery.base === base && !unboundDraft) {
       revision = recovery.revision;
       baseline = recovery.baseline;
       pendingSave = recovery.pendingSave || null;
@@ -100,6 +103,33 @@ window.TPConnection = (() => {
       await flush();
       return;
     }
+    if (
+      !force &&
+      recovery?.dirty &&
+      (recovery.base !== base || unboundDraft)
+    ) {
+      if (
+        confirm(
+          "本機有尚未同步的修改。\n\n按「確定」會以本機資料更新雲端；按「取消」會改用雲端資料並放棄本機修改。",
+        )
+      ) {
+        revision = data.revision;
+        baseline = serialize(data.state);
+        pendingSave = {
+          expectedRevision: revision,
+          mutationId: crypto.randomUUID(),
+          state: JSON.parse(serialize(adapter.get())),
+        };
+        unboundDraft = false;
+        paused = false;
+        ready = true;
+        locked(false);
+        status("正在同步保留的本機修改…");
+        await flush();
+        return;
+      }
+    }
+    unboundDraft = false;
     revision = data.revision;
     baseline = serialize(data.state);
     pendingSave = null;
@@ -112,7 +142,16 @@ window.TPConnection = (() => {
     locked(false);
   }
   async function flush() {
-    if (demo || !ready || paused || inflight || (!dirty() && !pendingSave))
+    if (
+      demo ||
+      !ready ||
+      !base ||
+      !auth ||
+      unboundDraft ||
+      paused ||
+      inflight ||
+      (!dirty() && !pendingSave)
+    )
       return;
     inflight = true;
     status("儲存中…");
@@ -163,6 +202,10 @@ window.TPConnection = (() => {
     if (demo) return;
     if (!ready) return;
     remember();
+    if (!base || !auth || unboundDraft) {
+      status("已儲存在本機・登入後同步");
+      return;
+    }
     clearTimeout(timer);
     timer = setTimeout(flush, 400);
   }
@@ -207,6 +250,7 @@ window.TPConnection = (() => {
       )
         return;
       try {
+        unboundDraft = false;
         await reload(true);
       } catch (e) {
         status(e.message, true);
@@ -218,7 +262,14 @@ window.TPConnection = (() => {
     };
     document.querySelector("#connectionSettings").onclick = () => {
       locked(true);
-      message.textContent = "登入後會自動載入資料；本機未同步草稿會保留並重試同步。";
+      message.textContent =
+        "登入只用來連接雲端與 LINE；你可以先離線使用，本機資料會保留。";
+    };
+    document.querySelector("#continueOffline").onclick = () => {
+      locked(false);
+      status(
+        dirty() ? "本機有尚未同步的修改" : "已儲存在本機・尚未登入同步",
+      );
     };
     document.querySelector("#demoLink").href = location.pathname + "?demo=1";
     form.onsubmit = async (e) => {
@@ -228,10 +279,11 @@ window.TPConnection = (() => {
       message.textContent = "連線中，第一次可能需要等候伺服器啟動…";
       try {
         const selected = serverBase(url.value.trim());
-        if (recovery?.dirty && recovery.base !== selected)
+        if (recovery?.dirty && recovery.base && recovery.base !== selected)
           throw new Error(
             "有另一個伺服器的未同步草稿，請先回原伺服器完成同步",
           );
+        unboundDraft = Boolean(recovery?.dirty && !recovery.base);
         base = selected;
         auth = "";
         const login = await request("/auth/login", {
@@ -260,7 +312,17 @@ window.TPConnection = (() => {
       locked(false);
       return;
     }
-    locked(true);
+    base = recovery?.base || "";
+    revision = Number(recovery?.revision) || 0;
+    baseline = recovery?.baseline || serialize(adapter.get());
+    pendingSave = recovery?.pendingSave || null;
+    ready = true;
+    locked(false);
+    status(
+      recovery?.dirty
+        ? "本機有尚未同步的修改"
+        : "已儲存在本機・尚未登入同步",
+    );
     url.value =
       window.TP_CONFIG?.API_BASE_URL ||
       localStorage.getItem("tp-v28-server") ||
@@ -268,24 +330,22 @@ window.TPConnection = (() => {
     const session = read("tp-v28-session", sessionStorage);
     if (session?.auth && session.base === url.value) {
       try {
+        unboundDraft = Boolean(recovery?.dirty && !recovery.base);
         base = serverBase(session.base);
         auth = session.auth;
         message.textContent = "正在載入…";
         await reload();
         message.textContent = "";
-      } catch (e) {
-        message.textContent = e.message;
+      } catch {
+        message.textContent = "雲端暫時無法連線；仍可繼續使用本機資料。";
+        status("目前離線，變更會保留在本機", true);
       }
     }
-    window.addEventListener("beforeunload", (e) => {
-      if (dirty() || inflight) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    });
     const refresh = async () => {
       if (
         !ready ||
+        !base ||
+        !auth ||
         inflight ||
         dirty() ||
         paused ||
@@ -322,6 +382,18 @@ window.TPConnection = (() => {
     };
     setInterval(refresh, 30000);
     window.addEventListener("focus", refresh);
+    window.addEventListener("online", () => {
+      if (!base || !auth) {
+        status("已儲存在本機・登入後同步");
+        return;
+      }
+      paused = false;
+      if (unboundDraft) {
+        reload().catch(() => status("目前離線，變更會保留在本機", true));
+        return;
+      }
+      flush().then(refresh);
+    });
   }
   async function manage(path, options = {}) {
     if (demo) throw new Error("示範模式不會變更正式週期");

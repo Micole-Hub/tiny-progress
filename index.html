@@ -26,14 +26,17 @@
           <span class="brand-mark">∞</span><span>Tiny Progress</span>
         </a>
       </header>
-      <div class="sync-bar">
-        <span id="syncStatus" role="status">尚未連線</span
-        ><button type="button" id="connectionSettings">連線設定</button>
-        <div id="syncActions" hidden>
-          <button type="button" id="retrySync">重試同步</button
-          ><button type="button" id="reloadCloud">載入最新資料</button>
+      <details class="sync-panel" id="syncPanel">
+        <summary id="syncStatus" role="status">本機已保存</summary>
+        <div class="sync-panel-content">
+          <p>登入後可與 LINE 共用進度；沒登入也能先使用。</p>
+          <button type="button" id="connectionSettings">設定雲端同步</button>
+          <div id="syncActions" hidden>
+            <button type="button" id="retrySync">重試同步</button
+            ><button type="button" id="reloadCloud">載入雲端資料</button>
+          </div>
         </div>
-      </div>
+      </details>
 
       <main class="page-wrap">
         <section
@@ -95,9 +98,9 @@
                 <h2 id="workTitle">這週想完成什麼</h2>
                 <p id="workHint">完成一件，就替這週多留下一片葉子</p>
               </div>
-              <div class="progress-number" aria-label="一般事情完成進度">
-                <small>一般事情</small><strong id="doneCount">0</strong
-                ><span>/</span><span id="totalCount">0</span><span>件</span>
+              <div class="progress-number" aria-label="本週完成進度">
+                <small>本週完成</small><strong id="doneCount">0</strong
+                ><span>/</span><span id="totalCount">0</span><span>項</span>
               </div>
             </div>
             <div class="progress-track" aria-hidden="true">
@@ -135,8 +138,8 @@
               <div class="repeat-box quick-type-box">
                 <label class="repeat-row">
                   <span
-                    ><strong>重複習慣</strong
-                    ><small>關閉時加入一般本週事項；開啟後設定重複頻率</small></span
+                    ><strong>設為重複習慣</strong
+                    ><small>只有固定要重複完成時才需要設定</small></span
                   >
                   <input type="checkbox" id="quickRepeat" />
                 </label>
@@ -657,13 +660,13 @@
     <section
       id="connectionGate"
       class="connection-gate"
-      aria-label="連線登入"
+      aria-label="雲端同步設定"
       hidden
     >
       <form id="connectionForm" class="connection-card">
         <p class="eyebrow">TINY PROGRESS</p>
-        <h1>接上你的進度</h1>
-        <p>登入後，網頁與 LINE 就會共用同一份資料。</p>
+        <h1>設定雲端同步</h1>
+        <p>登入後，網頁和 LINE 會共用同一份進度。你也可以先離線使用，資料會先保存在這台裝置。</p>
         <label
           >伺服器網址<input
             id="serverUrl"
@@ -680,7 +683,10 @@
             required
         /></label>
         <p id="connectionMessage" role="status"></p>
-        <button class="primary-button" type="submit">登入並載入</button
+        <button class="primary-button" type="submit">登入並同步</button
+        ><button class="secondary-button" id="continueOffline" type="button">
+          先離線使用
+        </button
         ><a id="demoLink" class="text-button" href="?demo=1">先看看示範</a
         <p class="dialog-help">
           密碼不會寫進網頁檔案。示範模式不會修改你的正式資料。
