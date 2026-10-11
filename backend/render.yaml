@@ -1,0 +1,35 @@
+# Use this Blueprint only when this file is selected from the repository.
+# For an existing Render service: Root Directory = render.
+services:
+  - type: web
+    name: tiny-progress
+    runtime: node
+    rootDir: render
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: GOOGLE_SHEETS_API_URL
+        sync: false
+      - key: GOOGLE_SHEETS_API_SECRET
+        sync: false
+      - key: WEB_PASSWORD
+        sync: false
+      - key: WEB_SESSION_SECRET
+        sync: false
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: LINE_ALLOWED_USER_ID
+        sync: false
+      - key: TINY_PROGRESS_WEB_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: QUEUE_RETRY_INTERVAL_MS
+        value: "300000"
+      - key: QUEUE_RETRY_START_DELAY_MS
+        value: "30000"
+      - key: QUEUE_RETRY_TIMEOUT_MS
+        value: "45000"
