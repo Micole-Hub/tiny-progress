@@ -230,8 +230,8 @@
             <div class="setting-block soft-card">
               <div class="setting-block-head">
                 <span
-                  ><strong>週期管理</strong
-                  ><small>建立下一輪、查看不同輪次、延後本週</small></span
+                  ><strong>12 週計畫</strong
+                  ><small>一般使用不必操作；需要開始新計畫或調整日期時再使用</small></span
                 >
               </div>
               <button
@@ -239,7 +239,7 @@
                 id="openCycleManagement"
                 class="secondary-button"
               >
-                管理 Cycle
+                管理 12 週計畫
               </button>
             </div>
             <div class="setting-row soft-card toggle-setting">
@@ -704,44 +704,64 @@
         <button type="button" class="dialog-x" data-close-dialog="cycleDialog">
           ×
         </button>
-        <h3>週期管理</h3>
+        <h3>12 週計畫管理</h3>
+        <p class="dialog-help">
+          平常安排每週事項不需要進來。這裡只用來切換或建立 12 週計畫，以及調整週次日期。
+        </p>
         <p id="cycleMessage" role="status"></p>
+        <button
+          type="button"
+          id="cycleSyncSettings"
+          class="text-button"
+          hidden
+        >
+          前往設定雲端同步
+        </button>
         <label class="dialog-label"
-          >選擇輪次<select id="cycleSelect"></select
+          >要查看哪一輪<select id="cycleSelect"></select
         ></label>
         <div class="dialog-actions">
           <button type="button" id="viewCycle" class="secondary-button">
-            查看這一輪</button
+            查看選擇的計畫</button
           ><button type="button" id="currentCycle" class="text-button">
-            回目前這一輪
+            回到目前計畫
           </button>
         </div>
         <form id="newCycleForm">
-          <h4>建立下一輪</h4>
+          <h4>開始新的 12 週計畫</h4>
+          <p class="dialog-help">
+            開始一段新的 12 週安排；之前的計畫會保留在紀錄中。
+          </p>
           <label class="dialog-label"
-            >開始日期<input type="date" id="newCycleDate" required /></label
+            >新計畫開始日期<input type="date" id="newCycleDate" required /></label
           ><label class="dialog-label"
-            >本輪主題<input
+            >這 12 週想完成的方向<input
               id="newCycleTheme"
               maxlength="200"
               required /></label
-          ><button class="primary-button" type="submit">建立下一輪</button>
+          ><button class="primary-button" type="submit">建立新計畫</button>
         </form>
         <form id="changeCycleStartForm">
-          <h4>修改尚未開始的輪次</h4>
+          <h4>調整尚未開始的計畫日期</h4>
+          <p class="dialog-help">
+            先在上方選擇還沒開始的計畫，再設定新的開始日期。
+          </p>
           <label class="dialog-label"
             >新的開始日期<input
               type="date"
               id="changeCycleDate"
               required /></label
           ><button class="secondary-button" type="submit">
-            更新選擇輪次的日期
+            更新開始日期
           </button>
         </form>
         <form id="postponeForm">
-          <h4>延後目前這一週</h4>
+          <h4>本週需要多一點時間？</h4>
+          <p class="dialog-help">
+            將本週和後續週次一起往後順延；每週最多延後一次。
+          </p>
           <label class="dialog-label"
-            >延後天數<select id="postponeDays">
+            >順延幾天<select id="postponeDays">
               <option value="1">1 天</option>
               <option value="2">2 天</option>
               <option value="3">3 天</option>
@@ -751,10 +771,9 @@
               <option value="7">7 天</option>
             </select></label
           ><label class="dialog-label"
-            >原因<input id="postponeReason" maxlength="200" required
+            >簡單記錄原因<input id="postponeReason" maxlength="200" required
           /></label>
-          <p class="dialog-help">本週最多延後一次，後面各週會一起順延。</p>
-          <button class="secondary-button" type="submit">延後本週</button>
+          <button class="secondary-button" type="submit">順延本週與後續日期</button>
         </form>
       </div>
     </dialog>

@@ -212,7 +212,9 @@ window.TPConnection = (() => {
     try {
       data = await res.json();
     } catch {
-      throw new Error("伺服器沒有回傳有效資料，請檢查網址");
+      throw new Error(
+        "伺服器回應不是有效的 API 資料；請確認同步設定使用 Render 後端網址，而不是網頁網址，並確認伺服器正常運作。",
+      );
     }
     if (!res.ok) {
       const error = new Error(data.message || "連線失敗");
@@ -552,6 +554,8 @@ window.TPConnection = (() => {
   }
   async function manage(path, options = {}) {
     if (demo) throw new Error("示範模式不會變更正式週期");
+    if (!base || !auth)
+      throw new Error("請先設定雲端同步並登入，才能載入或管理週期。");
     await flush();
     if (dirty() || inflight || paused) throw new Error("請先完成同步");
     return request(path, options);
@@ -567,6 +571,7 @@ window.TPConnection = (() => {
     save,
     start,
     demo,
+    isConnected: () => !demo && Boolean(base && auth),
     flush,
     manage,
     selectCycle,
