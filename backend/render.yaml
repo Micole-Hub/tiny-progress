@@ -1,10 +1,10 @@
 # Use this Blueprint only when this file is selected from the repository.
-# For an existing Render service: Root Directory = render.
+# For an existing Render service: Root Directory = backend.
 services:
   - type: web
     name: tiny-progress
     runtime: node
-    rootDir: render
+    rootDir: backend
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /

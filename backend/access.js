@@ -39,12 +39,18 @@ function validate(c, env = process.env) {
     throw Error("Apps Script 網址需為正式 /exec 網址");
   if (!env.LINE_CHANNEL_ACCESS_TOKEN)
     throw Error("缺少 LINE_CHANNEL_ACCESS_TOKEN");
-  if (
-    c.apiSecret.length < 32 ||
-    c.sessionSecret.length < 32 ||
-    c.password.length < 12
-  )
-    throw Error("伺服器密鑰至少 32 字；網頁密碼至少 12 字");
+  const shortValues = [
+    ["GOOGLE_SHEETS_API_SECRET", c.apiSecret, 32],
+    ["WEB_SESSION_SECRET", c.sessionSecret, 32],
+    ["WEB_PASSWORD", c.password, 12],
+  ].filter(([, value, minimum]) => value.length < minimum);
+  if (shortValues.length)
+    throw Error(
+      "設定長度不足：" +
+        shortValues
+          .map(([name, , minimum]) => `${name}（至少 ${minimum} 字）`)
+          .join("、"),
+    );
   if (
     c.apiSecret === c.sessionSecret ||
     c.apiSecret === c.password ||
