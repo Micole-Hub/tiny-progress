@@ -440,7 +440,7 @@ window.TPConnection = (() => {
           body: { password: password.value },
         });
         auth = login.token;
-        sessionStorage.setItem(
+        localStorage.setItem(
           "tp-v28-session",
           JSON.stringify({ base, auth }),
         );
@@ -472,7 +472,7 @@ window.TPConnection = (() => {
       window.TP_CONFIG?.API_BASE_URL ||
       localStorage.getItem("tp-v28-server") ||
       "";
-    const session = read("tp-v28-session", sessionStorage);
+    const session = read("tp-v28-session", localStorage);
     if (session?.auth && session.base === url.value) {
       try {
         unboundDraft = Boolean(recovery?.dirty && !recovery.base);
