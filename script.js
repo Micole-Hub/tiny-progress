@@ -319,11 +319,39 @@ function loadState() {
 function saveState() {
   TPConnection.save(state);
 }
+// The cycle start is authoritative. After changing a future start date, an older
+// server snapshot may still contain weekStarts/weekRanges for the previous date.
+// Align those calendars for display only; never mutate the saved cycle or tasks.
+function alignedCycleDates(items, firstStart, mapItem) {
+  if (!Array.isArray(items) || !items.length) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(firstStart || "")) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(String(CYCLE_START_YMD || "")))
+    return items;
+  const shiftDays = Math.round(
+    (Date.parse(CYCLE_START_YMD) - Date.parse(firstStart)) / 86400000,
+  );
+  if (!Number.isFinite(shiftDays) || shiftDays === 0) return items;
+  return items.map((item) => mapItem(item, shiftDays));
+}
 function refreshClock() {
   TODAY = D.today();
   CYCLE_START_YMD = state.cycle.startDate;
-  CYCLE_WEEK_STARTS = state.cycle.weekStarts || null;
-  CYCLE_WEEK_RANGES = state.cycle.weekRanges || null;
+  const rawStarts = state.cycle.weekStarts;
+  const rawRanges = state.cycle.weekRanges;
+  CYCLE_WEEK_STARTS = alignedCycleDates(
+    rawStarts,
+    rawStarts?.[0],
+    (date, days) => D.addDays(date, days),
+  );
+  CYCLE_WEEK_RANGES = alignedCycleDates(
+    rawRanges,
+    rawRanges?.[0]?.start,
+    (range, days) => ({
+      ...range,
+      start: range.start ? D.addDays(range.start, days) : range.start,
+      end: range.end ? D.addDays(range.end, days) : range.end,
+    }),
+  );
   CURRENT_WEEK = calendarWeekFor(TODAY);
 }
 function categoryById(id) {
@@ -670,8 +698,13 @@ function renderHome() {
     dates = weekDateMap(viewWeek);
   if (!Object.values(dates).includes(state.selectedDate))
     state.selectedDate = defaultDateForWeek(viewWeek);
-  const dayMode = state.mode === "day",
-    isToday = viewWeek === CURRENT_WEEK && state.selectedDate === TODAY;
+  const dayMode = state.mode === "day";
+  const firstWeekStart =
+    CYCLE_START_YMD || CYCLE_WEEK_RANGES?.[0]?.start || CYCLE_WEEK_STARTS?.[0];
+  const resting = compareIsoDate(TODAY, firstWeekStart) < 0;
+  const showRest = resting && viewWeek === CURRENT_WEEK;
+  const isToday =
+    !resting && viewWeek === CURRENT_WEEK && state.selectedDate === TODAY;
   const preview = viewWeek !== CURRENT_WEEK;
   $("#previewBar").hidden = !preview;
   if (preview) $("#previewLabel").textContent = `預習中 · Week ${viewWeek}`;
@@ -679,12 +712,19 @@ function renderHome() {
     archived = life === "archived";
   const entry = $("#footprintEntry");
   entry.hidden = footprintWeek === viewWeek;
-  $("#homeTitle").textContent = dayMode
-    ? `Week ${viewWeek} · ${isToday ? "今天" : `週${dayLabel(state.selectedDate)} ${formatShortDate(state.selectedDate)}`}`
-    : `Week ${viewWeek} · 這週慢慢長大`;
-  $("#homeLede").textContent = dayMode
-    ? "今天完成的每一件，都會長進這週的樹"
-    : "一件一件完成，讓這週留下自己的樣子";
+  $("#restBanner").hidden = !showRest;
+  if (showRest)
+    $("#restNextDate").textContent = `Week 1 將於 ${formatShortDate(firstWeekStart)} 開始`;
+  $("#homeTitle").textContent = showRest
+    ? "休息日"
+    : dayMode
+      ? `Week ${viewWeek} · ${isToday ? "今天" : `週${dayLabel(state.selectedDate)} ${formatShortDate(state.selectedDate)}`}`
+      : `Week ${viewWeek} · 這週慢慢長大`;
+  $("#homeLede").textContent = showRest
+    ? "Rest is part of progress."
+    : dayMode
+      ? "今天完成的每一件，都會長進這週的樹"
+      : "一件一件完成，讓這週留下自己的樣子";
   $("#workTitle").textContent = dayMode
     ? isToday
       ? "今天想完成什麼"
