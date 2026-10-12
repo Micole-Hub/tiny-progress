@@ -12,12 +12,33 @@
       .trim()
       .slice(0, max);
   const bool = (v) => v === true || String(v).toLowerCase() === "true";
-  const isoDate = (v) =>
-    /^\d{4}-\d{2}-\d{2}$/.test(String(v)) &&
-    !isNaN(Date.parse(v)) &&
-    new Date(v + "T12:00:00Z").toISOString().slice(0, 10) === v
-      ? String(v)
-      : "";
+  const toSafeDate = (v) => {
+    if (v === null || v === undefined) return null;
+    if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
+    if (typeof v === "object") {
+      if (typeof v.toDate === "function") {
+        const d = v.toDate();
+        return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
+      }
+      if (typeof v.seconds === "number") {
+        const d = new Date(v.seconds * 1000);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    }
+    if (typeof v === "string" || typeof v === "number") {
+      const value = String(v).trim();
+      if (!value) return null;
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+  };
+  const isoDate = (v) => {
+    const d = toSafeDate(v);
+    if (!d) return "";
+    return d.toISOString().slice(0, 10);
+  };
   const today = () =>
     new Intl.DateTimeFormat("en-CA", {
       timeZone: "Asia/Taipei",
@@ -25,12 +46,20 @@
       month: "2-digit",
       day: "2-digit",
     }).format(new Date());
-  const addDays = (d, n) =>
-    new Date(Date.parse(d + "T12:00:00Z") + n * 86400000)
-      .toISOString()
-      .slice(0, 10);
-  const monday = (d) =>
-    addDays(d, -((new Date(d + "T12:00:00Z").getUTCDay() + 6) % 7));
+  const addDays = (d, n) => {
+    const base = toSafeDate(d);
+    if (!base) return "";
+    const next = new Date(base.getTime());
+    next.setUTCDate(next.getUTCDate() + Number(n || 0));
+    return Number.isNaN(next.getTime()) ? "" : next.toISOString().slice(0, 10);
+  };
+  const monday = (d) => {
+    const base = toSafeDate(d);
+    if (!base) return "";
+    const day = new Date(base.getTime());
+    if (Number.isNaN(day.getTime())) return "";
+    return addDays(day, -((day.getUTCDay() + 6) % 7));
+  };
   let lastId = 0;
   const id = () =>
     (lastId = Math.max(
@@ -765,6 +794,7 @@
     VERSION,
     clone,
     text,
+    isoDate,
     today,
     addDays,
     monday,

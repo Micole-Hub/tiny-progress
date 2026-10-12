@@ -23,26 +23,46 @@
   function emptyChoices(label) {
     $("#cycleSelect").innerHTML = `<option value="">${label}</option>`;
   }
+  function normalizeDateValue(v) {
+    if (v === null || v === undefined) return "";
+    if (v instanceof Date) return TPDomain.isoDate(v);
+    if (typeof v === "object") {
+      if (typeof v.toDate === "function") return TPDomain.isoDate(v.toDate());
+      if (typeof v.seconds === "number") {
+        return TPDomain.isoDate(new Date(v.seconds * 1000));
+      }
+    }
+    return TPDomain.isoDate(v);
+  }
   async function choices() {
     const [cycles, weeks] = await Promise.all([
       TPConnection.manage("/cycles"),
       TPConnection.manage("/weeks"),
     ]);
-    $("#cycleSelect").innerHTML = cycles.length
-      ? cycles
+    const validCycles = (Array.isArray(cycles) ? cycles : []).filter(
+      (c) =>
+        c &&
+        Number.isFinite(Number(c.cycleNumber)) &&
+        normalizeDateValue(c.startDate),
+    );
+    $("#cycleSelect").innerHTML = validCycles.length
+      ? validCycles
           .map(
             (c) =>
-              `<option value="${Number(c.cycleNumber)}">第 ${Number(c.cycleNumber)} 輪 · ${String(c.startDate).slice(0, 10)} 開始</option>`,
+              `<option value="${Number(c.cycleNumber)}">第 ${Number(c.cycleNumber)} 輪 · ${normalizeDateValue(c.startDate)} 開始</option>`,
           )
           .join("")
       : `<option value="">目前沒有可選週期</option>`;
-    const last = weeks.at(-1);
+    const validWeeks = (Array.isArray(weeks) ? weeks : []).filter(
+      (w) => w && normalizeDateValue(w.weekEnd),
+    );
+    const last = validWeeks.at(-1);
     $("#newCycleDate").value = last
-      ? TPDomain.addDays(last.weekEnd, 1)
+      ? TPDomain.addDays(last.weekEnd, 1) || TPDomain.today()
       : TPDomain.today();
-    setEnabled(true, cycles.length > 0);
+    setEnabled(true, validCycles.length > 0);
     $("#cycleSyncSettings").hidden = true;
-    return cycles;
+    return validCycles;
   }
   $("#openCycleManagement").onclick = async () => {
     if (TPConnection.demo) {
