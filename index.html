@@ -237,7 +237,7 @@
               <button
                 type="button"
                 id="openCycleManagement"
-                class="secondary-button"
+                class="secondary-button setting-action"
               >
                 管理 12 週計畫
               </button>
@@ -580,8 +580,11 @@
 
     <dialog id="tutorialDialog">
       <div class="tutorial-card">
+        <div class="tut-top">
+          <div class="tut-dots" id="tutDots"></div>
+          <span class="tut-count" id="tutCount"></span>
+        </div>
         <div id="tutBody" class="tut-body"></div>
-        <div class="tut-dots" id="tutDots"></div>
         <div class="tut-actions">
           <button type="button" class="text-button" id="tutSkip">略過</button
           ><span class="spacer"></span
@@ -689,11 +692,13 @@
             required
         /></label>
         <p id="connectionMessage" role="status"></p>
-        <button class="primary-button" type="submit">登入並同步</button
-        ><button class="secondary-button" id="continueOffline" type="button">
-          先離線使用
-        </button
-        ><a id="demoLink" class="text-button" href="?demo=1">先看教學</a
+        <div class="connection-actions">
+          <button class="primary-button" type="submit">登入並同步</button>
+          <button class="secondary-button" id="continueOffline" type="button">
+            先離線使用
+          </button>
+          <a id="demoLink" class="text-button" href="?demo=1">先看教學</a>
+        </div>
         <p class="dialog-help">
           密碼不會寫進網頁檔案。教學模式不會修改你的正式資料。
         </p>
