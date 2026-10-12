@@ -2510,8 +2510,9 @@ function bindStaticEvents() {
   );
 
   $("#tutNext").addEventListener("click", () => {
+    const totalSteps = 6;
     if (tutStep === 1 && !tutValid()) return;
-    if (tutStep === 3) {
+    if (tutStep === totalSteps - 1) {
       tutApply = true;
       $("#tutorialDialog").close();
       return;
@@ -2968,24 +2969,63 @@ function tutPace(weekly) {
         i === 0 ? first : i === n - 1 ? rest - share * (n - 2) : share),
   );
 }
+function tutorialArt(kind) {
+  const common = 'class="tut-art" viewBox="0 0 180 120" aria-hidden="true"';
+  switch (kind) {
+    case "plan":
+      return `<svg ${common}><rect x="18" y="18" width="132" height="84" rx="18" fill="#f3f0e7" stroke="#d9d0be" stroke-width="2"/><rect x="36" y="38" width="70" height="12" rx="6" fill="#d9e9d2"/><rect x="36" y="56" width="96" height="10" rx="5" fill="#e8e3d5"/><rect x="36" y="72" width="80" height="10" rx="5" fill="#e8e3d5"/><circle cx="128" cy="52" r="12" fill="#8dbd80"/><path d="M128 35v34M111 52h34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M74 90C78 78 86 70 92 62C98 70 104 78 108 90" fill="none" stroke="#87a96d" stroke-width="3" stroke-linecap="round"/></svg>`;
+    case "event":
+      return `<svg ${common}><rect x="22" y="24" width="136" height="78" rx="18" fill="#f5f4ee" stroke="#d9d0be" stroke-width="2"/><rect x="36" y="40" width="92" height="14" rx="7" fill="#dfead2"/><rect x="36" y="60" width="76" height="10" rx="5" fill="#eee7db"/><rect x="36" y="76" width="52" height="10" rx="5" fill="#eee7db"/><circle cx="130" cy="56" r="14" fill="#8dbd80"/><path d="M130 46v20M120 56h20" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M102 92l13-12 9 10 24-24" fill="none" stroke="#7fa163" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    case "done":
+      return `<svg ${common}><rect x="24" y="20" width="132" height="82" rx="18" fill="#f4f1e8" stroke="#d8d0bd" stroke-width="2"/><rect x="36" y="40" width="90" height="14" rx="7" fill="#d7ebd9"/><rect x="36" y="62" width="78" height="10" rx="5" fill="#eae0d6"/><g transform="translate(121 52)"><circle r="16" fill="#9ec082"/><path d="M-5 1l7 8 13-16" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g><path d="M65 86c8-18 18-26 29-34 11 8 17 16 24 30" fill="none" stroke="#6c9d67" stroke-width="3" stroke-linecap="round"/></svg>`;
+    case "review":
+      return `<svg ${common}><rect x="24" y="20" width="118" height="78" rx="18" fill="#f6f0e9" stroke="#d9d0be" stroke-width="2"/><path d="M44 30V90H118V30" fill="none" stroke="#c2b39b" stroke-width="2"/><path d="M44 52H118" stroke="#c2b39b" stroke-width="2"/><path d="M62 33v18M90 33v18M44 44h74" stroke="#c2b39b" stroke-width="2"/><circle cx="118" cy="90" r="16" fill="#a9cb9f"/><path d="M111 90h14M118 83v14" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M52 68c10 8 16 10 26 9 10-1 18-9 26-9" fill="none" stroke="#8bb27a" stroke-width="3" stroke-linecap="round"/></svg>`;
+    case "edit":
+      return `<svg ${common}><rect x="18" y="24" width="120" height="76" rx="18" fill="#f5f3ed" stroke="#d9d0be" stroke-width="2"/><rect x="32" y="40" width="76" height="12" rx="6" fill="#dfe9d3"/><rect x="32" y="58" width="62" height="10" rx="5" fill="#ebdfd2"/><path d="M112 34l17 17-16 16-17-17z" fill="#9ec082" stroke="#7a9d6e" stroke-width="2"/><path d="M126 28l6-10 14 15-9 7" fill="none" stroke="#7a9d6e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M48 88h58" stroke="#b7bfaa" stroke-width="3" stroke-linecap="round"/></svg>`;
+    default:
+      return `<svg ${common}><ellipse cx="80" cy="106" rx="46" ry="8" fill="rgba(120,100,80,.18)"/><path class="tut-stem" d="M80 104C80 90 78 76 82 58" pathLength="1"/><path class="tut-leaf l1" d="M82 62C96 52 108 54 114 60C106 70 92 70 82 62Z"/><path class="tut-leaf l2" d="M81 76C68 66 56 68 50 74C58 84 72 84 81 76Z"/><circle class="tut-seed" cx="80" cy="102" r="6"/></svg>`;
+  }
+}
 function renderTutorial() {
   const body = $("#tutBody");
-  $("#tutDots").innerHTML = [0, 1, 2, 3]
-    .map((i) => `<i class="${i === tutStep ? "on" : ""}"></i>`)
-    .join("");
+  const tutorialSteps = [
+    { label: "開始", short: "看懂系統" },
+    { label: "12週", short: "設定計畫" },
+    { label: "事件", short: "建立任務" },
+    { label: "完成", short: "做出成績" },
+    { label: "回顧", short: "留一句感想" },
+    { label: "編輯", short: "修改細節" },
+  ];
+  $("#tutDots").innerHTML = Array.from({ length: tutorialSteps.length }, (_, i) =>
+    `<i class="${i === tutStep ? "on" : ""}"></i>`,
+  ).join("");
   $("#tutBack").hidden = tutStep === 0;
   $("#tutNext").textContent =
-    tutStep === 3
+    tutStep === tutorialSteps.length - 1
       ? "開始使用"
       : tutStep === 0
         ? "繼續完整教學"
         : "下一步";
-  $("#tutSkip").hidden = tutStep === 3;
+  $("#tutSkip").hidden = tutStep === tutorialSteps.length - 1;
   $("#tutSkip").textContent = tutStep === 0 ? "先開始使用" : "略過教學";
+  const flow = `
+    <div class="tut-steps" aria-label="新手教學步驟">
+      ${tutorialSteps
+        .map(
+          (step, i) => `
+            <div class="tut-step ${i === tutStep ? "active" : ""} ${i < tutStep ? "done" : ""}">
+              <span>${i + 1}</span>
+              <small>${step.label}</small>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
   if (tutStep === 0) {
-    body.innerHTML = `<div class="tut-pane"><svg class="tut-art" viewBox="0 0 160 120" aria-hidden="true"><ellipse cx="80" cy="106" rx="46" ry="8" fill="rgba(120,100,80,.18)"/><path class="tut-stem" d="M80 104C80 90 78 76 82 58" pathLength="1"/><path class="tut-leaf l1" d="M82 62C96 52 108 54 114 60C106 70 92 70 82 62Z"/><path class="tut-leaf l2" d="M81 76C68 66 56 68 50 74C58 84 72 84 81 76Z"/><circle class="tut-seed" cx="80" cy="102" r="6"/></svg><h3>歡迎來到 Tiny Progress</h3><p>每完成一件小事，就長一片葉子。<br>先加入本週事項就能開始；方向和目標之後再設定也可以。</p></div>`;
+    body.innerHTML = `${flow}<div class="tut-pane">${tutorialArt("default")}<h3>歡迎來到 Tiny Progress</h3><p>每完成一件小事，就長一片葉子。接下來這份教學會帶你從「12 週計畫」到「建立事件」、再到「回顧感想」與「編輯修正」，每個步驟都可以關掉或略過，當你熟悉後再慢慢使用。</p></div>`;
   } else if (tutStep === 1) {
-    body.innerHTML = `<div class="tut-pane"><h3>你想往哪裡走？</h3><p>先寫下 1 到 3 個大方向，之後隨時可以改。</p><div class="tut-dirs">${tutDraft.map((d, i) => `<div class="tut-dir" style="--c:${d.color}"><i class="color-dot"></i><div><input data-tut-name="${i}" value="${esc(d.name)}" placeholder="方向名稱" maxlength="12"><input data-tut-outcome="${i}" value="${esc(d.outcome)}" placeholder="做到什麼算完成" maxlength="40"></div></div>`).join("")}</div>${tutDraft.length < 3 ? `<button class="text-button" type="button" id="tutAddDir">＋ 再加一個方向</button>` : ""}</div>`;
+    body.innerHTML = `${flow}<div class="tut-pane">${tutorialArt("plan")}<h3>第一步：建立你的 12 週計畫</h3><p>先開啟「12 週計畫」管理，設定你這 12 週的主方向。每個方向會變成一個目標，讓你知道自己這段時間要往哪裡走。</p><div class="tut-dirs">${tutDraft.map((d, i) => `<div class="tut-dir" style="--c:${d.color}"><i class="color-dot"></i><div><input data-tut-name="${i}" value="${esc(d.name)}" placeholder="方向名稱" maxlength="12"><input data-tut-outcome="${i}" value="${esc(d.outcome)}" placeholder="做到什麼算完成" maxlength="40"></div></div>`).join("")}</div><div class="tut-note">你可以在之後隨時重新編輯方向、目標與目標葉子數，改完後已經長出的葉子仍然保留。</div>${tutDraft.length < 3 ? `<button class="text-button" type="button" id="tutAddDir">＋ 再加一個方向</button>` : ""}</div>`;
     $$("[data-tut-name]").forEach((el) =>
       el.addEventListener(
         "input",
@@ -3009,71 +3049,10 @@ function renderTutorial() {
       renderTutorial();
     });
   } else if (tutStep === 2) {
-    const total = tutDraft.reduce((n, d) => n + d.target, 0);
-    body.innerHTML = `<div class="tut-pane"><h3>水缸要裝多少葉子？</h3><p>每個方向有一個水缸，葉子越多，水越高。</p><div class="tut-pace">${[
-      ["輕", 3],
-      ["穩", 5],
-      ["積極", 7],
-    ]
-      .map(
-        ([n, w]) =>
-          `<button type="button" class="reason-chip" data-pace="${w}">${n} · 一週約 ${w} 片</button>`,
-      )
-      .join(
-        "",
-      )}</div><div class="tut-goals">${tutDraft.map((d, i) => `<div class="tut-goal" style="--c:${d.color}"><div class="tut-goal-head"><strong>${esc(d.name || "未命名")}</strong><div class="stepper"><button type="button" data-dec="${i}">−</button><input type="number" min="1" max="999" data-tut-target="${i}" value="${d.target}"><button type="button" data-inc="${i}">＋</button></div></div><div class="tank big"><div class="tank-fill" data-fill="${i}" style="width:0%"></div></div></div>`).join("")}</div><p class="tut-note" id="tutTotal">合計 ${total} 片，平均一週約 ${(total / 12).toFixed(1)} 片</p></div>`;
-    const upd = () => {
-      const t = tutDraft.reduce((n, d) => n + d.target, 0);
-      $("#tutTotal").textContent =
-        `合計 ${t} 片，平均一週約 ${(t / 12).toFixed(1)} 片`;
-      $$("[data-tut-target]").forEach(
-        (el) => (el.value = tutDraft[Number(el.dataset.tutTarget)].target),
-      );
-      $$("[data-fill]").forEach((el) => (el.style.width = "45%"));
-    };
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() =>
-        $$("[data-fill]").forEach((el) => (el.style.width = "45%")),
-      ),
-    );
-    $$("[data-pace]").forEach((b) =>
-      b.addEventListener("click", () => {
-        tutPace(Number(b.dataset.pace));
-        upd();
-        $$("[data-fill]").forEach((el) => {
-          el.style.width = "12%";
-          requestAnimationFrame(() =>
-            requestAnimationFrame(() => (el.style.width = "45%")),
-          );
-        });
-      }),
-    );
-    $$("[data-inc]").forEach((b) =>
-      b.addEventListener("click", () => {
-        const d = tutDraft[Number(b.dataset.inc)];
-        d.target = Math.min(999, d.target + 1);
-        upd();
-      }),
-    );
-    $$("[data-dec]").forEach((b) =>
-      b.addEventListener("click", () => {
-        const d = tutDraft[Number(b.dataset.dec)];
-        d.target = Math.max(1, d.target - 1);
-        upd();
-      }),
-    );
-    $$("[data-tut-target]").forEach((el) =>
-      el.addEventListener("change", () => {
-        tutDraft[Number(el.dataset.tutTarget)].target = Math.max(
-          1,
-          Math.min(999, Number(el.value) || 1),
-        );
-        upd();
-      }),
-    );
-  } else {
+    body.innerHTML = `${flow}<div class="tut-pane">${tutorialArt("event")}<h3>第二步：建立事件與任務</h3><p>在主畫面裡，點新增事件或任務，輸入標題、分類、日期與頻率。這裡最重要的是：先把「真正該做的事」放進清單，然後再去完成它。</p><ul class="tut-list"><li>可新增單次事件，也可設為重複任務。</li><li>如果不想留，按右上角關閉或取消即可。</li><li>每個任務都可以之後再編輯，不需要一次寫對。</li></ul><div class="tut-note">想設定重複頻率？可以選擇每天、每週幾次，系統會自動幫你排下一次。</div></div>`;
+  } else if (tutStep === 3) {
     const d = tutDraft[0];
-    body.innerHTML = `<div class="tut-pane"><h3>試著按一下</h3><p>這只是練習，不會留下任何紀錄。</p><div class="tut-demo"><div class="tank demo" style="--c:${d.color}"><div class="tank-fill" id="tutDemoFill" style="width:0%"></div><span class="tank-name">${esc(d.name)}</span><span class="tank-count" id="tutDemoCount">0 / ${d.target}</span></div><article class="task-row demo-row" style="--c:${d.color}"><button class="task-check" type="button" id="tutDemoCheck" aria-label="完成"></button><div class="task-main"><p class="task-title">按一下左邊的圈圈</p><div class="task-meta"><span>${esc(d.name)}</span></div></div></article></div><p class="tut-note" id="tutDemoMsg">做完一件事，就長一片葉子</p></div>`;
+    body.innerHTML = `${flow}<div class="tut-pane">${tutorialArt("done")}<h3>第三步：完成一件事，讓葉子長出來</h3><p>點左邊的勾選圈，就像完成一項任務；你會看到這一片水缸慢慢長高，這代表進度真的被記錄下來。</p><div class="tut-demo"><div class="tank demo" style="--c:${d.color}"><div class="tank-fill" id="tutDemoFill" style="width:0%"></div><span class="tank-name">${esc(d.name)}</span><span class="tank-count" id="tutDemoCount">0 / ${d.target}</span></div><article class="task-row demo-row" style="--c:${d.color}"><button class="task-check" type="button" id="tutDemoCheck" aria-label="完成"></button><div class="task-main"><p class="task-title">按一下左邊的圈圈</p><div class="task-meta"><span>${esc(d.name)}</span></div></div></article></div><p class="tut-note" id="tutDemoMsg">這裡是練習，不會留下正式紀錄，讓你先感受完成的感覺。</p></div>`;
     $("#tutDemoCheck").addEventListener("click", () => {
       if (tutDemoDone) return;
       tutDemoDone = true;
@@ -3101,6 +3080,10 @@ function renderTutorial() {
         $("#tutorialDialog"),
       );
     });
+  } else if (tutStep === 4) {
+    body.innerHTML = `${flow}<div class="tut-pane">${tutorialArt("review")}<h3>第四步：回顧與寫一句話感想</h3><p>做完一段時間後，打開本週足跡或本輪回顧。這裡可以寫一句話：這週做得不錯的地方、以及下週想調整的地方。感想不是要寫很多，而是留下一個提醒。</p><div class="tut-note">感想可以只寫一兩句，通常寫「這週做得不錯的地方」和「下週想調整」就很夠用。你也可以在任何時候關閉這個視窗，不會影響已經完成的紀錄。</div></div>`;
+  } else if (tutStep === 5) {
+    body.innerHTML = `${flow}<div class="tut-pane">${tutorialArt("edit")}<h3>第五步：編輯與微調</h3><p>這個系統很擅長修正。點任務卡後可編輯標題、日期、分類、重複設定；也可以從更多選項裡移動到其他週、刪除或重新安排。</p><ul class="tut-list"><li>要改內容時，點任務卡或編輯按鈕即可。</li><li>如果你不想保留某個變更，直接關閉對話框即可，這些都可在後面再調。</li><li>方向與目標也可以重新設定，已長出的葉子會保留，不會因為改名字而消失。</li></ul><div class="tut-note">你真正需要學會的是：先做，再修正，最重要的是讓進度被記錄下來，而不是一次寫得完全完美。</div></div>`;
   }
 }
 function flyLeafSimple(from, to, color, done, host = document.body) {

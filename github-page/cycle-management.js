@@ -66,11 +66,11 @@
   }
   $("#openCycleManagement").onclick = async () => {
     if (TPConnection.demo) {
-      emptyChoices("示範模式不提供正式週期");
+      emptyChoices("教學模式不提供正式週期");
       setEnabled(false);
       $("#cycleSyncSettings").hidden = true;
       message.textContent =
-        "示範模式使用獨立資料，不會連接或更改正式的 12 週計畫。";
+        "教學模式使用本地練習資料，不會連接或更改正式的 12 週計畫。";
       $("#cycleDialog").showModal();
       return;
     }

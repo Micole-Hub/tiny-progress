@@ -4,7 +4,6 @@ window.TPConnection = (() => {
   const D = window.TPDomain,
     demo = new URLSearchParams(location.search).get("demo") === "1";
   const CACHE = "tiny-progress-v28-cache",
-    DEMO = "tiny-progress-v28-demo",
     META = "tiny-progress-v28-sync";
   let adapter,
     base = "",
@@ -192,8 +191,9 @@ window.TPConnection = (() => {
     document.querySelector("#connectionGate").hidden = !value;
   };
   function cache(s) {
+    if (demo) return;
     try {
-      localStorage.setItem(demo ? DEMO : CACHE, JSON.stringify(s));
+      localStorage.setItem(CACHE, JSON.stringify(s));
     } catch {
       status("儲存空間不足，請清理瀏覽器空間後重試同步", true);
     }
@@ -373,7 +373,7 @@ window.TPConnection = (() => {
   }
   function initial(seed) {
     if (demo) {
-      const s = read(DEMO) || D.clone(seed);
+      const s = D.clone(seed);
       s.schemaVersion = 27;
       s.cycle.startDate =
         s.cycle.startDate || s.simulationWeekStart || D.monday(D.today());
@@ -457,7 +457,7 @@ window.TPConnection = (() => {
     if (demo) {
       ready = true;
       baseline = serialize(adapter.get());
-      status("示範模式・不會同步到 LINE");
+      status("教學模式・不會同步到 LINE");
       locked(false);
       return;
     }
@@ -553,7 +553,7 @@ window.TPConnection = (() => {
     });
   }
   async function manage(path, options = {}) {
-    if (demo) throw new Error("示範模式不會變更正式週期");
+    if (demo) throw new Error("教學模式不會變更正式週期");
     if (!base || !auth)
       throw new Error("請先設定雲端同步並登入，才能載入或管理週期。");
     await flush();
