@@ -2510,7 +2510,7 @@ function bindStaticEvents() {
   );
 
   $("#tutNext").addEventListener("click", () => {
-    const totalSteps = 6;
+    const totalSteps = TUT_STEPS;
     if (tutStep === 1 && !tutValid()) return;
     if (tutStep === totalSteps - 1) {
       tutApply = true;
@@ -2941,8 +2941,9 @@ function switchPage(page) {
   restartEnter($(`.page[data-page="${page}"]`));
 }
 
-const TUT_STEPS = 6;
-let tutStep = 0,
+const TUT_STEPS = 7;
+let tutTasks = [],
+  tutStep = 0,
   tutDraft = [],
   tutApply = false,
   tutDemoDone = false;
@@ -2951,6 +2952,7 @@ function openTutorial() {
   tutStep = 0;
   tutApply = false;
   tutDemoDone = false;
+  tutTasks = [];
   $("#tutorialDialog").showModal();
   renderTutorial();
 }
@@ -2970,28 +2972,23 @@ function tutPace(weekly) {
         i === 0 ? first : i === n - 1 ? rest - share * (n - 2) : share),
   );
 }
-function tutScene(kind) {
-  if (kind === "sprout" || kind === "grown") {
-    const week = kind === "sprout" ? 1 : 8,
-      n = kind === "sprout" ? 3 : 14,
-      colors = state.categories.map((c) => c.color).concat(PALETTE),
-      leaves = Array.from({ length: n }, (_, i) => ({
-        key: "tut" + i,
-        title: "",
-        color: colors[i % colors.length],
-      }));
-    return `<div class="tut-stage tree">${treeSvg(week, leaves, {
-      live: true,
-      intro: true,
-      now: performance.now(),
-    })}</div>`;
-  }
-  if (kind === "add")
-    return `<div class="tut-stage"><div class="mini-list"><div class="mini-row" style="--d:.15s"><i></i><b>整理 HTML 語意筆記</b></div><div class="mini-row fresh" style="--d:.8s"><i></i><b>練習 DOM 操作</b><em>學技能</em></div></div></div>`;
-  if (kind === "edit")
-    return `<div class="tut-stage edit"><div class="mini-list"><div class="mini-row" style="--d:.1s"><i></i><b>練習 DOM 操作</b><u>•••</u></div><div class="mini-menu" style="--d:.7s"><span>編輯</span><span>移到其他週</span><span class="del">刪除</span></div></div></div>`;
-  return "";
+function tutTree(week, n, size = "") {
+  const colors = state.categories.map((c) => c.color).concat(PALETTE),
+    leaves = Array.from({ length: n }, (_, i) => ({
+      key: "tut" + i,
+      title: "",
+      color: colors[i % colors.length],
+    }));
+  return `<div class="tut-stage tree ${size}">${treeSvg(week, leaves, {
+    live: true,
+    intro: true,
+    now: performance.now(),
+  })}</div>`;
 }
+function tutRow(t, color, more = false) {
+  return `<article class="task-row tut-row ${t.done ? "done" : ""}" data-tut-id="${t.id}" style="--c:${color}"><button class="task-check" type="button" aria-label="${t.done ? "已完成" : "完成"}">${t.done ? "✓" : ""}</button><div class="task-main"><p class="task-title">${esc(t.title)}</p></div>${more ? `<button class="task-more" type="button" id="tutMore" aria-label="更多">•••</button>` : ""}</article>`;
+}
+const tutDoneCount = () => tutTasks.filter((t) => t.done).length;
 function renderTutorial() {
   const body = $("#tutBody"),
     last = TUT_STEPS - 1,
@@ -3007,12 +3004,13 @@ function renderTutorial() {
     tutStep === last ? "開始使用" : tutStep === 0 ? "開始看看" : "下一步";
   $("#tutSkip").hidden = tutStep === last;
   $("#tutSkip").textContent = tutStep === 0 ? "先開始使用" : "略過教學";
+  const dir = tutDraft[0] || { name: "", color: PALETTE[0], target: 12 };
 
   if (tutStep === 0) {
     body.innerHTML = pane(
-      tutScene("sprout"),
+      tutTree(1, 3),
       "歡迎來到 Tiny Progress",
-      "每完成一件小事，就長一片葉子。花一分鐘，看看怎麼用。",
+      "每完成一件小事，就長一片葉子。接下來用一分鐘，實際做一遍。",
     );
   } else if (tutStep === 1) {
     body.innerHTML = pane(
@@ -3045,60 +3043,187 @@ function renderTutorial() {
     });
   } else if (tutStep === 2) {
     body.innerHTML = pane(
-      tutScene("add"),
-      "把這週要做的事放進來",
-      "不用一次寫對，先放進清單，之後都能再修改。",
+      "",
+      "放進一件這週想做的事",
+      "在下面寫一件事，按「加入」。這是練習，不會寫進正式資料。",
+      `<form class="tut-add" id="tutAddForm"><input id="tutAddInput" maxlength="40" autocomplete="off" placeholder="例如：整理 HTML 筆記"><button class="primary-button" type="submit">加入</button></form><div class="tut-sandbox" id="tutList">${tutTasks.map((t) => tutRow(t, dir.color)).join("")}</div><p class="tut-note" id="tutAddMsg">${tutTasks.length ? "加好了，下一步就能完成它" : "加好之後，下一步就能完成它"}</p>`,
     );
+    $("#tutAddForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = $("#tutAddInput"),
+        title = input.value.trim(),
+        msg = $("#tutAddMsg");
+      if (!title) {
+        msg.textContent = "先寫下一件想做的事";
+        return;
+      }
+      if (tutTasks.length >= 3) {
+        msg.textContent = "練習先加三件就夠了，繼續下一步吧";
+        return;
+      }
+      tutTasks.push({ id: Date.now(), title, done: false });
+      input.value = "";
+      $("#tutList").innerHTML = tutTasks.map((t) => tutRow(t, dir.color)).join("");
+      $("#tutList").lastElementChild.classList.add("row-new");
+      msg.textContent = "加好了，下一步就能完成它";
+    });
   } else if (tutStep === 3) {
-    const d = tutDraft[0];
+    if (!tutTasks.length)
+      tutTasks.push({ id: Date.now(), title: "整理 HTML 筆記", done: false });
+    const stepPct = Math.max(8, Math.min(100, Math.round(100 / dir.target))),
+      n = tutDoneCount();
     body.innerHTML = pane(
       "",
       "完成一件，長一片葉子",
-      "點左邊的圈圈試試看。這只是練習，不會留下正式紀錄。",
-      `<div class="tut-demo"><div class="tank demo" style="--c:${d.color}"><div class="tank-fill" id="tutDemoFill" style="width:0%"></div><span class="tank-name">${esc(d.name)}</span><span class="tank-count" id="tutDemoCount">0 / ${d.target}</span></div><article class="task-row demo-row" style="--c:${d.color}"><button class="task-check" type="button" id="tutDemoCheck" aria-label="完成"></button><div class="task-main"><p class="task-title">按一下左邊的圈圈</p><div class="task-meta"><span>${esc(d.name)}</span></div></div></article></div><p class="tut-note" id="tutDemoMsg">做完一件事，水缸就會長高</p>`,
+      "點事情左邊的圈圈，看水缸長高。這只是練習，不會留下正式紀錄。",
+      `<div class="tut-demo"><div class="tank demo" style="--c:${dir.color}"><div class="tank-fill" id="tutDemoFill" style="width:${Math.min(100, n * stepPct)}%"></div><span class="tank-name">${esc(dir.name)}</span><span class="tank-count" id="tutDemoCount">${n} / ${dir.target}</span></div><div class="tut-sandbox" id="tutList">${tutTasks.map((t) => tutRow(t, dir.color)).join("")}</div></div><p class="tut-note" id="tutDemoMsg">${n ? "再點一件試試看" : "做完一件事，水缸就會長高"}</p>`,
     );
-    $("#tutDemoCheck").addEventListener("click", () => {
-      if (tutDemoDone) return;
-      tutDemoDone = true;
-      const btn = $("#tutDemoCheck"),
-        r = btn.getBoundingClientRect(),
-        tank = $("#tutDemoFill").parentElement.getBoundingClientRect();
-      btn.classList.add("popped");
-      const step = Math.max(8, Math.min(100, Math.round(100 / d.target)));
-      const to = {
-        x: tank.left + Math.max(14, (tank.width * step) / 100),
-        y: tank.top + tank.height / 2,
-      };
-      flyLeafSimple(
-        r,
-        to,
-        d.color,
-        () => {
-          $("#tutDemoFill").style.width = step + "%";
-          $("#tutDemoCount").textContent = `1 / ${d.target}`;
-          btn.textContent = "✓";
-          btn.closest(".task-row").classList.add("done");
-          sparkle(to.x, to.y, d.color, $("#tutorialDialog"));
-          $("#tutDemoMsg").textContent = "就是這樣，每一件小事都算數 🌿";
-        },
-        $("#tutorialDialog"),
-      );
-    });
+    $$("#tutList .task-check").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const row = btn.closest("[data-tut-id]"),
+          t = tutTasks.find((x) => String(x.id) === row.dataset.tutId);
+        if (!t || t.done) return;
+        t.done = true;
+        const count = tutDoneCount(),
+          pct = Math.min(100, count * stepPct),
+          from = btn.getBoundingClientRect(),
+          tank = $("#tutDemoFill").parentElement.getBoundingClientRect(),
+          to = {
+            x: tank.left + Math.max(14, (tank.width * pct) / 100),
+            y: tank.top + tank.height / 2,
+          };
+        btn.classList.add("popped");
+        flyLeafSimple(
+          from,
+          to,
+          dir.color,
+          () => {
+            $("#tutDemoFill").style.width = pct + "%";
+            $("#tutDemoCount").textContent = `${count} / ${dir.target}`;
+            btn.textContent = "✓";
+            row.classList.add("done");
+            sparkle(to.x, to.y, dir.color, $("#tutorialDialog"));
+            $("#tutDemoMsg").textContent =
+              count === tutTasks.length
+                ? "全部完成了，每一件小事都算數 🌿"
+                : "再點一件試試看";
+          },
+          $("#tutorialDialog"),
+        );
+      }),
+    );
   } else if (tutStep === 4) {
     body.innerHTML = pane(
-      tutScene("grown"),
+      tutTree(3, Math.max(tutDoneCount(), 3), "small"),
       "每週留一句感想",
-      "週末打開「本週足跡」，用一兩句話記下這週的樣子就夠了。",
+      "樹上的葉子，就是你完成的每一件事。週末到「本週足跡」寫一兩句就夠了。",
+      `<div class="tut-reflect"><label>這週做得不錯的地方<input id="tutGood" maxlength="80" placeholder="留一句就好"></label><label>下週想調整的地方<input id="tutAdjust" maxlength="80" placeholder="也可以只寫其中一格"></label><button class="primary-button" type="button" id="tutSaveRef">儲存感想</button></div><p class="tut-note" id="tutRefMsg">儲存後就不能再改，所以簡單一句就好</p>`,
     );
+    $("#tutSaveRef").addEventListener("click", () => {
+      const good = $("#tutGood"),
+        adjust = $("#tutAdjust"),
+        msg = $("#tutRefMsg");
+      if (!good.value.trim() && !adjust.value.trim()) {
+        msg.textContent = "先寫一句再儲存";
+        return;
+      }
+      good.disabled = adjust.disabled = true;
+      $("#tutSaveRef").disabled = true;
+      $("#tutSaveRef").textContent = "已儲存";
+      msg.textContent = "存好了。這是練習，正式的感想要在本週足跡留下";
+    });
   } else if (tutStep === 5) {
+    let title = tutTasks.find((t) => !t.done)?.title || tutTasks[0]?.title || "練習 DOM 操作";
     body.innerHTML = pane(
-      tutScene("edit"),
+      "",
       "寫錯了也沒關係",
-      "點任務卡就能修改；要移到其他週或刪除時，會請你留一句原因。",
+      "點右邊的「•••」，三個選項都可以試試看。移週和刪除會請你留一句原因。",
+      `<div class="tut-sandbox" id="tutEditBox">${tutRow({ id: "edit", title, done: false }, dir.color, true)}</div><p class="tut-note" id="tutEditMsg">這是練習，不會改到正式資料</p>`,
+    );
+    const box = $("#tutEditBox"),
+      msg = $("#tutEditMsg"),
+      closeMenu = () => box.querySelector(".mini-menu")?.remove(),
+      finish = (text) => {
+        box.innerHTML = `<p class="tut-gone">${text}</p><button class="text-button" type="button" id="tutAgain">再練習一次</button>`;
+        $("#tutAgain").addEventListener("click", renderTutorial);
+        msg.textContent = "要改回來，也是一樣的步驟";
+      },
+      startEdit = () => {
+        const p = box.querySelector(".task-title"),
+          input = document.createElement("input");
+        input.className = "tut-inline";
+        input.value = title;
+        input.maxLength = 40;
+        p.replaceWith(input);
+        input.focus();
+        input.select();
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            input.blur();
+          }
+        });
+        input.addEventListener(
+          "blur",
+          () => {
+            title = input.value.trim() || title;
+            const np = document.createElement("p");
+            np.className = "task-title";
+            np.textContent = title;
+            input.replaceWith(np);
+            msg.textContent = "改好了，之後隨時都能再改";
+          },
+          { once: true },
+        );
+      },
+      askReason = (act) => {
+        box.querySelector(".tut-reason")?.remove();
+        const f = document.createElement("form");
+        f.className = "tut-reason";
+        f.innerHTML = `<input maxlength="40" required placeholder="${act === "del" ? "為什麼刪除？例如：不需要了" : "為什麼移走？例如：時間不夠"}"><button class="primary-button" type="submit">確定</button>`;
+        box.appendChild(f);
+        f.querySelector("input").focus();
+        f.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const reason = f.querySelector("input").value.trim();
+          if (!reason) return;
+          const row = box.querySelector(".tut-row");
+          f.remove();
+          row.classList.add("leaving");
+          setTimeout(
+            () =>
+              finish(
+                act === "del"
+                  ? `已刪除，原因「${esc(reason)}」留在 History 裡`
+                  : `已移到 Week 2，原因「${esc(reason)}」記在紀錄裡`,
+              ),
+            280,
+          );
+        });
+      };
+    $("#tutMore").addEventListener("click", () => {
+      if (box.querySelector(".mini-menu")) return closeMenu();
+      const menu = document.createElement("div");
+      menu.className = "mini-menu";
+      menu.innerHTML = `<button type="button" data-act="edit">編輯</button><button type="button" data-act="move">移到其他週</button><button type="button" class="del" data-act="del">刪除</button>`;
+      box.appendChild(menu);
+      menu.addEventListener("click", (e) => {
+        const act = e.target.dataset.act;
+        if (!act) return;
+        closeMenu();
+        if (act === "edit") startEdit();
+        else askReason(act);
+      });
+    });
+  } else if (tutStep === 6) {
+    body.innerHTML = pane(
+      `<div class="tut-done" aria-hidden="true">✓</div>`,
+      "準備好了",
+      "你已經練習過：設定方向、加入事情、完成、寫感想、修改。想再看一次，到「設定」按「重看教學」。",
     );
   }
   // 樹上的葉子照順序一片一片長出來，而不是同時蹦出。
-  const leafPace = { 0: [0.95, 0.32], 4: [0.8, 0.1] }[tutStep];
+  const leafPace = { 0: [0.95, 0.32], 4: [0.7, 0.12] }[tutStep];
   if (leafPace)
     $$("#tutBody .tree-leaf").forEach(
       (el, i) =>
