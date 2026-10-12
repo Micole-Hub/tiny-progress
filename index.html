@@ -12,7 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=20261012-rest-calendar" />
   </head>
   <body>
     <div class="app-shell">
@@ -75,7 +75,7 @@
             <span class="rest-banner-icon" aria-hidden="true">🌿</span>
             <div class="rest-banner-copy">
               <strong id="restNextDate"></strong>
-              <small>可以先安排第 1 週的任務，正式開始前不必著急。</small>
+              <small>任務清單會在正式開始後顯示；想提前準備時，可以開啟預排。</small>
             </div>
           </section>
 
@@ -99,8 +99,8 @@
             </aside>
           </section>
 
-          <section class="work-card soft-card">
-            <div class="work-header">
+          <section class="work-card soft-card" id="workCard">
+            <div class="work-header" id="workHeader">
               <div>
                 <h2 id="workTitle">這週想完成什麼</h2>
                 <p id="workHint">完成一件，就替這週多留下一片葉子</p>
@@ -110,7 +110,7 @@
                 ><span>/</span><span id="totalCount">0</span><span>項</span>
               </div>
             </div>
-            <div class="progress-track" aria-hidden="true">
+            <div class="progress-track" id="progressTrack" aria-hidden="true">
               <span id="progressFill"></span>
             </div>
             <p id="progressSummary" class="progress-summary"></p>
@@ -122,6 +122,10 @@
               aria-label="這一週的 7 天"
               hidden
             ></div>
+            <div class="rest-planning-bar" id="restPlanningBar" hidden>
+              <p id="restPlanningHint">預排的任務會在正式開始後顯示。</p>
+              <button type="button" class="secondary-button" id="toggleRestPlanner" aria-expanded="false" aria-controls="taskList quickAddForm focusPool habitTracker">預先安排任務</button>
+            </div>
             <div class="task-list" id="taskList" aria-live="polite"></div>
             <section class="habit-tracker" id="habitTracker" hidden>
               <div class="habit-tracker-head">

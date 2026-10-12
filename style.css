@@ -3652,3 +3652,59 @@ body {
     min-height: 180px;
   }
 }
+
+/* 休息期間：日曆保留，任務區域預設收合。此狀態不更改任務資料。 */
+.work-card.resting {
+  padding-top: 22px;
+  padding-bottom: 22px;
+}
+.work-card.resting .week-strip,
+.work-card.resting .day-strip {
+  margin-bottom: 6px;
+}
+.rest-planning-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 3px 0;
+}
+.rest-planning-bar p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.rest-planning-bar .secondary-button {
+  min-height: 38px;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+/* 預排可以編輯日期與任務，但不把休息日當作完成日。 */
+.work-card.resting .task-row {
+  grid-template-columns: minmax(0, 1fr) 40px;
+}
+.work-card.resting .habit-row {
+  grid-template-columns: minmax(0, 1fr) 40px;
+}
+.work-card.resting .task-check {
+  display: none;
+}
+@media (max-width: 600px) {
+  .rest-planning-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* 最後一組桌面樣式會覆蓋前面的手機斷點，這裡重新確保小螢幕單欄。 */
+@media (max-width: 760px) {
+  .growth-banner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .growth-copy,
+  .week-tree-panel {
+    min-width: 0;
+  }
+}

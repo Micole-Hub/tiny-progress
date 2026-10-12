@@ -278,6 +278,8 @@ const seedState = {
 };
 
 let state = loadState();
+// 只影響休息日的顯示，不寫入雲端狀態。重新開啟網頁時預排預設收起。
+let restPlannerOpen = false;
 state.unfinishedReasons = state.unfinishedReasons || {};
 state.tankReviewed = state.tankReviewed || {};
 state.weekMeta = state.weekMeta || {};
@@ -692,6 +694,9 @@ function renderHistoryTanks() {
       .join("");
 }
 
+function isCycleResting() {
+  return Boolean(CYCLE_START_YMD && compareIsoDate(TODAY, CYCLE_START_YMD) < 0);
+}
 function renderHome() {
   if (!state.selectedWeek) state.selectedWeek = CURRENT_WEEK;
   const viewWeek = state.selectedWeek,
@@ -701,8 +706,9 @@ function renderHome() {
   const dayMode = state.mode === "day";
   const firstWeekStart =
     CYCLE_START_YMD || CYCLE_WEEK_RANGES?.[0]?.start || CYCLE_WEEK_STARTS?.[0];
-  const resting = compareIsoDate(TODAY, firstWeekStart) < 0;
-  const showRest = resting && viewWeek === CURRENT_WEEK;
+  const resting = isCycleResting();
+  const showRest = resting;
+  const planningOpen = resting && restPlannerOpen;
   const isToday =
     !resting && viewWeek === CURRENT_WEEK && state.selectedDate === TODAY;
   const preview = viewWeek !== CURRENT_WEEK;
@@ -711,7 +717,7 @@ function renderHome() {
   const life = weekLifecycle(viewWeek),
     archived = life === "archived";
   const entry = $("#footprintEntry");
-  entry.hidden = footprintWeek === viewWeek;
+  entry.hidden = resting || footprintWeek === viewWeek;
   $("#restBanner").hidden = !showRest;
   if (showRest)
     $("#restNextDate").textContent = `Week 1 將於 ${formatShortDate(firstWeekStart)} 開始`;
@@ -741,6 +747,17 @@ function renderHome() {
   $("#weekStrip").hidden = dayMode;
   $("#dayStrip").hidden = !dayMode;
   dayMode ? renderDayStrip() : renderWeekStrip();
+  // 休息日保留日曆，收起任務、進度及新增表單。需要時才打開預排。
+  $("#workCard").classList.toggle("resting", resting);
+  $("#workHeader").hidden = resting;
+  $("#progressTrack").hidden = resting;
+  $("#progressSummary").hidden = resting;
+  $("#restPlanningBar").hidden = !resting;
+  $("#restPlanningHint").textContent = planningOpen
+    ? `這些事項是預排內容，${formatShortDate(firstWeekStart)} 開始後會自動顯示。`
+    : `已預排的任務先收起，${formatShortDate(firstWeekStart)} 開始後會自動顯示。`;
+  $("#toggleRestPlanner").textContent = planningOpen ? "收起預排" : "預先安排任務";
+  $("#toggleRestPlanner").setAttribute("aria-expanded", String(planningOpen));
   renderTreeHome();
 
   let html = "";
@@ -781,12 +798,13 @@ function renderHome() {
         : `<div class="empty-note">這一週還沒有放進事情</div>`;
   }
   const list = $("#taskList");
+  list.hidden = resting && !planningOpen;
   list.innerHTML = html;
   [...list.querySelectorAll("[data-task-id]")].forEach((el, i) =>
     el.style.setProperty("--i", i),
   );
   const habitTracker = $("#habitTracker");
-  habitTracker.hidden = !habitHtml || archived;
+  habitTracker.hidden = !habitHtml || archived || (resting && !planningOpen);
   $("#habitTrackerTitle").textContent = dayMode ? "今天的習慣" : "習慣追蹤";
   $("#habitTrackerHint").textContent = dayMode
     ? "完成次數會計入本週"
@@ -804,6 +822,7 @@ function renderHome() {
   }
   bindTaskRows();
   renderFocusPool();
+  if (resting && !planningOpen) $("#focusPool").hidden = true;
   applyRowFeedback();
 
   const ordinary = activeTasks(viewWeek).filter((t) => !isRecurring(t)),
@@ -828,7 +847,7 @@ function renderHome() {
   $("#progressFill").style.width = total
     ? `${Math.round((done / total) * 100)}%`
     : "0%";
-  $("#quickAddForm").hidden = archived;
+  $("#quickAddForm").hidden = archived || (resting && !planningOpen);
   renderQuickOptions();
 }
 function applyRowFeedback() {
@@ -966,7 +985,7 @@ function openTaskActions(t, row) {
     : [t];
   const rowDone = pool.length > 0 && pool.every((o) => o.done);
   $("#actionTaskTitle").textContent = t.title;
-  $("#toggleTaskDoneBtn").hidden = archived;
+  $("#toggleTaskDoneBtn").hidden = archived || isCycleResting();
   $("#toggleTaskDoneBtn").textContent =
     isRecurring(t) && state.mode === "week" && !actionOccIds.length
       ? rowDone
@@ -977,7 +996,7 @@ function openTaskActions(t, row) {
         : "完成";
   $("#replanTaskBtn").hidden =
     archived || isRecurring(t) || taskDone(t) || t.week >= 12;
-  $("#editTaskBtn").hidden = archived || !rowDone;
+  $("#editTaskBtn").hidden = archived || (!rowDone && !isCycleResting());
   $("#editTaskBtn").textContent = "編輯";
   $("#deleteTaskBtn").hidden = archived;
   $("#completionRecordBtn").hidden =
@@ -1061,6 +1080,7 @@ function bindTaskRows() {
   });
 }
 function toggleTaskCompletion(t, occIds, fromRect) {
+  if (isCycleResting()) return showToast("計畫還沒開始，先預排任務即可");
   if (!t || !guardWeekEditable(t.week)) return;
   let becameComplete = false,
     leafKey = "",
@@ -2629,6 +2649,12 @@ function bindStaticEvents() {
     }),
   );
 
+  $("#toggleRestPlanner").addEventListener("click", () => {
+    if (!isCycleResting()) return;
+    restPlannerOpen = !restPlannerOpen;
+    renderHome();
+  });
+
   $("#moreToggle").addEventListener("click", () => {
     const box = $("#moreFields");
     box.hidden = !box.hidden;
@@ -3366,6 +3392,13 @@ function openYearReview() {
 bindStaticEvents();
 refreshClock();
 renderAll();
+// 網頁跨到新日期時，休息畫面會自動切回正式週期；切回分頁時也會校正。
+setInterval(() => {
+  if (D.today() !== TODAY) renderAll();
+}, 60 * 1000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && D.today() !== TODAY) renderAll();
+});
 restartEnter($(".page.active"));
 TPConnection.start({
   get: () => state,
