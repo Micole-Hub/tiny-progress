@@ -18,13 +18,8 @@
     new Date(v + "T12:00:00Z").toISOString().slice(0, 10) === v
       ? String(v)
       : "";
-  const today = () =>
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Taipei",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
+   const today = () =>
+    Utilities.formatDate(new Date(), "Asia/Taipei", "yyyy-MM-dd");
   const addDays = (d, n) =>
     new Date(Date.parse(d + "T12:00:00Z") + n * 86400000)
       .toISOString()
