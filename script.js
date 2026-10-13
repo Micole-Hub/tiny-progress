@@ -23,6 +23,88 @@ const PALETTE = [
   "#b5a3c9",
   "#bec9b2",
 ];
+// 只供分類使用的完整色盤；原本的方向／新手教學色盤保持不變。
+const CATEGORY_PALETTE_GROUPS = [
+  { title: "柔和粉彩", colors: [
+    "#9FC3DE", "#EFB8CF", "#E7CE72", "#E3B48A", "#A9CB9F", "#C8B9E6",
+    "#D4A99C", "#91B4A2", "#AEB8D3", "#D5C09C", "#B5A3C9", "#BEC9B2",
+  ] },
+  { title: "自然霧色", colors: [
+    "#7F9C87", "#6E9F92", "#A5BB8E", "#C3AD86", "#BA8E81", "#C8A2A5",
+    "#A58EA9", "#819CAD", "#B7B39B", "#9FADAB", "#8BA3C7", "#CAAEA5",
+  ] },
+  { title: "明亮活力", colors: [
+    "#E76F51", "#F4A261", "#E9C46A", "#83C785", "#38A3A5", "#57B6D4",
+    "#6C9EF8", "#9580DE", "#D57AC8", "#F07FA1", "#E8A838", "#75B7A7",
+  ] },
+  { title: "深色經典", colors: [
+    "#4F5947", "#3D7055", "#256B64", "#285E79", "#43577C", "#645184",
+    "#7A4F73", "#93566A", "#965D45", "#8D7560", "#6B727A", "#404A53",
+  ] },
+];
+function normalizeHexColor(value) {
+  const input = String(value || "").trim();
+  if (/^#[0-9a-f]{6}$/i.test(input)) return input.toUpperCase();
+  if (/^#[0-9a-f]{3}$/i.test(input))
+    return ("#" + [...input.slice(1)].map((c) => c + c).join("")).toUpperCase();
+  return null;
+}
+function renderCategoryPresetPalette(containerId, selected, onChoose) {
+  const container = $("#" + containerId);
+  const current = normalizeHexColor(selected) || "#9FC3DE";
+  container.innerHTML = CATEGORY_PALETTE_GROUPS.map((group) =>
+    `<div class="category-palette-group"><span class="category-palette-group-title">${group.title}</span>` +
+    `<div class="category-color-grid">${group.colors.map((color) =>
+      `<button type="button" class="category-color-option ${color === current ? "is-selected" : ""}"` +
+      ` style="--swatch:${color}" data-preset-color="${color}"` +
+      ` aria-label="選擇 ${color}" aria-pressed="${String(color === current)}" title="${color}"></button>`
+    ).join("")}</div></div>`
+  ).join("");
+  container.onclick = (e) => {
+    const swatch = e.target.closest("[data-preset-color]");
+    if (swatch && container.contains(swatch)) onChoose(swatch.dataset.presetColor);
+  };
+}
+function updateCategoryColorInputs(prefix, selected, showInvalid = false) {
+  const valid = normalizeHexColor(selected);
+  const hexInput = $("#" + prefix + "HexColor");
+  const preview = $("#" + prefix + "ColorPreview");
+  const native = $("#" + prefix + "NativeColor");
+  const error = $("#" + prefix + "HexError");
+  if (valid) {
+    hexInput.value = valid;
+    native.value = valid;
+    preview.style.backgroundColor = valid;
+  }
+  error.hidden = !showInvalid;
+  hexInput.setAttribute("aria-invalid", String(showInvalid));
+  const submit = prefix === "categoryQuick" ? $("#applyCategoryColor") : $("#categoryForm .primary-button");
+  if (submit) submit.disabled = showInvalid;
+}
+function bindCategoryCustomColor(prefix, applyColor) {
+  const native = $("#" + prefix + "NativeColor");
+  const hex = $("#" + prefix + "HexColor");
+  native.addEventListener("input", () => applyColor(native.value));
+  hex.addEventListener("input", () => {
+    // 輸入過程只接受完整的六位 HEX，避免剛打完三位時提前轉成縮寫色而打斷輸入。
+    const parsed = /^#[0-9a-f]{6}$/i.test(hex.value.trim())
+      ? normalizeHexColor(hex.value)
+      : null;
+    const error = $("#" + prefix + "HexError");
+    const invalid = !parsed;
+    error.hidden = !invalid;
+    hex.setAttribute("aria-invalid", String(invalid));
+    const button = prefix === "categoryQuick" ? $("#applyCategoryColor") : $("#categoryForm .primary-button");
+    if (button) button.disabled = invalid;
+    if (parsed) {
+      applyColor(parsed);
+    }
+  });
+  hex.addEventListener("blur", () => {
+    const parsed = normalizeHexColor(hex.value);
+    if (parsed) applyColor(parsed);
+  });
+}
 const NEUTRAL_LEAF = "#9eb29a";
 const REASONS = ["時間不夠", "事情太大", "忘記了", "不想做了"];
 
@@ -311,7 +393,9 @@ let actionTaskId = null,
   editingTaskOccurrenceId = null,
   editingRecurringId = null,
   editingCategoryId = null,
-  categoryPickColor = PALETTE[0];
+  categoryPickColor = PALETTE[0],
+  categoryQuickTargetId = null,
+  categoryQuickColor = PALETTE[0];
 
 function cloneSeed() {
   return JSON.parse(JSON.stringify(seedState));
@@ -725,11 +809,10 @@ function renderRestHome() {
   $("#dayStrip").hidden = !dayMode;
   if (dayMode) renderDayStrip();
   else renderWeekStrip();
-  const note = $("#restDateNote");
-  note.hidden = dayMode;
-  note.textContent = dayMode
-    ? ""
-    : `Week ${viewWeek} · ${formatShortDate(first)}～${formatShortDate(last)}（尚未開始）`;
+  // The week range / future status now lives directly above the date strip.
+  // Keep the legacy element hidden so information is not repeated at the bottom.
+  $("#restDateNote").hidden = true;
+  $("#restDateNote").textContent = "";
   $("#restPlanningBar").hidden = false;
   $("#toggleRestPlanner").textContent = "預先安排任務";
   $("#toggleRestPlanner").setAttribute("aria-expanded", "false");
@@ -924,25 +1007,54 @@ function applyRowFeedback() {
   }
 }
 
-// Month is context only: keep the existing weekly/daily navigation intact.
+// Month is informational, not a navigation mode. Both views show the Week number;
+// the selected date is conveyed solely by the seven-day strip in Day mode.
 function renderCalendarMonthLabel() {
   const dates = Object.values(weekDateMap(state.selectedWeek));
-  const first = dates[0];
-  const last = dates[dates.length - 1];
-  const label = $("#calendarMonthLabel");
+  const first = dates[0], last = dates[dates.length - 1];
+  const month = $("#calendarMonthLabel");
+  const title = $("#calendarViewTitle");
+  const range = $("#calendarWeekRange");
+  const period = $("#calendarPeriod");
+  const phase = $("#calendarPhase");
   if (!first || !last) {
-    label.textContent = "";
+    month.textContent = title.textContent = phase.textContent = "";
+    range.textContent = "";
+    range.hidden = true;
+    period.classList.remove("is-real-current");
+    period.classList.remove("is-week-view");
+    period.classList.remove("is-day-view");
+    phase.hidden = true;
     return;
   }
   const firstYear = Number(first.slice(0, 4));
   const lastYear = Number(last.slice(0, 4));
   const firstMonth = Number(first.slice(5, 7));
   const lastMonth = Number(last.slice(5, 7));
-  label.textContent = firstYear !== lastYear
+  month.textContent = firstYear !== lastYear
     ? `${firstYear} 年 ${firstMonth} 月－${lastYear} 年 ${lastMonth} 月`
     : firstMonth !== lastMonth
       ? `${firstYear} 年 ${firstMonth} 月－${lastMonth} 月`
       : `${firstYear} 年 ${firstMonth} 月`;
+
+  title.textContent = `Week ${state.selectedWeek}`;
+  // Week view gives the date range once. Day view already shows 7 individual dates.
+  range.textContent = `${formatShortDate(first)}～${formatShortDate(last)}`;
+  range.hidden = state.mode !== "week";
+  // Current time is independent of the user's green selection.
+  // Before Cycle starts no future week/day may pretend to be current.
+  const today = TODAY;
+  const realWeek = first <= today && today <= last;
+  const realDay = state.selectedDate === today && realWeek;
+  period.classList.toggle("is-week-view", state.mode === "week");
+  period.classList.toggle("is-day-view", state.mode === "day");
+  period.classList.toggle("is-real-current", state.mode === "week" ? realWeek : realDay);
+  const future = today < first;
+  const past = today > last;
+  phase.textContent = future ? "尚未開始" : past ? "已結束" : "進行中";
+  phase.hidden = false;
+  phase.classList.toggle("is-future", future);
+  phase.classList.toggle("is-past", past);
 }
 function renderWeekStrip() {
   renderCalendarMonthLabel();
@@ -969,6 +1081,7 @@ function renderWeekStrip() {
     b.classList.toggle("locked", !unlocked && !isCycleResting());
     b.classList.toggle("archived", archived);
     b.classList.toggle("now", realCurrent);
+    b.classList.toggle("is-real-current", realCurrent);
     b.classList.toggle("sel", n === state.selectedWeek);
     b.classList.toggle("past", n < CURRENT_WEEK);
   });
@@ -986,7 +1099,7 @@ function renderDayStrip() {
       const date = dates[k];
       const today = date === TODAY;
       const selected = date === state.selectedDate;
-      return `<button type="button" class="dy ${today ? "today" : ""} ${selected ? "sel" : ""}" data-date="${date}" aria-label="${Number(date.slice(5, 7))} 月 ${Number(date.slice(8, 10))} 日，週${dayLabel(date)}${today ? "，今天" : ""}" aria-pressed="${selected}" ${today ? 'aria-current="date"' : ""}><span>${dayLabel(date)}</span><strong>${Number(date.slice(8))}</strong></button>`;
+      return `<button type="button" class="dy ${today ? "today is-real-current" : ""} ${selected ? "sel" : ""}" data-date="${date}" aria-label="${Number(date.slice(5, 7))} 月 ${Number(date.slice(8, 10))} 日，週${dayLabel(date)}${today ? "，今天" : ""}" aria-pressed="${selected}" ${today ? 'aria-current="date"' : ""}><span>${dayLabel(date)}</span><strong>${Number(date.slice(8))}</strong></button>`;
     })
     .join(
       "",
@@ -2384,25 +2497,40 @@ function renderRecurringList() {
 }
 function renderCategoryList() {
   const el = $("#categoryList");
-  el.innerHTML = state.categories
-    .map(
-      (c) =>
-        `<div class="category-color-block"><div class="category-color-head"><div class="category-color-actions"><span class="color-dot" style="--c:${c.color}"></span><strong>${esc(c.name)}</strong></div><button class="text-button" data-edit-category="${c.id}" type="button">改名稱</button></div><div class="inline-palette">${PALETTE.map((color) => `<button type="button" class="palette-dot ${color === c.color ? "on" : ""}" style="--c:${color}" data-category-color="${c.id}" data-color="${color}" aria-label="選擇顏色"></button>`).join("")}</div></div>`,
-    )
-    .join("");
-  $$("[data-edit-category]").forEach((b) =>
-    b.addEventListener("click", () =>
-      openCategoryDialog(b.dataset.editCategory),
-    ),
+  el.innerHTML = state.categories.length
+    ? state.categories.map((c) => {
+        const color = normalizeHexColor(c.color) || PALETTE[0].toUpperCase();
+        return `<div class="category-compact-row">` +
+          `<button type="button" class="category-color-trigger" data-open-category-color="${esc(c.id)}" aria-label="調整 ${esc(c.name)} 的顏色" title="調整顏色"><span class="category-color-sample" style="--category-color:${color}"></span></button>` +
+          `<div class="category-compact-copy"><strong>${esc(c.name)}</strong><small>${color}</small></div>` +
+          `<div class="category-compact-actions">` +
+          `<button type="button" class="category-action-btn" data-edit-category="${esc(c.id)}">改名稱</button>` +
+          `<button type="button" class="category-action-btn category-color-action" data-open-category-color="${esc(c.id)}">調色</button>` +
+          `</div></div>`;
+      }).join("")
+    : '<div class="category-empty-state">還沒有分類，點「＋ 新增」建立第一個分類。</div>';
+  $$('[data-edit-category]').forEach((button) =>
+    button.addEventListener('click', () => openCategoryDialog(button.dataset.editCategory))
   );
-  $$("[data-category-color]").forEach((b) =>
-    b.addEventListener("click", () => {
-      const c = state.categories.find((x) => x.id === b.dataset.categoryColor);
-      c.color = b.dataset.color;
-      renderAll();
-      showToast(`${c.name} 的顏色換好了`);
-    }),
+  $$('[data-open-category-color]').forEach((button) =>
+    button.addEventListener('click', () => openCategoryColorDialog(button.dataset.openCategoryColor))
   );
+}
+function openCategoryColorDialog(id) {
+  const category = state.categories.find((c) => c.id === id);
+  if (!category) return;
+  categoryQuickTargetId = id;
+  categoryQuickColor = normalizeHexColor(category.color) || PALETTE[0].toUpperCase();
+  $("#categoryColorDialogTitle").textContent = category.name + " · 調整顏色";
+  renderCategoryQuickPalette();
+  $("#categoryColorDialog").showModal();
+}
+function renderCategoryQuickPalette() {
+  renderCategoryPresetPalette("categoryQuickPalette", categoryQuickColor, (color) => {
+    categoryQuickColor = color;
+    renderCategoryQuickPalette();
+  });
+  updateCategoryColorInputs("categoryQuick", categoryQuickColor);
 }
 
 function openEditTask(t) {
@@ -2496,16 +2624,11 @@ function openCategoryDialog(id = null) {
   $("#categoryDialog").showModal();
 }
 function renderCategoryPalette() {
-  $("#categoryPalette").innerHTML = PALETTE.map(
-    (c) =>
-      `<button type="button" class="palette-dot ${c === categoryPickColor ? "on" : ""}" style="--c:${c}" data-color="${c}" aria-label="選擇顏色"></button>`,
-  ).join("");
-  $$("#categoryPalette [data-color]").forEach((b) =>
-    b.addEventListener("click", () => {
-      categoryPickColor = b.dataset.color;
-      renderCategoryPalette();
-    }),
-  );
+  renderCategoryPresetPalette("categoryPalette", categoryPickColor, (color) => {
+    categoryPickColor = color;
+    renderCategoryPalette();
+  });
+  updateCategoryColorInputs("category", categoryPickColor);
 }
 
 function createRecurringTask(rule, week = CURRENT_WEEK) {
@@ -3014,10 +3137,30 @@ function bindStaticEvents() {
     showToast("重複習慣已更新");
   });
   $("#addCategoryBtn").addEventListener("click", () => openCategoryDialog());
+  bindCategoryCustomColor("category", (color) => {
+    categoryPickColor = color;
+    renderCategoryPalette();
+  });
+  bindCategoryCustomColor("categoryQuick", (color) => {
+    categoryQuickColor = color;
+    renderCategoryQuickPalette();
+  });
+  $("#categoryColorForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const category = state.categories.find((c) => c.id === categoryQuickTargetId);
+    const color = normalizeHexColor($("#categoryQuickHexColor").value);
+    if (!category || !color) return showToast("請先輸入正確的色碼");
+    $("#categoryColorDialog").close();
+    if (normalizeHexColor(category.color) === color) return;
+    category.color = color;
+    renderAll();
+    showToast(`${category.name} 的顏色已更新`);
+  });
   $("#categoryForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const name = $("#categoryNameInput").value.trim();
     if (!name) return showToast("先寫分類名稱");
+    if (!normalizeHexColor($("#categoryHexColor").value)) return showToast("請先輸入正確的色碼");
     if (editingCategoryId)
       Object.assign(
         state.categories.find((x) => x.id === editingCategoryId),

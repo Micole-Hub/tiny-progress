@@ -3958,3 +3958,310 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .wk::after, .dy::after, .nav-item::after { transition: none; }
 }
+
+
+/* 2026-10-13 calendar refinement v3: prominent header and flat coffee navigation.
+   Week/day switching works exactly as before, month is informational only. */
+.calendar-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 18px;
+  margin: 0 0 16px;
+  padding: 2px 2px 16px;
+  border-bottom: 1px solid var(--line);
+  min-height: 0;
+}
+.calendar-period-main { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.calendar-month-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #7c846e;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: .05em;
+}
+.calendar-month-label::before {
+  content: '';
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 5px;
+  height: 14px;
+  border-radius: 4px;
+  background: #93ae91;
+}
+.calendar-view-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+}
+.calendar-view-line strong {
+  color: var(--ink);
+  font-size: clamp(18px, 2.4vw, 23px);
+  font-family: var(--font-en);
+  font-weight: 750;
+  line-height: 1.25;
+  letter-spacing: -.02em;
+}
+.calendar-phase {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 3px 10px;
+  border: 1px solid #e6ddce;
+  border-radius: 999px;
+  background: #f6f0e8;
+  color: #876f55;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.calendar-phase.is-past { background: #f4f4f2; border-color: #e7e7e4; color: #777d77; }
+.calendar-phase:not(.is-future):not(.is-past) { background: #eaf2e9; border-color: #d2e0d0; color: #557858; }
+/* The old footer info is superseded by the prominent header. */
+.rest-date-note { display: none !important; }
+.week-strip { margin-top: 2px; }
+.day-strip { margin-top: 2px; }
+.wk.sel::after { width: calc(100% - 6px); }
+.dy.sel::after { width: calc(100% - 4px); }
+/* Explicit overrides so no older floating-pill styling can win the cascade. */
+.bottom-nav { border-radius: 0; box-shadow: none; }
+.nav-item.active { color: #8d7560; }
+.nav-item::after { background: #8d7560; height: 3px; }
+.nav-item.active::after { width: 79%; }
+@media (min-width: 860px) {
+  .bottom-nav { background: transparent; border: 0; box-shadow: none; }
+  .nav-item.active::after { width: 82%; }
+}
+@media (max-width: 760px) {
+  .calendar-period { padding-bottom: 14px; gap: 8px 12px; }
+  .calendar-view-line { gap: 6px 10px; }
+}
+
+/* v4: Month uses muted coral red; all Week/Day headings show only Week N.
+   Dates stay exclusively inside the 7-day selection row in Day mode. */
+.calendar-month-label {
+  color: #b4655d;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: .02em;
+}
+.calendar-month-label::before { background: #c98077; }
+
+
+/* 2026-10-13 v5 | Calendar: real today/current week versus user selection.
+   CURRENT: quiet coral background/ring + red dot. SELECTED: green underline.
+   Both styles can be shown simultaneously; neither changes navigation. */
+:root {
+  --tp-real-date-bg: #fff4f0;
+  --tp-real-date-outline: #e9c6be;
+  --tp-real-date-text: #a45d54;
+}
+/* Week mode: a warm rounded number, not a second selection underline. */
+.week-strip .wk.is-real-current .week-number {
+  background: var(--tp-real-date-bg);
+  color: var(--tp-real-date-text);
+  box-shadow: inset 0 0 0 1px var(--tp-real-date-outline);
+  font-weight: 800;
+}
+/* Day mode: a gentle wash highlights the actual date column. */
+.day-strip-row .dy.is-real-current {
+  background: #fff8f5;
+  border-radius: 13px;
+  color: var(--tp-real-date-text);
+}
+.day-strip-row .dy.is-real-current strong {
+  color: var(--tp-real-date-text);
+  background: var(--tp-real-date-bg);
+  box-shadow: inset 0 0 0 1px var(--tp-real-date-outline);
+}
+/* Keep today's red dot above the tint; don't displace the green underline. */
+.week-strip .wk.is-real-current .week-number::before,
+.day-strip-row .dy.is-real-current strong::before {
+  z-index: 2;
+}
+.week-strip .wk.sel::after,
+.day-strip-row .dy.sel::after {
+  background: var(--green-deep);
+}
+/* Week-only date range as secondary metadata, not a duplicate Day label. */
+.calendar-week-range {
+  font-family: var(--font-en);
+  font-size: 13px;
+  font-weight: 600;
+  color: #778077;
+  letter-spacing: .015em;
+}
+.calendar-week-range[hidden] { display: none !important; }
+/* Week mode has a prominent title; Day mode lets the dates lead. */
+.calendar-period.is-week-view .calendar-view-line > strong {
+  font-size: clamp(19px, 2.4vw, 23px);
+}
+.calendar-period.is-day-view .calendar-view-line > strong {
+  font-size: 16px;
+  font-weight: 650;
+  color: #58665b;
+}
+@media (max-width: 430px) {
+  .day-strip-row .dy.is-real-current { border-radius: 9px; }
+  .calendar-week-range { font-size: 12px; }
+}
+
+
+/* v7 分類選色：清單只留一顆色票，完整調色板在 dialog 裡。 */
+#categoryList {
+  margin-top: 13px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #e4e8df;
+  background: #fffdfb;
+}
+.category-compact-row {
+  display: flex;
+  align-items: center;
+  min-height: 60px;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid #ebeee8;
+}
+.category-compact-row:last-child { border-bottom: 0; }
+.category-compact-row:hover { background: #f8faf6; }
+.category-color-trigger {
+  display: grid;
+  place-items: center;
+  flex: 0 0 39px;
+  width: 39px;
+  height: 39px;
+  border: 1px solid #e3e6e0;
+  border-radius: 12px;
+  padding: 0;
+  background: #fff;
+  cursor: pointer;
+}
+.category-color-trigger:hover { border-color: #9aab98; }
+.category-color-sample {
+  width: 24px;
+  height: 24px;
+  background: var(--category-color);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(20,24,20,.06);
+}
+.category-compact-copy { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.category-compact-copy strong {
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.category-compact-copy small {
+  font: 500 11px/1.4 var(--font-en);
+  letter-spacing: .045em;
+  color: #838a82;
+}
+.category-compact-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; }
+.category-action-btn {
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 7px 11px;
+  color: #766c60;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.category-action-btn:hover { background: #f4f0e9; }
+.category-color-action { border-color: #e7e5df; background: #fbfaf7; }
+.category-empty-state { padding: 18px; font-size: 13px; color: var(--muted); }
+.category-color-dialog { width: min(460px, calc(100vw - 30px)); max-height: min(88vh, 780px); overflow-y: auto; }
+.category-color-dialog-help { margin: 4px 0 13px; color: var(--muted); font-size: 12px; }
+.category-picker-section { display: grid; gap: 10px; margin: 12px 0 4px; }
+.category-picker-label { font-weight: 600; font-size: 13px; }
+.category-preset-palette { display: grid; gap: 13px; }
+.category-palette-group { display: grid; gap: 7px; }
+.category-palette-group-title { font-size: 11px; color: #858a81; font-weight: 600; }
+.category-color-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 7px; }
+.category-color-option {
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+.category-color-option:hover { transform: scale(1.12); }
+.category-color-option.is-selected { border: 2px solid #fff; box-shadow: 0 0 0 2px #4d5b50; }
+.category-custom-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 12px;
+  margin-top: 8px;
+  border: 1px solid #e7e9e2;
+  background: #f9faf7;
+  border-radius: 12px;
+}
+.category-native-picker {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  position: relative;
+  flex: 1;
+  min-height: 42px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.category-native-picker input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.category-selected-sample {
+  flex: 0 0 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #9FC3DE;
+  box-shadow: 0 0 0 1px #d2d8ce;
+}
+.category-hex-label { flex: 0 0 142px; display: grid; gap: 5px; font-size: 11px; color: #697168; }
+.category-hex-label input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #d9dfd6;
+  border-radius: 9px;
+  background: white;
+  font-family: var(--font-en);
+  font-size: 12px;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+.category-hex-label input[aria-invalid="true"] { border-color: #c96b6b; outline-color: #c96b6b; }
+.category-color-error { font-size: 11px; color: #b84b4b; }
+#categoryDialog .dialog-card { max-height: min(88vh, 780px); overflow-y: auto; }
+.category-color-option:focus-visible,
+.category-color-trigger:focus-visible,
+.category-action-btn:focus-visible { outline: 3px solid #617e64; outline-offset: 3px; }
+@media (max-width: 520px) {
+  .category-compact-row { padding: 8px 10px; gap: 9px; }
+  .category-action-btn { padding: 7px 8px; }
+  .category-color-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+  .category-custom-controls { flex-wrap: wrap; }
+  .category-hex-label { flex: 1 1 130px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .category-color-option { transition: none; }
+}
+
+/* 分類設定完整佔一行，桌面寬度充足；手機自然單欄。 */
+.settings-list > #categorySettingsBlock { grid-column: 1 / -1; }
+@media (max-width: 760px) { .settings-list > #categorySettingsBlock { grid-column: auto; } }

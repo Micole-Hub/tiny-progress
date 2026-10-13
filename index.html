@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261013-nav-v2" />
+    <link rel="stylesheet" href="style.css?v=20261013-category-picker-v7" />
   </head>
   <body>
     <div class="app-shell">
@@ -110,7 +110,14 @@
             <p id="progressSummary" class="progress-summary"></p>
 
             <div class="calendar-period" id="calendarPeriod" aria-live="off">
-              <span class="calendar-month-label" id="calendarMonthLabel"></span>
+              <div class="calendar-period-main">
+                <span class="calendar-month-label" id="calendarMonthLabel"></span>
+                <div class="calendar-view-line">
+                  <strong id="calendarViewTitle"></strong>
+                  <span id="calendarWeekRange" class="calendar-week-range" hidden></span>
+                  <span id="calendarPhase" class="calendar-phase" hidden></span>
+                </div>
+              </div>
             </div>
             <div class="week-strip" id="weekStrip" aria-label="12 週"></div>
             <div
@@ -302,7 +309,7 @@
               <div id="recurringList" class="manage-list"></div>
             </div>
 
-            <div class="setting-block soft-card">
+            <div class="setting-block soft-card" id="categorySettingsBlock">
               <div class="setting-block-head">
                 <span
                   ><strong>分類與顏色</strong
@@ -619,9 +626,20 @@
         <label class="dialog-label"
           >名稱<input id="categoryNameInput" type="text" maxlength="60"
         /></label>
-        <div class="dialog-label">
-          <span>顏色</span>
-          <div class="palette-grid" id="categoryPalette"></div>
+        <div class="category-picker-section">
+          <span class="category-picker-label">分類顏色</span>
+          <div class="category-preset-palette" id="categoryPalette" aria-label="分類預設調色板"></div>
+          <div class="category-custom-controls">
+            <label class="category-native-picker" title="開啟系統調色板">
+              <span class="category-selected-sample" id="categoryColorPreview"></span>
+              <span>自訂顏色</span>
+              <input type="color" id="categoryNativeColor" aria-label="選擇自訂顏色" />
+            </label>
+            <label class="category-hex-label" for="categoryHexColor">HEX 色碼
+              <input type="text" id="categoryHexColor" spellcheck="false" autocapitalize="characters" maxlength="7" placeholder="#9FC3DE" inputmode="text" />
+            </label>
+          </div>
+          <small class="category-color-error" id="categoryHexError" hidden>請輸入正確的色碼，例如 #9FC3DE</small>
         </div>
         <div class="dialog-actions">
           <button
@@ -631,6 +649,32 @@
           >
             取消</button
           ><button type="submit" class="primary-button">儲存</button>
+        </div>
+      </form>
+    </dialog>
+
+
+    <!-- 分類清單共用調色板：先預覽，按套用才變更雲端 state。 -->
+    <dialog id="categoryColorDialog" aria-labelledby="categoryColorDialogTitle">
+      <form method="dialog" class="dialog-card category-color-dialog" id="categoryColorForm">
+        <p class="eyebrow">分類顏色</p>
+        <h3 id="categoryColorDialogTitle">調整顏色</h3>
+        <p class="category-color-dialog-help">選擇一個喜歡的顏色，也能輸入色碼。</p>
+        <div class="category-preset-palette" id="categoryQuickPalette" aria-label="預設調色板"></div>
+        <div class="category-custom-controls">
+          <label class="category-native-picker" title="開啟系統調色板">
+            <span class="category-selected-sample" id="categoryQuickColorPreview"></span>
+            <span>自訂顏色</span>
+            <input type="color" id="categoryQuickNativeColor" aria-label="選擇自訂顏色" />
+          </label>
+          <label class="category-hex-label" for="categoryQuickHexColor">HEX 色碼
+            <input type="text" id="categoryQuickHexColor" spellcheck="false" autocapitalize="characters" maxlength="7" placeholder="#9FC3DE" inputmode="text" />
+          </label>
+        </div>
+        <small class="category-color-error" id="categoryQuickHexError" hidden>請輸入正確的色碼，例如 #9FC3DE</small>
+        <div class="dialog-actions">
+          <button type="button" class="cancel-button" data-close-dialog="categoryColorDialog">取消</button>
+          <button type="submit" class="primary-button" id="applyCategoryColor">套用顏色</button>
         </div>
       </form>
     </dialog>
@@ -815,8 +859,8 @@
     </dialog>
     <script src="github-page/config.js"></script>
     <script src="github-page/domain.js"></script>
-    <script src="github-page/connection.js?v=20261013-nav-v2"></script>
-    <script src="script.js?v=20261013-nav-v2"></script>
+    <script src="github-page/connection.js?v=20261013-real-current-v5"></script>
+    <script src="script.js?v=20261013-category-picker-v7"></script>
     <script src="github-page/cycle-management.js"></script>
   </body>
 </html>
