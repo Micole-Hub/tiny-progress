@@ -3243,12 +3243,15 @@ async function tpRouteLineCommand({ sourceKey, userText, eventId }) {
     }
     scopeMessages(messages, next.cycle.number);
     try {
-      return await gasPost("line-state-save", {
+      // GAS 負責儲存狀態；真正要回覆 LINE 的是 Bot.respond 產生的 messages。
+      // 不可直接 return GAS 回傳的 {state, revision}，否則會被轉成 [object Object]。
+      await gasPost("line-state-save", {
         state: next,
         expectedRevision: current.revision,
         eventId,
         messages,
       });
+      return messages;
     } catch (e) {
       if (e.status !== 409 || attempt === 2) throw e;
     }
