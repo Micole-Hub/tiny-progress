@@ -1,23 +1,10 @@
-/* Version-checked cloud saves with local recovery for failed drafts. */
+/* Cloud-first: authoritative reads/writes, no offline editing. */
 window.TPConnection = (() => {
   "use strict";
   const D = window.TPDomain,
     demo = new URLSearchParams(location.search).get("demo") === "1";
   const CACHE = "tiny-progress-v28-cache",
     META = "tiny-progress-v28-sync";
-  let adapter,
-    base = "",
-    auth = "",
-    ready = false,
-    revision = 0,
-    baseline = "",
-    inflight = false,
-    paused = false,
-    unboundDraft = false,
-    conflictRetries = 0,
-    timer;
-  let pendingSave = null,
-    selectedCycle = null;
   const read = (key, storage = localStorage) => {
     try {
       return JSON.parse(storage.getItem(key) || "null");
@@ -25,7 +12,6 @@ window.TPConnection = (() => {
       return null;
     }
   };
-  let recovery = read(META);
   const serialize = (s) => JSON.stringify(D.publicState(s));
   const MISSING = Symbol("missing");
   function equal(a, b) {
@@ -160,43 +146,77 @@ window.TPConnection = (() => {
   function mergeStates(baseState, localState, remoteState) {
     return mergeValue(baseState, localState, remoteState);
   }
+  // Cloud is authoritative. Browser cache is read-only until a cloud response succeeds.
+  // The previous offline draft storage is never imported into cloud data automatically.
+  const LEGACY_BACKUP = "tiny-progress-legacy-draft-backup-cloud-first";
+  let adapter;
+  let base = "";
+  let auth = "";
+  let ready = false;
+  let revision = 0;
+  let baseline = "";
+  let inflight = false;
+  let paused = false;
+  let pendingSave = null;
+  let selectedCycle = null;
+  let conflictRetries = 0;
+  let writeTimer = null;
+  let statusTimer = null;
+  let reauthForSave = false;
+  let startCompleted = false;
+  const oldMeta = read(META);
+  let oldUnsaved = oldMeta?.dirty &&
+    localStorage.getItem("tiny-progress-cloud-first-legacy-reviewed") !== "yes"
+      ? { meta: oldMeta, state: read(CACHE) } : null;
   const dirty = () => ready && serialize(adapter.get()) !== baseline;
-  function remember() {
-    if (demo || !ready) return;
-    try {
-      recovery = {
-        base,
-        revision,
-        baseline,
-        pendingSave,
-        dirty: dirty() || !!pendingSave,
-      };
-      localStorage.setItem(META, JSON.stringify(recovery));
-    } catch {
-      status("草稿空間不足，請清理瀏覽器空間後重試同步", true);
-    }
+
+  function ui(id) {
+    return document.getElementById(id);
   }
-  const status = (message, error = false) => {
-    const el = document.querySelector("#syncStatus");
-    if (el) {
-      el.textContent = message;
-      el.classList.toggle("error", error);
-    }
-    const actions = document.querySelector("#syncActions");
-    actions.hidden = !error;
-    if (error) document.querySelector("#syncPanel").open = true;
-  };
-  const locked = (value) => {
-    document.querySelector(".app-shell").inert = value;
-    document.querySelector("#connectionGate").hidden = !value;
-  };
-  function cache(s) {
+  function status(message, kind = "info", autoHide = false) {
+    clearTimeout(statusTimer);
+    const panel = ui("syncPanel");
+    panel.hidden = !message;
+    panel.classList.toggle("error", kind === "error");
+    ui("syncStatus").textContent = message;
+    if (autoHide && message)
+      statusTimer = setTimeout(() => {
+        if (!inflight && !paused) panel.hidden = true;
+      }, 2400);
+  }
+  function gate(kind) {
+    ui("connectionGate").hidden = kind !== "login";
+    ui("saveFailureGate").hidden = kind !== "save";
+    document.querySelector(".app-shell").inert = kind !== null;
+  }
+  function cacheConfirmed(s) {
     if (demo) return;
     try {
       localStorage.setItem(CACHE, JSON.stringify(s));
     } catch {
-      status("儲存空間不足，請清理瀏覽器空間後重試同步", true);
+      // Cache is optional: cloud saves must not fail when browser storage is full.
     }
+  }
+  function preserveLegacyDraft() {
+    if (!oldUnsaved) return;
+    try {
+      if (!localStorage.getItem(LEGACY_BACKUP))
+        localStorage.setItem(LEGACY_BACKUP, JSON.stringify(oldUnsaved));
+    } catch { /* The original old META/CACHE keys are left untouched. */ }
+    ui("legacyDraftNotice").hidden = false;
+  }
+  function downloadLegacyDraft() {
+    const content = localStorage.getItem(LEGACY_BACKUP) || JSON.stringify(oldUnsaved);
+    if (!content) return;
+    const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "tiny-progress-舊版未同步草稿備份.json";
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   async function request(path, { method = "GET", body } = {}) {
     const res = await fetch(base + path, {
@@ -212,375 +232,326 @@ window.TPConnection = (() => {
     try {
       data = await res.json();
     } catch {
-      throw new Error(
-        "伺服器回應不是有效的 API 資料；請確認同步設定使用 Render 後端網址，而不是網頁網址，並確認伺服器正常運作。",
-      );
+      throw new Error("伺服器回傳格式異常，請檢查 Render 服務是否正常。");
     }
     if (!res.ok) {
-      const error = new Error(data.message || "連線失敗");
+      const error = new Error(data.message || "雲端暫時無法使用");
       error.status = res.status;
       throw error;
     }
     return data;
   }
-  async function reload(force = false) {
-    const data = await request(
-      "/api/state" + (selectedCycle ? "?cycle=" + selectedCycle : ""),
-    );
+  function statePath() {
+    return "/api/state" + (selectedCycle ? "?cycle=" + selectedCycle : "");
+  }
+  function takeCloud(data) {
     D.validate(data.state);
-    if (!force && recovery?.dirty && recovery.base === base && !unboundDraft) {
-      revision = recovery.revision;
-      baseline = recovery.baseline;
-      pendingSave = recovery.pendingSave || null;
-      ready = true;
-      paused = false;
-      locked(false);
-      status("已保留未同步草稿，正在重試…");
-      await flush();
-      return;
-    }
-    if (!force && recovery?.dirty && (recovery.base !== base || unboundDraft)) {
-      const baseState = JSON.parse(recovery.baseline || serialize(D.empty()));
-      const merged = mergeStates(baseState, adapter.get(), data.state);
-      D.validate(merged);
-      adapter.replace(merged);
-      revision = data.revision;
-      baseline = serialize(data.state);
-      pendingSave = null;
-      unboundDraft = false;
-      paused = false;
-      ready = true;
-      locked(false);
-      remember();
-      if (dirty()) {
-        status("正在合併並同步更新…");
-        await flush();
-      } else status("已同步");
-      return;
-    }
-    unboundDraft = false;
-    revision = data.revision;
+    revision = Number(data.revision);
     baseline = serialize(data.state);
     pendingSave = null;
     paused = false;
+    conflictRetries = 0;
     ready = true;
     adapter.replace(data.state);
-    cache(adapter.get());
-    remember();
-    status("已同步");
-    locked(false);
+    cacheConfirmed(data.state);
+    gate(null);
+  }
+  async function reload() {
+    const data = await request(statePath());
+    takeCloud(data);
+    status("已載入雲端進度", "info", true);
+  }
+  function showFailure(error) {
+    paused = true;
+    const unauthorized = error?.status === 401;
+    ui("saveFailureText").textContent = unauthorized
+      ? "登入已過期。這次修改尚未儲存，請重新登入後繼續送出。"
+      : "這次修改尚未儲存到雲端。為避免資料分岔，編輯已暫停。" +
+        (error?.message ? " 原因：" + error.message : "");
+    ui("reloginFailedSave").hidden = !unauthorized;
+    ui("retryFailedSave").hidden = unauthorized;
+    gate("save");
+    status("雲端儲存失敗，請處理未儲存的修改", "error");
   }
   async function flush() {
-    if (
-      demo ||
-      !ready ||
-      !base ||
-      !auth ||
-      unboundDraft ||
-      paused ||
-      inflight ||
-      (!dirty() && !pendingSave)
-    )
-      return;
+    if (demo || !ready || !base || !auth || paused || inflight || (!dirty() && !pendingSave)) return;
     inflight = true;
-    status("儲存中…");
-    const snapshot = serialize(adapter.get());
+    clearTimeout(writeTimer);
+    status("正在儲存雲端進度…");
     if (!pendingSave)
       pendingSave = {
         expectedRevision: revision,
         mutationId: crypto.randomUUID(),
-        state: JSON.parse(snapshot),
+        state: JSON.parse(serialize(adapter.get())),
       };
     const sent = pendingSave;
-    remember();
     try {
       const data = await request("/api/state", { method: "PUT", body: sent });
-      revision = data.revision;
-      const canonical = data.state || sent.state;
+      const cloud = data.state || sent.state;
+      D.validate(cloud);
+      revision = Number(data.revision);
+      baseline = serialize(cloud);
+      pendingSave = null;
+      conflictRetries = 0;
+      // Don't replace additional edits made while this request was in flight.
       if (serialize(adapter.get()) === JSON.stringify(sent.state))
-        adapter.replace(canonical);
-      else if (data.state) {
-        adapter.get().legacyArchive = data.state.legacyArchive;
-        for (const t of adapter.get().tasks) {
-          const saved = data.state.tasks.find((x) => x.id === t.id);
-          if (saved?.legacyId) t.legacyId = saved.legacyId;
+        adapter.replace(cloud);
+      else {
+        // Keep server-assigned metadata when there were later local changes.
+        const current = adapter.get();
+        current.legacyArchive = cloud.legacyArchive;
+        for (const item of current.tasks || []) {
+          const saved = (cloud.tasks || []).find((x) => x.id === item.id);
+          if (saved?.legacyId) item.legacyId = saved.legacyId;
         }
       }
-      baseline = JSON.stringify(canonical);
-      pendingSave = null;
-      cache(adapter.get());
-      status("已同步");
+      cacheConfirmed(cloud);
+      gate(navigator.onLine ? null : "login");
+      status("已儲存至雲端", "info", true);
     } catch (error) {
-      if (error.status === 409) {
+      if (error.status === 409 && conflictRetries < 3) {
+        // Only merge while connected, not from an offline edit copy.
         try {
-          const data = await request(
-            "/api/state" + (selectedCycle ? "?cycle=" + selectedCycle : ""),
-          );
+          const data = await request(statePath());
           D.validate(data.state);
-          const baseState = JSON.parse(baseline || serialize(D.empty()));
-          const merged = mergeStates(baseState, adapter.get(), data.state);
+          const merged = mergeStates(JSON.parse(baseline), adapter.get(), data.state);
           D.validate(merged);
-          adapter.replace(merged);
-          revision = data.revision;
+          revision = Number(data.revision);
           baseline = serialize(data.state);
           pendingSave = null;
-          conflictRetries++;
-          paused = false;
-          status("正在合併其他裝置的更新…");
-          remember();
+          conflictRetries += 1;
+          adapter.replace(merged);
+          cacheConfirmed(data.state);
+          status("正在整合其他裝置的更新…");
         } catch (mergeError) {
-          paused = true;
-          status(
-            "同步遇到多裝置更新，修改仍已保留；請稍後重試。" +
-              (mergeError.message ? ` ${mergeError.message}` : ""),
-            true,
-          );
+          showFailure(mergeError);
         }
       } else {
-        paused = true;
-        const offline = !navigator.onLine;
-        status(
-          offline
-            ? "目前離線，恢復網路後會自動同步"
-            : error.status === 401
-              ? "登入已過期，請重新設定同步。修改仍已保留。"
-              : "同步失敗，修改仍已保留：" + error.message,
-          true,
-        );
+        showFailure(error);
       }
     } finally {
       inflight = false;
-      remember();
-      if (!paused && dirty()) {
-        const delay = conflictRetries
-          ? Math.min(500 * 2 ** Math.min(conflictRetries, 5), 15000)
-          : 100;
-        timer = setTimeout(flush, delay);
-      } else if (!dirty()) conflictRetries = 0;
+      if (!paused && dirty())
+        writeTimer = setTimeout(flush, 100 + 200 * conflictRetries);
     }
   }
-  function save(s) {
-    cache(s);
-    if (demo) return;
-    if (!ready) return;
-    remember();
-    if (!base || !auth || unboundDraft) {
-      status("同步尚未設定");
+  function save() {
+    if (demo || !ready || paused) return;
+    if (!dirty() && !pendingSave) return;
+    if (!navigator.onLine) {
+      showFailure(new Error("網路中斷。恢復網路後才能儲存。"));
       return;
     }
-    clearTimeout(timer);
-    timer = setTimeout(flush, 400);
+    status("正在儲存雲端進度…");
+    clearTimeout(writeTimer);
+    if (!inflight) writeTimer = setTimeout(flush, 220);
   }
   function initial(seed) {
     if (demo) {
       const s = D.clone(seed);
       s.schemaVersion = 27;
-      s.cycle.startDate =
-        s.cycle.startDate || s.simulationWeekStart || D.monday(D.today());
-      s.weekMeta = s.weekMeta || {};
-      s.unfinishedReasons = s.unfinishedReasons || {};
+      s.cycle.startDate = s.cycle.startDate || s.simulationWeekStart || D.monday(D.today());
+      s.weekMeta ||= {};
+      s.unfinishedReasons ||= {};
       s.preferences.lineEnabled = false;
       return s;
     }
+    // Preview is visible only behind a locked login panel until fresh cloud data arrives.
     return read(CACHE) || D.empty();
   }
   function serverBase(value) {
     const u = new URL(value);
     if (u.username || u.password || u.search || u.hash || u.pathname !== "/")
-      throw new Error("請填 Render 根網址，不要加路徑或參數");
-    if (
-      u.protocol !== "https:" &&
-      !(
-        u.protocol === "http:" &&
-        ["localhost", "128.0.0.1"].includes(u.hostname)
-      )
-    )
-      throw new Error("請使用 HTTPS 網址");
+      throw new Error("請填入 Render 根網址，不要包含其他路徑或參數");
+    if (u.protocol !== "https:" && !(u.protocol === "http:" && ["localhost", "127.0.0.1"].includes(u.hostname)))
+      throw new Error("請使用 HTTPS Render 網址");
     return u.origin;
   }
   async function start(a) {
     adapter = a;
-    const form = document.querySelector("#connectionForm"),
-      url = document.querySelector("#serverUrl"),
-      password = document.querySelector("#webPassword"),
-      message = document.querySelector("#connectionMessage");
-    document.querySelector("#retrySync").onclick = () => {
-      paused = false;
-      if (dirty() || pendingSave) flush();
-      else refresh();
-    };
-    document.querySelector("#connectionSettings").onclick = () => {
-      locked(true);
-      message.textContent =
-        "登入後，網頁與 LINE 會自動共用資料；暫時離線時會在恢復網路後自動同步。";
-    };
-    document.querySelector("#continueOffline").onclick = () => {
-      locked(false);
-      status(
-        dirty() ? "等待網路恢復後同步" : "同步尚未設定",
-      );
-    };
-    document.querySelector("#demoLink").href = location.pathname + "?demo=1";
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      const btn = form.querySelector("button[type=submit]");
-      btn.disabled = true;
-      message.textContent = "連線中，第一次可能需要等候伺服器啟動…";
-      try {
-        const selected = serverBase(url.value.trim());
-        if (recovery?.dirty && recovery.base && recovery.base !== selected)
-          throw new Error(
-            "有另一個伺服器的未同步草稿，請先回原伺服器完成同步",
-          );
-        unboundDraft = Boolean(recovery?.dirty && !recovery.base);
-        base = selected;
-        auth = "";
-        const login = await request("/auth/login", {
-          method: "POST",
-          body: { password: password.value },
-        });
-        auth = login.token;
-        localStorage.setItem(
-          "tp-v28-session",
-          JSON.stringify({ base, auth }),
-        );
-        localStorage.setItem("tp-v28-server", base);
-        password.value = "";
-        await reload();
-        message.textContent = "";
-      } catch (error) {
-        message.textContent = error.message;
-      } finally {
-        btn.disabled = false;
-      }
-    };
     if (demo) {
       ready = true;
       baseline = serialize(adapter.get());
-      status("教學模式・不會同步到 LINE");
-      locked(false);
+      gate(null);
+      status("");
       return;
     }
-    base = recovery?.base || "";
-    revision = Number(recovery?.revision) || 0;
-    baseline = recovery?.baseline || serialize(adapter.get());
-    pendingSave = recovery?.pendingSave || null;
-    ready = true;
-    locked(false);
-    status(recovery?.dirty ? "等待網路恢復後同步" : "同步尚未設定");
-    url.value =
-      window.TP_CONFIG?.API_BASE_URL ||
-      localStorage.getItem("tp-v28-server") ||
-      "";
-    const session = read("tp-v28-session", localStorage);
-    if (session?.auth && session.base === url.value) {
+    gate("login");
+    const form = ui("connectionForm");
+    const url = ui("serverUrl");
+    const password = ui("webPassword");
+    const message = ui("connectionMessage");
+    ui("demoLink").href = location.pathname + "?demo=1";
+    preserveLegacyDraft();
+    ui("downloadLegacyDraft").onclick = downloadLegacyDraft;
+    url.value = window.TP_CONFIG?.API_BASE_URL || localStorage.getItem("tp-v28-server") || "";
+    const session = read("tp-v28-session");
+    if (!url.value && session?.base) url.value = session.base;
+
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      if (oldUnsaved && !ui("legacyDraftConfirmed").checked) {
+        message.textContent = "請先確認舊版草稿備份，再繼續使用雲端版。";
+        return;
+      }
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      message.textContent = "正在連線到雲端，Render 首次啟動可能需要稍等…";
       try {
-        unboundDraft = Boolean(recovery?.dirty && !recovery.base);
+        const chosenBase = serverBase(url.value.trim());
+        if (reauthForSave && base && chosenBase !== base)
+          throw new Error("要完成目前未儲存的修改，請登入原本的 Render 服務。 ");
+        base = chosenBase;
+        auth = "";
+        const login = await request("/auth/login", {
+          method: "POST", body: { password: password.value },
+        });
+        auth = login.token;
+        localStorage.setItem("tp-v28-session", JSON.stringify({ base, auth }));
+        localStorage.setItem("tp-v28-server", base);
+        password.value = "";
+        if (reauthForSave && pendingSave) {
+          reauthForSave = false;
+          paused = false;
+          await flush();
+          if (paused) return;
+        } else {
+          await reload();
+        }
+        if (oldUnsaved) {
+          localStorage.setItem("tiny-progress-cloud-first-legacy-reviewed", "yes");
+          oldUnsaved = null;
+        }
+        message.textContent = "";
+      } catch (error) {
+        message.textContent = error.message;
+        gate("login");
+      } finally {
+        button.disabled = false;
+      }
+    };
+    ui("retryFailedSave").onclick = async () => {
+      if (!navigator.onLine) {
+        ui("saveFailureText").textContent = "目前沒有網路，恢復連線後才能重新儲存。";
+        return;
+      }
+      paused = false;
+      await flush();
+    };
+    ui("reloginFailedSave").onclick = () => {
+      reauthForSave = true;
+      message.textContent = "請重新登入，系統會再嘗試儲存剛剛的修改。";
+      gate("login");
+    };
+    ui("discardFailedSave").onclick = async () => {
+      if (!window.confirm("確定放棄這次尚未儲存的修改，重新載入雲端版本嗎？")) return;
+      // Always verify the cloud is reachable before discarding a failed write.
+      try {
+        const data = await request(statePath());
+        takeCloud(data);
+        status("已還原成雲端版本，未儲存的變更已放棄", "info", true);
+      } catch (error) {
+        ui("saveFailureText").textContent = "目前還無法讀取雲端，尚未放棄你的修改：" + error.message;
+      }
+    };
+
+    if (!oldUnsaved && session?.auth && session.base === url.value) {
+      try {
         base = serverBase(session.base);
         auth = session.auth;
-        message.textContent = "正在載入…";
+        message.textContent = "正在載入雲端進度…";
         await reload();
         message.textContent = "";
       } catch (error) {
-        message.textContent =
-          error.status === 401
-            ? "登入已過期，請重新登入；本機修改仍會保留。"
-            : "雲端暫時無法連線；仍可繼續使用，恢復網路後會自動同步。";
-        status(
-          error.status === 401
-            ? "登入已過期，請重新設定同步。修改仍已保留。"
-            : "目前離線，恢復網路後會自動同步",
-          error.status === 401,
-        );
+        message.textContent = error.status === 401
+          ? "登入已過期，請重新輸入密碼。"
+          : "暫時無法讀取雲端，請稍後重試登入。未開啟離線編輯。";
+        if (error.status === 401) {
+          auth = "";
+          localStorage.removeItem("tp-v28-session");
+        }
+        gate("login");
       }
     }
+    if (startCompleted) return;
+    startCompleted = true;
     const refresh = async () => {
-      if (
-        !ready ||
-        !base ||
-        !auth ||
-        inflight ||
-        dirty() ||
-        paused ||
-        document.hidden ||
-        document.querySelector("dialog[open]") ||
-        document.activeElement?.matches("input,textarea,select") ||
-        !document.querySelector("#weekFootprintLayer").hidden
-      )
-        return;
+      if (!ready || !base || !auth || inflight || paused || dirty() ||
+          document.hidden || document.querySelector("dialog[open]") ||
+          document.activeElement?.matches("input,textarea,select") ||
+          !ui("weekFootprintLayer").hidden || !navigator.onLine) return;
       try {
-        const data = await request(
-          "/api/state" + (selectedCycle ? "?cycle=" + selectedCycle : ""),
-        );
-        if (
-          inflight ||
-          dirty() ||
-          paused ||
-          document.querySelector("dialog[open]") ||
-          document.activeElement?.matches("input,textarea,select")
-        )
-          return;
-        // Google Sheets 可能經由其他流程更新資料，卻未增加 web revision。
-        // 在沒有本地待同步修改時，除了版本號也比較完整的公開資料內容。
-        const remoteChanged = !equal(
-          D.publicState(data.state),
-          JSON.parse(baseline || "null"),
-        );
-        if (data.revision !== revision || remoteChanged) {
-          D.validate(data.state);
-          revision = data.revision;
-          baseline = serialize(data.state);
-          adapter.replace(data.state);
-          cache(data.state);
-          remember();
-          status("已同步雲端最新進度");
+        const data = await request(statePath());
+        if (inflight || paused || dirty() || document.querySelector("dialog[open]") ||
+            document.activeElement?.matches("input,textarea,select")) return;
+        const changed = data.revision !== revision ||
+          !equal(D.publicState(data.state), JSON.parse(baseline || "null"));
+        if (changed) {
+          takeCloud(data);
+          status("已更新雲端最新進度", "info", true);
         }
-      } catch {
-        status("目前離線，恢復網路後會自動同步", true);
+      } catch (error) {
+        // No offline edits when the cloud cannot be reached.
+        if (dirty() || pendingSave) {
+          showFailure(error);
+        } else {
+          gate("login");
+          message.textContent = error.status === 401
+            ? "登入已過期，請重新登入。"
+            : "暫時無法連線到雲端，編輯已暫停。連線恢復後會重新載入。";
+          status("暫時無法連線到雲端，已暫停編輯", "error");
+        }
       }
     };
     setInterval(refresh, 30000);
     window.addEventListener("focus", refresh);
     window.addEventListener("offline", () => {
-      if (base && auth) status("目前離線，恢復網路後會自動同步");
+      if (!ready || paused) return;
+      if (dirty() || pendingSave) {
+        showFailure(new Error("網路中斷，這次修改仍未儲存。"));
+      } else {
+        gate("login");
+        message.textContent = "目前離線，編輯已暫停。恢復網路後會重新載入雲端資料。";
+        status("目前離線，已暫停編輯", "error");
+      }
+    });
+    window.addEventListener("beforeunload", (event) => {
+      if (ready && (dirty() || pendingSave || inflight)) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
     });
     window.addEventListener("online", () => {
-      if (!base || !auth) {
-        status("同步尚未設定");
-        return;
+      if (!auth || !base) return;
+      if (paused && (dirty() || pendingSave)) {
+        paused = false;
+        flush();
+      } else if (ready && !dirty() && !pendingSave) {
+        reload().catch((error) => {
+          gate("login");
+          message.textContent = "無法重新讀取雲端，請再次登入：" + error.message;
+        });
       }
-      paused = false;
-      if (unboundDraft) {
-        reload().catch(() => status("目前離線，恢復網路後會自動同步", true));
-        return;
-      }
-      status("網路已恢復，正在同步…");
-      flush().then(refresh);
     });
   }
   async function manage(path, options = {}) {
     if (demo) throw new Error("教學模式不會變更正式週期");
-    if (!base || !auth)
-      throw new Error("請先設定雲端同步並登入，才能載入或管理週期。");
+    if (!ready || !base || !auth || paused || !navigator.onLine)
+      throw new Error("請先完成雲端登入，並確認網路連線正常。");
     await flush();
-    if (dirty() || inflight || paused) throw new Error("請先完成同步");
+    if (dirty() || inflight || paused) throw new Error("請等待雲端儲存完成");
     return request(path, options);
   }
   async function selectCycle(cycle) {
+    if (!ready || paused) throw new Error("雲端尚未就緒");
     await flush();
-    if (dirty() || inflight || paused) throw new Error("請先完成同步");
+    if (dirty() || inflight || paused) throw new Error("請先完成雲端儲存");
     selectedCycle = Number(cycle) || null;
-    await reload(true);
+    await reload();
   }
   return {
-    initial,
-    save,
-    start,
-    demo,
-    isConnected: () => !demo && Boolean(base && auth),
-    flush,
-    manage,
-    selectCycle,
-    isReady: () => ready,
+    initial, save, start, demo,
+    isConnected: () => !demo && Boolean(ready && base && auth && !paused),
+    flush, manage, selectCycle, isReady: () => ready && !paused,
   };
 })();

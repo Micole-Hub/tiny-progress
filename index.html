@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f4f1ea" />
     <meta name="referrer" content="no-referrer" />
-    <title>Tiny Progress · 小小進度，也值得被看見</title>
-    <meta name="description" content="Tiny Progress，記錄每週的小小進度。小小進度，也值得被看見。休息也是前進的一部分。" />
+    <title>Tiny Progress · Every small step matters.</title>
+    <meta name="description" content="Tiny Progress，記錄每週的小小進度。Every small step matters. 休息也是前進的一部分。" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261013-frontend-consolidated-v1" />
+    <link rel="stylesheet" href="style.css?v=20261013-cloud-first-v1" />
   </head>
   <body>
     <div class="app-shell">
@@ -24,19 +24,12 @@
           id="brandHome"
           aria-label="Tiny Progress 首頁"
         >
-          <span class="brand-mark">∞</span><span class="brand-wordmark"><strong>Tiny Progress</strong><small>小小進度，也值得被看見。</small></span>
+          <span class="brand-mark">∞</span><span class="brand-wordmark"><strong>Tiny Progress</strong><small>Every small step matters.</small></span>
         </a>
       </header>
-      <details class="sync-panel" id="syncPanel">
-        <summary id="syncStatus" role="status">同步尚未設定</summary>
-        <div class="sync-panel-content">
-          <p>登入後會自動同步；離線時會在網路恢復後補上。</p>
-          <button type="button" id="connectionSettings">設定雲端同步</button>
-          <div id="syncActions" hidden>
-            <button type="button" id="retrySync">重試同步</button>
-          </div>
-        </div>
-      </details>
+      <div id="syncPanel" class="cloud-status" role="status" aria-live="polite" hidden>
+        <span id="syncStatus">載入中…</span>
+      </div>
 
       <main class="page-wrap">
         <section
@@ -688,13 +681,13 @@
     <section
       id="connectionGate"
       class="connection-gate"
-      aria-label="雲端同步設定"
+      aria-label="雲端登入"
       hidden
     >
       <form id="connectionForm" class="connection-card">
         <p class="eyebrow">TINY PROGRESS</p>
-        <h1>設定雲端同步</h1>
-        <p>登入後，網頁和 LINE 會共用同一份進度。你也可以先離線使用，資料會先保存在這台裝置。</p>
+        <h1>登入 Tiny Progress</h1>
+        <p>登入後自動載入雲端進度。網路中斷時會暫停編輯，不會建立另一份離線資料。</p>
         <label
           >伺服器網址<input
             id="serverUrl"
@@ -711,17 +704,33 @@
           </span>
         </label>
         <p id="connectionMessage" role="status"></p>
+        <div id="legacyDraftNotice" class="legacy-draft-notice" hidden>
+          <strong>偵測到舊版未同步草稿</strong>
+          <p>新版不會自動把舊草稿覆蓋到雲端。若草稿重要，請先下載備份，再登入查看正式資料。</p>
+          <button type="button" id="downloadLegacyDraft" class="secondary-button">下載舊草稿備份</button>
+          <label class="legacy-draft-confirm"><input type="checkbox" id="legacyDraftConfirmed" />我已確認草稿備份，繼續使用雲端資料</label>
+        </div>
         <div class="connection-actions">
-          <button class="primary-button" type="submit">登入並同步</button>
-          <button class="secondary-button" id="continueOffline" type="button">
-            先離線使用
-          </button>
+          <button class="primary-button" type="submit">登入雲端</button>
           <a id="demoLink" class="text-button" href="?demo=1">先看教學</a>
         </div>
         <p class="dialog-help">
           密碼不會寫進網頁檔案。教學模式不會修改你的正式資料。
         </p>
       </form>
+    </section>
+    <section id="saveFailureGate" class="connection-gate" hidden aria-label="雲端儲存失敗">
+      <div class="connection-card" role="alertdialog" aria-labelledby="saveFailureTitle" aria-describedby="saveFailureText">
+        <p class="eyebrow">TINY PROGRESS</p>
+        <h2 id="saveFailureTitle">這次修改還沒儲存成功</h2>
+        <p id="saveFailureText">目前無法連線到雲端。為避免產生不同步資料，編輯已暫停。</p>
+        <div class="connection-actions">
+          <button class="primary-button" type="button" id="retryFailedSave">重試這次儲存</button>
+          <button class="primary-button" type="button" id="reloginFailedSave" hidden>重新登入並儲存</button>
+          <button class="secondary-button" type="button" id="discardFailedSave">放棄未儲存的修改</button>
+        </div>
+        <p class="dialog-help">放棄後會重新讀取雲端最後成功儲存的版本。網路恢復前不能離線編輯。</p>
+      </div>
     </section>
     <dialog id="cycleDialog">
       <div class="dialog-card">
@@ -803,8 +812,8 @@
     </dialog>
     <script src="github-page/config.js"></script>
     <script src="github-page/domain.js"></script>
-    <script src="github-page/connection.js?v=20261013-refresh-content"></script>
-    <script src="script.js?v=20261013-frontend-consolidated-v1"></script>
+    <script src="github-page/connection.js?v=20261013-cloud-first-v1"></script>
+    <script src="script.js?v=20261013-cloud-first-v1"></script>
     <script src="github-page/cycle-management.js"></script>
   </body>
 </html>
