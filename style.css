@@ -4265,3 +4265,140 @@ body {
 /* 分類設定完整佔一行，桌面寬度充足；手機自然單欄。 */
 .settings-list > #categorySettingsBlock { grid-column: 1 / -1; }
 @media (max-width: 760px) { .settings-list > #categorySettingsBlock { grid-column: auto; } }
+
+
+/* === Tiny Progress · responsive UI v8 · presentation only ===
+   One cohesive final layer: warm paper, gentle hierarchy, and reachable actions.
+   No data model or cloud logic changes. */
+:root {
+  --bg: #f7f4ef;
+  --surface: #fffefa;
+  --surface-2: #faf7f1;
+  --surface-3: #eef3eb;
+  --ink: #3c4941;
+  --ink-2: #59665d;
+  --muted: #7d877f;
+  --line: #e8e3d9;
+  --green: #719478;
+  --green-deep: #55785b;
+  --nav-coffee: #8d7560;
+  --today: #c6736c;
+  --shadow-soft: 0 8px 24px rgba(78, 70, 52, 0.045);
+}
+html, body { background: var(--bg); }
+body { background: linear-gradient(180deg, #fbf9f5 0px, #f7f4ef 390px); }
+.topbar { background: rgba(255,254,250,.96); border-bottom: 1px solid var(--line); }
+.page-wrap { width: min(1160px, calc(100% - 48px)); padding-top: 28px; }
+.soft-card { background: var(--surface); border: 1px solid var(--line); border-radius: 19px; box-shadow: var(--shadow-soft); }
+.home-head h1, .simple-page-head h1 { color: #3c4941; letter-spacing: -.028em; }
+.home-lede { line-height: 1.7; }
+.home-mode-control { border-color: #e1dfd5; background: #fdfbf7; }
+.home-mode-control button.active { background: #719478; }
+.calendar-month-label { color: #b5655f; }
+.calendar-month-label::before { background: #cb827a; }
+.calendar-week-range { color: #778077; }
+/* Each clock / navigation state has exactly one visual responsibility. */
+.week-strip .wk.sel::after, .day-strip-row .dy.sel::after { background: var(--green-deep); }
+.bottom-nav, .bottom-nav .nav-item { box-shadow: none; }
+.bottom-nav .nav-item.active { color: var(--nav-coffee); }
+.bottom-nav .nav-item::after { background: var(--nav-coffee); }
+.bottom-nav .nav-item.active::after { width: 82%; }
+.mobile-tree-peek { display: none; }
+/* Desktop: work first, growth direction and full tree in a calm side panel. */
+@media (min-width: 1000px) {
+  .page[data-page="home"].active {
+    display: grid;
+    grid-template-columns: minmax(0, 1.75fr) minmax(290px, .82fr);
+    column-gap: 20px;
+    row-gap: 18px;
+    align-items: start;
+  }
+  .page[data-page="home"] > .home-head,
+  .page[data-page="home"] > .preview-bar,
+  .page[data-page="home"] > .footprint-entry,
+  .page[data-page="home"] > .rest-banner { grid-column: 1 / -1; }
+  .page[data-page="home"] > .work-card { grid-column: 1; order: 5; margin: 0; min-width: 0; }
+  .page[data-page="home"] > .work-card.resting { grid-column: 1 / -1; }
+  .page[data-page="home"] > .growth-banner { grid-column: 2; order: 6; margin: 0; min-width: 0; }
+  .page[data-page="home"] > .mobile-tree-peek { display: none !important; }
+  .page[data-page="home"] > .growth-banner {
+    display: grid; grid-template-columns: 1fr;
+    padding: 22px; gap: 14px; min-height: 0;
+    background: #f2f6ef; border-color: #dce6d9;
+  }
+  .page[data-page="home"] .direction-text { margin: 12px 0; font-size: 19px; line-height: 1.55; }
+  .page[data-page="home"] .week-tree-panel { min-height: 232px; }
+  .page[data-page="home"] .tree-stage { height: 176px; }
+  .page[data-page="home"] .work-card { padding: 24px 24px 26px; }
+  .page[data-page="home"] .home-head { margin-bottom: 0; }
+  .page[data-page="home"] .rest-banner { margin: 0; }
+  .page[data-page="home"] .preview-bar,
+  .page[data-page="home"] .footprint-entry { margin: 0; }
+  .settings-list { column-gap: 20px; row-gap: 18px; }
+}
+@media (min-width: 761px) and (max-width: 999px) {
+  .growth-banner { grid-template-columns: minmax(0,1.2fr) minmax(240px,.75fr); }
+  .page-wrap { width: min(780px, calc(100% - 40px)); }
+}
+/* Phone: calendar and tasks near the top; tree remains present below tasks.
+   Preview is always a miniature of the very same real tree. */
+@media (max-width: 760px) {
+  .page-wrap { width: min(100% - 28px, 600px); padding-top: 18px; }
+  .page[data-page="home"].active { display: flex; flex-direction: column; gap: 12px; }
+  .page[data-page="home"] > .home-head { order: 1; width: 100%; margin: 0 0 2px; }
+  .page[data-page="home"] > .preview-bar { order: 2; }
+  .page[data-page="home"] > .footprint-entry { order: 3; }
+  .page[data-page="home"] > .rest-banner { order: 4; margin: 0; }
+  .page[data-page="home"] > .mobile-tree-peek { order: 5; }
+  .page[data-page="home"] > .work-card { order: 6; width: 100%; margin: 0; padding: 18px 16px; }
+  .page[data-page="home"] > .growth-banner { order: 7; width: 100%; margin: 0; }
+  .home-head h1, .simple-page-head h1 { font-size: 27px; }
+  .home-lede { margin: 5px 0 0; font-size: 13px; }
+  .home-mode-control { margin-top: 12px; }
+  .home-mode-control > span { display: none; }
+  .home-mode-control button { min-height: 40px; min-width: 76px; font-size: 13px; }
+  .mobile-tree-peek:not([hidden]) {
+    display: grid; grid-template-columns: 68px minmax(0,1fr) auto;
+    width: 100%; min-height: 84px; align-items: center; gap: 14px;
+    padding: 7px 14px; border: 1px solid #dae5d7; border-radius: 16px;
+    background: #f1f6ef; text-align: left; color: var(--ink);
+    box-shadow: none; cursor: pointer;
+  }
+  .mobile-tree-peek:focus-visible { outline: 2px solid var(--green-deep); outline-offset: 2px; }
+  .mobile-tree-peek-art { width: 68px; height: 65px; display: block; overflow: hidden; }
+  .mobile-tree-peek-art svg { width: 100%; height: 100%; display: block; }
+  .mobile-tree-peek-copy { display: grid; gap: 4px; min-width: 0; }
+  .mobile-tree-peek-copy strong { font-size: 14px; font-weight: 700; }
+  .mobile-tree-peek-copy small { color: var(--muted); font-size: 12px; }
+  .mobile-tree-peek-arrow { color: #69866e; font-size: 22px; font-weight: 600; padding: 0 3px; }
+  .growth-banner { grid-template-columns: minmax(0,1fr); padding: 20px 16px; gap: 12px; scroll-margin-top: 85px; }
+  .growth-banner .direction-text { font-size: 19px; margin: 9px 0 12px; }
+  .growth-banner .week-tree-panel { min-height: 230px; }
+  .work-header { gap: 12px; }
+  .work-header h2 { font-size: 18px; }
+  .work-header p { font-size: 12px; line-height: 1.5; }
+  .progress-track { margin: 12px 0 14px; }
+  .calendar-period { margin-bottom: 10px; padding-bottom: 11px; }
+  .calendar-view-line strong { font-size: 18px; }
+  .calendar-week-range { font-size: 12px; }
+  .calendar-month-label { font-size: 12px; }
+  .week-strip { margin-bottom: 14px; }
+  .day-strip { margin-bottom: 14px; }
+  .task-row { min-height: 60px; }
+  .task-title { font-size: 14px; line-height: 1.5; }
+  .task-more, .task-check { min-width: 40px; min-height: 40px; }
+  .quick-add { padding: 14px; }
+  .settings-list { gap: 12px; }
+  .settings-list .setting-block, .settings-list .setting-row { border-radius: 16px; }
+  .bottom-nav { background: rgba(255,254,250,.98); }
+  .bottom-nav .nav-item { min-height: 60px; }
+}
+@media (max-width: 370px) {
+  .page-wrap { width: calc(100% - 20px); }
+  .page[data-page="home"] > .work-card { padding: 14px 11px; }
+  .mobile-tree-peek:not([hidden]) { grid-template-columns: 60px minmax(0,1fr) auto; gap: 9px; padding: 6px 10px; }
+  .mobile-tree-peek-art { width: 60px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-tree-peek, .bottom-nav .nav-item { transition: none; }
+}

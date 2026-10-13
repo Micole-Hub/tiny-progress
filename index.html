@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261013-category-picker-v7" />
+    <link rel="stylesheet" href="style.css?v=20261013-responsive-ui-v8" />
   </head>
   <body>
     <div class="app-shell">
@@ -92,6 +92,13 @@
               </div>
             </aside>
           </section>
+
+          <!-- UI-only live preview of the same growth tree. Hidden outside phone layout. -->
+          <button type="button" id="mobileTreePeek" class="mobile-tree-peek" hidden aria-label="查看本週完整成長樹">
+            <span class="mobile-tree-peek-art" id="miniTreeArt" aria-hidden="true"></span>
+            <span class="mobile-tree-peek-copy"><strong>我的成長樹</strong><small><span id="miniTreeLeafCount">0</span> 片葉子正在累積</small></span>
+            <span class="mobile-tree-peek-arrow" aria-hidden="true">↓</span>
+          </button>
 
           <section class="work-card soft-card" id="workCard">
             <div class="work-header" id="workHeader">
@@ -860,7 +867,7 @@
     <script src="github-page/config.js"></script>
     <script src="github-page/domain.js"></script>
     <script src="github-page/connection.js?v=20261013-real-current-v5"></script>
-    <script src="script.js?v=20261013-category-picker-v7"></script>
+    <script src="script.js?v=20261013-responsive-ui-v8"></script>
     <script src="github-page/cycle-management.js"></script>
   </body>
 </html>

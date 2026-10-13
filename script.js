@@ -798,6 +798,7 @@ function renderRestHome() {
   $("#homeEyebrow").hidden = false;
   $("#homeModeControl").hidden = false;
   $("#growthBanner").hidden = true;
+  $("#mobileTreePeek").hidden = true;
   $("#previewBar").hidden = true;
   $("#footprintEntry").hidden = true;
   $("#restBanner").hidden = true;
@@ -832,6 +833,7 @@ function renderHome() {
   $("#homeEyebrow").hidden = false;
   $("#homeModeControl").hidden = false;
   $("#growthBanner").hidden = isCycleResting();
+  $("#mobileTreePeek").hidden = isCycleResting();
   $("#restDateNote").hidden = true;
   if (!state.selectedWeek) state.selectedWeek = CURRENT_WEEK;
   const viewWeek = state.selectedWeek,
@@ -859,8 +861,8 @@ function renderHome() {
   $("#homeTitle").textContent = showRest
     ? "休息日"
     : dayMode
-      ? `Week ${viewWeek} · ${isToday ? "今天" : `週${dayLabel(state.selectedDate)} ${formatShortDate(state.selectedDate)}`}`
-      : `Week ${viewWeek} · 這週慢慢長大`;
+      ? "一天一點點，累積進度"
+      : "這週慢慢長大";
   $("#homeLede").textContent = showRest
     ? "Rest is part of progress."
     : dayMode
@@ -870,9 +872,7 @@ function renderHome() {
     ? isToday
       ? "今天想完成什麼"
       : `${formatShortDate(state.selectedDate)} 想完成什麼`
-    : viewWeek === CURRENT_WEEK
-      ? "這週想完成什麼"
-      : `Week ${viewWeek}`;
+    : "這週想完成什麼";
   $("#workHint").textContent = archived
     ? "這週已封存，完整紀錄留在 History"
     : dayMode
@@ -1732,6 +1732,12 @@ function renderTreeHome() {
     falls: activeFalls.filter((f) => f.week === week),
     now,
   });
+  // Miniature shares the same week, leaves and palette as the full tree.
+  // It is presentation-only, never a second state or editable copy.
+  $("#miniTreeArt").innerHTML = treeSvg(week, leaves, {
+    slotOf: (k) => map[k],
+  });
+  $("#miniTreeLeafCount").textContent = String(leaves.length - flying);
   treeIntro = false;
   growKeys.clear();
 }
@@ -1790,6 +1796,13 @@ function revealLeaf(key) {
     el.classList.add("grow");
   }
   setLeafCount(currentLeafRecords(treeWeek()).length - flyingKeys.size);
+  // Sync the small decorative preview after the actual tree leaf appears.
+  const peekLeaves = currentLeafRecords(treeWeek());
+  const peekSlots = assignLeafSlots(treeWeek(), peekLeaves);
+  $("#miniTreeArt").innerHTML = treeSvg(treeWeek(), peekLeaves, {
+    slotOf: (k) => peekSlots[k],
+  });
+  $("#miniTreeLeafCount").textContent = String(peekLeaves.length - flyingKeys.size);
   renderDirection();
   const svg = $("#homeTree svg");
   if (svg) {
@@ -3635,6 +3648,12 @@ function openYearReview() {
 }
 
 bindStaticEvents();
+$("#mobileTreePeek").addEventListener("click", () => {
+  $("#growthBanner").scrollIntoView({
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+    block: "start",
+  });
+});
 refreshClock();
 renderAll();
 // 網頁跨到新日期時，休息畫面會自動切回正式週期；切回分頁時也會校正。
