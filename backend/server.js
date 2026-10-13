@@ -2709,19 +2709,78 @@ app.post("/gas-queue", async (req, res) => {
   }
 });
 
-app.post("/line/webhook", async (req, res) => {
-  try {
-    if (!Array.isArray(req.body.events))
-      return res.status(400).json({ message: "events 格式不正確" });
-    const events = req.body.events.filter(
-      (e) => e.source?.type === "user" && e.source.userId === ACCESS.owner,
-    );
-    if (events.length)
-      await gasPostWithTimeout("line-ingress", { events }, 55000);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(503).json({ message: "接收暫時失敗，LINE 可以重送" });
+// LINE Webhook 需要快速回應 200。既有的 GAS line-ingress 會建立持久 queue、
+// 呼叫 /gas-queue 處理指令、最後向 LINE reply / push，因此不能讓 LINE 等它跑完。
+// 這裡的記憶體暫存僅是「成功寫入 GAS queue 前」的短暫緩衝；Render 重新啟動時
+// 可能遺失，正式要求零遺失時須再改為獨立持久佇列。
+const LINE_INGRESS_RETRY_DELAYS_MS = [0, 2000, 5000, 15000];
+const LINE_INGRESS_MAX_PENDING = 100;
+const lineIngressPending = new Map();
+
+function lineWebhookEventKey(event) {
+  return String(event.webhookEventId || event.replyToken || "").trim() ||
+    crypto.createHash("sha256").update(JSON.stringify(event)).digest("hex");
+}
+
+function enqueueLineWebhookEvents(events) {
+  const fresh = [];
+  const inBatch = new Set();
+  for (const event of events) {
+    const key = lineWebhookEventKey(event);
+    if (inBatch.has(key) || lineIngressPending.has(key)) continue;
+    inBatch.add(key);
+    fresh.push({ key, event });
   }
+  // 先確認空間足夠再加入，以免一批事件只接受一半。
+  if (lineIngressPending.size + fresh.length > LINE_INGRESS_MAX_PENDING)
+    return false;
+  for (const item of fresh) lineIngressPending.set(item.key, item.event);
+  for (const item of fresh) {
+    // 不 await：簽章已由 access.js 驗證，先讓 LINE 收到 HTTP 200。
+    dispatchLineWebhookEvent(item.key, item.event).catch((error) => {
+      console.error("[line-webhook] 背景處理異常：", error.message);
+    });
+  }
+  return true;
+}
+
+async function dispatchLineWebhookEvent(key, event) {
+  try {
+    for (let attempt = 0; attempt < LINE_INGRESS_RETRY_DELAYS_MS.length; attempt++) {
+      const delay = LINE_INGRESS_RETRY_DELAYS_MS[attempt];
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+      try {
+        const result = await gasPostWithTimeout("line-ingress", { events: [event] }, 55000);
+        console.log(
+          `[line-webhook] 已交給 GAS；event=${key.slice(0, 12)}；處理=${Number(result?.processedCount || 0)}`,
+        );
+        return;
+      } catch (error) {
+        console.warn(
+          `[line-webhook] GAS 轉送失敗 (${attempt + 1}/${LINE_INGRESS_RETRY_DELAYS_MS.length})；event=${key.slice(0, 12)}；${error.message}`,
+        );
+      }
+    }
+    console.error(
+      `[line-webhook] 已達重試上限；event=${key.slice(0, 12)}。請檢查 GAS queue 與 Render Logs。`,
+    );
+  } finally {
+    lineIngressPending.delete(key);
+  }
+}
+
+app.post("/line/webhook", (req, res) => {
+  if (!Array.isArray(req.body?.events))
+    return res.status(400).json({ message: "events 格式不正確" });
+  const events = req.body.events.filter(
+    (e) => e && e.source?.type === "user" && e.source.userId === ACCESS.owner,
+  );
+  // LINE Developers 的 Verify 通常使用空 events，必須直接回應 200。
+  if (!enqueueLineWebhookEvents(events)) {
+    console.error("[line-webhook] 暫存已滿，要求 LINE 重送");
+    return res.status(503).json({ message: "目前繁忙，請稍後重送" });
+  }
+  res.status(200).json({ ok: true });
 });
 
 app.get("/core", async (req, res) => {
