@@ -520,14 +520,20 @@ window.TPConnection = (() => {
           document.activeElement?.matches("input,textarea,select")
         )
           return;
-        if (data.revision !== revision) {
+        // Google Sheets 可能經由其他流程更新資料，卻未增加 web revision。
+        // 在沒有本地待同步修改時，除了版本號也比較完整的公開資料內容。
+        const remoteChanged = !equal(
+          D.publicState(data.state),
+          JSON.parse(baseline || "null"),
+        );
+        if (data.revision !== revision || remoteChanged) {
           D.validate(data.state);
           revision = data.revision;
           baseline = serialize(data.state);
           adapter.replace(data.state);
           cache(data.state);
           remember();
-          status("已同步 LINE 的最新進度");
+          status("已同步雲端最新進度");
         }
       } catch {
         status("目前離線，恢復網路後會自動同步", true);

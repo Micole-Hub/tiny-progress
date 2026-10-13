@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f4f1ea" />
     <meta name="referrer" content="no-referrer" />
-    <title>Tiny Progress · Weekly Footprint</title>
+    <title>Tiny Progress · 小小進度，也值得被看見</title>
+    <meta name="description" content="Tiny Progress，記錄每週的小小進度。小小進度，也值得被看見。休息也是前進的一部分。" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261012-rest-calendar" />
+    <link rel="stylesheet" href="style.css?v=20261013-frontend-consolidated-v1" />
   </head>
   <body>
     <div class="app-shell">
@@ -23,7 +24,7 @@
           id="brandHome"
           aria-label="Tiny Progress 首頁"
         >
-          <span class="brand-mark">∞</span><span>Tiny Progress</span>
+          <span class="brand-mark">∞</span><span class="brand-wordmark"><strong>Tiny Progress</strong><small>小小進度，也值得被看見。</small></span>
         </a>
       </header>
       <details class="sync-panel" id="syncPanel">
@@ -49,7 +50,7 @@
             <p class="home-lede" id="homeLede">
               一件一件完成，讓這週留下自己的樣子
             </p>
-            <div class="home-mode-control" role="group" aria-label="切換週與每日檢視">
+            <div class="home-mode-control" id="homeModeControl" role="group" aria-label="切換週與每日檢視">
               <button type="button" data-mode="week" aria-pressed="true">整週</button>
               <button type="button" data-mode="day" aria-pressed="false">每日</button>
               <span>同一週的不同檢視</span>
@@ -75,11 +76,11 @@
             <span class="rest-banner-icon" aria-hidden="true">🌿</span>
             <div class="rest-banner-copy">
               <strong id="restNextDate"></strong>
-              <small>任務清單會在正式開始後顯示；想提前準備時，可以開啟預排。</small>
+              <small>提前安排的任務會在正式開始後顯示。</small>
             </div>
           </section>
 
-          <section class="growth-banner soft-card">
+          <section class="growth-banner soft-card" id="growthBanner">
             <div class="growth-copy">
               <div class="card-topline">
                 <span class="section-kicker">這 12 週想往這裡走</span>
@@ -126,6 +127,7 @@
               <p id="restPlanningHint">預排的任務會在正式開始後顯示。</p>
               <button type="button" class="secondary-button" id="toggleRestPlanner" aria-expanded="false" aria-controls="taskList quickAddForm focusPool habitTracker">預先安排任務</button>
             </div>
+            <p class="rest-date-note" id="restDateNote" hidden></p>
             <div class="task-list" id="taskList" aria-live="polite"></div>
             <section class="habit-tracker" id="habitTracker" hidden>
               <div class="habit-tracker-head">
@@ -153,6 +155,11 @@
                   ＋
                 </button>
               </div>
+              <label class="quick-date-field" id="quickDateWrap" hidden>
+                <span>安排在哪一天</span>
+                <select id="quickDate" aria-label="安排在哪一天"></select>
+                <small>不確定日期，也可以先放在「這週還有」。</small>
+              </label>
               <div class="repeat-box quick-type-box">
                 <label class="repeat-row">
                   <span
@@ -697,12 +704,12 @@
             required
         /></label>
         <label
-          >私人登入密碼<input
-            id="webPassword"
-            type="password"
-            autocomplete="current-password"
-            required
-        /></label>
+          >私人登入密碼
+          <span class="password-control">
+            <input id="webPassword" type="password" autocomplete="current-password" required />
+            <button type="button" id="toggleWebPassword" class="password-toggle" aria-label="顯示密碼" aria-pressed="false">顯示</button>
+          </span>
+        </label>
         <p id="connectionMessage" role="status"></p>
         <div class="connection-actions">
           <button class="primary-button" type="submit">登入並同步</button>
@@ -796,8 +803,8 @@
     </dialog>
     <script src="github-page/config.js"></script>
     <script src="github-page/domain.js"></script>
-    <script src="github-page/connection.js"></script>
-    <script src="script.js?v=20261012-date-fix1"></script>
+    <script src="github-page/connection.js?v=20261013-refresh-content"></script>
+    <script src="script.js?v=20261013-frontend-consolidated-v1"></script>
     <script src="github-page/cycle-management.js"></script>
   </body>
 </html>

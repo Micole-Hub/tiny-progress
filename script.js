@@ -278,8 +278,9 @@ const seedState = {
 };
 
 let state = loadState();
-// 只影響休息日的顯示，不寫入雲端狀態。重新開啟網頁時預排預設收起。
+// 只控制休息期 UI，與雲端儲存的週次及任務資料分離。
 let restPlannerOpen = false;
+// 休息日的日曆日期獨立於 12 週任務，切換箭頭不會更動雲端計畫。
 state.unfinishedReasons = state.unfinishedReasons || {};
 state.tankReviewed = state.tankReviewed || {};
 state.weekMeta = state.weekMeta || {};
@@ -476,6 +477,8 @@ function isWeekUnlocked(week) {
 }
 function canEnterWeek(week) {
   week = Number(week);
+  // Before a cycle starts, its 12 weeks may be browsed without unlocking tasks.
+  if (isCycleResting()) return week >= 1 && week <= 12;
   return (
     week >= 1 &&
     week <= 12 &&
@@ -535,7 +538,7 @@ function renderHeader() {
   $("#homeEyebrow").textContent =
     `Cycle ${state.cycle.number} · ${state.mode === "day" ? "每日檢視" : "整週檢視"}`;
 }
-function directionLeafCounts() {
+function directionLeafCounts(weekFilter = () => true) {
   const counts = {},
     ds = state.cycle.directions;
   ds.forEach((d) => (counts[d.name] = 0));
@@ -547,6 +550,7 @@ function directionLeafCounts() {
       : ds.find((d) => d.name === t.goal);
   };
   state.tasks.forEach((t) => {
+    if (!weekFilter(Number(t.week))) return;
     const d = directionFor(t);
     if (t.status === "active" && d) counts[d.name] += occurrenceDoneCount(t);
   });
@@ -554,7 +558,7 @@ function directionLeafCounts() {
     const [tid, oid] = k.split(":"),
       t = state.tasks.find((x) => String(x.id) === tid),
       d = t && directionFor(t);
-    if (!t || t.status !== "active" || !d) return;
+    if (!t || !weekFilter(Number(t.week)) || t.status !== "active" || !d) return;
     const completed = oid
       ? t.occurrences?.find((o) => o.id === oid)?.done
       : t.done;
@@ -677,11 +681,12 @@ function openDirectionDialog(id = null) {
   $("#deleteDirectionBtn").hidden = !d || state.cycle.directions.length <= 1;
   $("#directionDialog").showModal();
 }
-function renderHistoryTanks() {
+function renderHistoryTanks(finishedWeeks = []) {
   const ds = state.cycle.directions,
-    counts = directionLeafCounts(),
+    finished = new Set(finishedWeeks),
+    counts = directionLeafCounts((week) => finished.has(week)),
     box = $("#historyTanks");
-  box.hidden = !ds.length;
+  box.hidden = !ds.length || !finished.size;
   box.innerHTML =
     `<p class="field-label">方向水缸</p>` +
     ds
@@ -697,7 +702,52 @@ function renderHistoryTanks() {
 function isCycleResting() {
   return Boolean(CYCLE_START_YMD && compareIsoDate(TODAY, CYCLE_START_YMD) < 0);
 }
+// Keep the original weekly/daily calendar, but pause every task surface until
+// this cycle's own startDate. Browsing never marks a week as started.
+function renderRestHome() {
+  const dayMode = state.mode === "day";
+  const viewWeek = state.selectedWeek;
+  const dates = Object.values(weekDateMap(viewWeek));
+  const first = dates[0], last = dates.at(-1);
+  $("#homeTitle").textContent = "休息日";
+  $("#homeLede").textContent = "Rest is part of progress.";
+  $("#homeEyebrow").hidden = false;
+  $("#homeModeControl").hidden = false;
+  $("#growthBanner").hidden = true;
+  $("#previewBar").hidden = true;
+  $("#footprintEntry").hidden = true;
+  $("#restBanner").hidden = true;
+  $("#workCard").classList.add("resting");
+  $("#workHeader").hidden = true;
+  $("#progressTrack").hidden = true;
+  $("#progressSummary").hidden = true;
+  $("#weekStrip").hidden = dayMode;
+  $("#dayStrip").hidden = !dayMode;
+  if (dayMode) renderDayStrip();
+  else renderWeekStrip();
+  const note = $("#restDateNote");
+  note.hidden = false;
+  note.textContent = `Week ${viewWeek} · ${formatShortDate(first)}～${formatShortDate(last)}（尚未開始）`;
+  $("#restPlanningBar").hidden = false;
+  $("#toggleRestPlanner").textContent = "預先安排任務";
+  $("#toggleRestPlanner").setAttribute("aria-expanded", "false");
+  $("#restPlanningHint").textContent = "想先準備下一輪？任務可預先安排，正式開始前不計入完成。";
+  $("#taskList").hidden = true;
+  $("#taskList").replaceChildren();
+  $("#habitTracker").hidden = true;
+  $("#habitList").replaceChildren();
+  $("#focusPool").hidden = true;
+  $("#quickAddForm").hidden = true;
+}
 function renderHome() {
+  if (isCycleResting() && !restPlannerOpen) {
+    renderRestHome();
+    return;
+  }
+  $("#homeEyebrow").hidden = false;
+  $("#homeModeControl").hidden = false;
+  $("#growthBanner").hidden = isCycleResting();
+  $("#restDateNote").hidden = true;
   if (!state.selectedWeek) state.selectedWeek = CURRENT_WEEK;
   const viewWeek = state.selectedWeek,
     dates = weekDateMap(viewWeek);
@@ -712,7 +762,7 @@ function renderHome() {
   const isToday =
     !resting && viewWeek === CURRENT_WEEK && state.selectedDate === TODAY;
   const preview = viewWeek !== CURRENT_WEEK;
-  $("#previewBar").hidden = !preview;
+  $("#previewBar").hidden = resting || !preview;
   if (preview) $("#previewLabel").textContent = `預習中 · Week ${viewWeek}`;
   const life = weekLifecycle(viewWeek),
     archived = life === "archived";
@@ -753,11 +803,11 @@ function renderHome() {
   $("#progressTrack").hidden = resting;
   $("#progressSummary").hidden = resting;
   $("#restPlanningBar").hidden = !resting;
+  $("#toggleRestPlanner").textContent = planningOpen ? "收起預排" : "預先安排任務";
+  $("#toggleRestPlanner").setAttribute("aria-expanded", String(planningOpen));
   $("#restPlanningHint").textContent = planningOpen
     ? `這些事項是預排內容，${formatShortDate(firstWeekStart)} 開始後會自動顯示。`
     : `已預排的任務先收起，${formatShortDate(firstWeekStart)} 開始後會自動顯示。`;
-  $("#toggleRestPlanner").textContent = planningOpen ? "收起預排" : "預先安排任務";
-  $("#toggleRestPlanner").setAttribute("aria-expanded", String(planningOpen));
   renderTreeHome();
 
   let html = "";
@@ -887,9 +937,9 @@ function renderWeekStrip() {
       enterable = canEnterWeek(n);
     b.disabled = !enterable;
     b.setAttribute("aria-disabled", enterable ? "false" : "true");
-    b.classList.toggle("locked", !unlocked);
+    b.classList.toggle("locked", !unlocked && !isCycleResting());
     b.classList.toggle("archived", archived);
-    b.classList.toggle("now", n === CURRENT_WEEK);
+    b.classList.toggle("now", !isCycleResting() && n === CURRENT_WEEK);
     b.classList.toggle("sel", n === state.selectedWeek);
     b.classList.toggle("past", n < CURRENT_WEEK);
   });
@@ -904,7 +954,7 @@ function renderDayStrip() {
   )
     .map((k) => {
       const date = dates[k];
-      return `<button type="button" class="dy ${date === TODAY ? "today" : ""}" data-date="${date}"><span>${dayLabel(dates[k])}</span><strong>${Number(date.slice(8))}</strong></button>`;
+      return `<button type="button" class="dy ${!isCycleResting() && date === TODAY ? "today" : ""}" data-date="${date}"><span>${dayLabel(dates[k])}</span><strong>${Number(date.slice(8))}</strong></button>`;
     })
     .join(
       "",
@@ -996,7 +1046,8 @@ function openTaskActions(t, row) {
         : "完成";
   $("#replanTaskBtn").hidden =
     archived || isRecurring(t) || taskDone(t) || t.week >= 12;
-  $("#editTaskBtn").hidden = archived || (!rowDone && !isCycleResting());
+  // 原本條件寫反：尚未完成的任務應可編輯，完成的項目則查看完成紀錄。
+  $("#editTaskBtn").hidden = archived || rowDone;
   $("#editTaskBtn").textContent = "編輯";
   $("#deleteTaskBtn").hidden = archived;
   $("#completionRecordBtn").hidden =
@@ -1319,7 +1370,17 @@ function renderFocusPool() {
     }),
   );
 }
+function updateQuickDatePickerVisibility() {
+  const isEveryDayHabit = $("#quickRepeat").checked && $("#quickFrequency").value === "daily";
+  $("#quickDateWrap").hidden = state.mode !== "day" || isCycleResting() && !restPlannerOpen || isEveryDayHabit;
+}
 function renderQuickOptions() {
+  const dates = weekDateMap(state.selectedWeek);
+  $("#quickDate").innerHTML = `<option value="">待安排（放在這週還有）</option>` +
+    Object.values(dates).map((date) =>
+      `<option value="${date}" ${date === state.selectedDate ? "selected" : ""}>週${dayLabel(date)} ${formatShortDate(date)}</option>`
+    ).join("");
+  updateQuickDatePickerVisibility();
   $("#quickGoal").innerHTML =
     `<option value="">不連結方向</option>` +
     state.cycle.goals.map((g) => `<option>${esc(g)}</option>`).join("");
@@ -1952,8 +2013,24 @@ function openCompletionRecord(t) {
   $("#completionRecordDialog").showModal();
 }
 
+// History follows the actual end of each week, not its first day or task status.
+// The current week and pre-scheduled future weeks must never appear here early.
+function historyWeekFinished(week) {
+  week = Number(week);
+  if (!Number.isInteger(week) || week < 1 || week > 12) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(CYCLE_START_YMD || "")))
+    return false;
+  const days = Object.values(weekDateMap(week));
+  const lastDay = days.at(-1);
+  return Boolean(lastDay && compareIsoDate(TODAY, lastDay) > 0);
+}
+function finishedHistoryWeeks() {
+  return Array.from({ length: 12 }, (_, i) => i + 1).filter(historyWeekFinished);
+}
 function renderHistory() {
-  renderHistoryTanks();
+  const finished = finishedHistoryWeeks();
+  renderHistoryTanks(finished);
+  $("#yearReviewBtn").hidden = !finished.length;
   const mk = (w) => {
     const leaves = currentLeafRecords(w),
       map = assignLeafSlots(w, leaves);
@@ -1968,62 +2045,38 @@ function renderHistory() {
       total: currentTotalUnits(w),
     };
   };
-  const cards = [];
-  state.archivedWeeks.forEach((w) =>
-    cards.push({
-      week: w.week,
-      leaves: (w.completed || []).map((v, i) => ({
-        key: v.key || `h${w.week}-${i}`,
-        title: v.title,
-        color: v.color || NEUTRAL_LEAF,
-      })),
-      total: currentTotalUnits(w.week),
-    }),
-  );
-  if (!isWeekArchived(CURRENT_WEEK)) cards.push(mk(CURRENT_WEEK));
-  for (let w = CURRENT_WEEK + 1; w <= 12; w++) {
-    if (isWeekArchived(w)) {
-      if (!cards.some((c) => c.week === w)) {
-        const a = state.archivedWeeks.find((x) => x.week === w);
-        if (a)
-          cards.push({
-            week: w,
-            leaves: (a.completed || []).map((v, i) => ({
-              key: v.key || `h${w}-${i}`,
-              title: v.title,
-              color: v.color || NEUTRAL_LEAF,
-            })),
-            total: currentTotalUnits(w),
-          });
-      }
-      continue;
-    }
-    const c = mk(w);
-    if (
-      c.leaves.length ||
-      state.events.some(
-        (e) =>
-          e.type !== "complete" &&
-          e.type !== "uncomplete" &&
-          e.type !== "focus" &&
-          (e.week === w || e.fromWeek === w || e.toWeek === w),
-      )
-    )
-      cards.push(c);
-  }
-  cards.sort((a, b) => a.week - b.week);
-  $("#historyGrid").innerHTML = cards
-    .map((x, idx) => {
-      const done = x.leaves.length;
-      const tree = treeSvg(
-        x.week,
-        x.leaves,
-        x.map ? { slotOf: (k) => x.map[k], hidden: flyingKeys } : {},
-      );
-      return `<button class="history-card soft-card" type="button" style="--i:${idx}" data-history-week="${x.week}"><div class="history-card-copy"><h3>Week ${x.week}</h3><div class="history-statline"><strong>${done}</strong><span>片葉子 · ${done}/${Math.max(x.total, done)}</span></div></div><div class="history-mini-tree">${tree}</div></button>`;
-    })
-    .join("");
-  $$("[data-history-week]").forEach((b) =>
+  const cards = finished.map((week) => {
+    const snapshot = state.archivedWeeks.find((x) => Number(x.week) === week);
+    return snapshot
+      ? {
+          week,
+          leaves: (snapshot.completed || []).map((v, i) => ({
+            key: v.key || `h${week}-${i}`,
+            title: v.title,
+            color: v.color || NEUTRAL_LEAF,
+          })),
+          total: currentTotalUnits(week),
+        }
+      : mk(week);
+  });
+  const firstWeekDates = Object.values(weekDateMap(1));
+  const historyOpenDate = firstWeekDates.length
+    ? formatShortDate(D.addDays(firstWeekDates.at(-1), 1))
+    : "第一週結束後";
+  $("#historyGrid").innerHTML = cards.length
+    ? cards
+        .map((x, idx) => {
+          const done = x.leaves.length;
+          const tree = treeSvg(
+            x.week,
+            x.leaves,
+            x.map ? { slotOf: (k) => x.map[k], hidden: flyingKeys } : {},
+          );
+          return `<button class="history-card soft-card" type="button" style="--i:${idx}" data-history-week="${x.week}"><div class="history-card-copy"><h3>Week ${x.week}</h3><div class="history-statline"><strong>${done}</strong><span>片葉子 · ${done}/${Math.max(x.total, done)}</span></div></div><div class="history-mini-tree">${tree}</div></button>`;
+        })
+        .join("")
+    : `<div class="history-empty soft-card"><strong>還沒有完成的週次 🌿</strong><p>每一週結束後，才會在這裡留下歷史紀錄。<span>Week 1 將於 ${historyOpenDate} 出現。</span></p></div>`;
+  $$('[data-history-week]').forEach((b) =>
     b.addEventListener("click", () => {
       const w = Number(b.dataset.historyWeek);
       if (historySelected === w && !$("#historyDetail").hidden) closeHistory();
@@ -2038,7 +2091,7 @@ function renderHistory() {
   );
   const detailOpen = historySelected !== null && !$("#historyDetail").hidden;
   if (detailOpen) {
-    if (cards.some((c) => Number(c.week) === Number(historySelected)))
+    if (finished.includes(Number(historySelected)))
       showHistoryWeek(historySelected);
     else closeHistory();
   } else markHistorySelected();
@@ -2119,6 +2172,10 @@ function closeHistory() {
   markHistorySelected();
 }
 function showHistoryWeek(week) {
+  if (!historyWeekFinished(week)) {
+    closeHistory();
+    return;
+  }
   const box = $("#historyDetail");
   box.hidden = false;
   historySelected = week;
@@ -2654,7 +2711,14 @@ function bindStaticEvents() {
     restPlannerOpen = !restPlannerOpen;
     renderHome();
   });
-
+  $("#toggleWebPassword").addEventListener("click", () => {
+    const field = $("#webPassword"), btn = $("#toggleWebPassword");
+    const visible = field.type === "password";
+    field.type = visible ? "text" : "password";
+    btn.textContent = visible ? "隱藏" : "顯示";
+    btn.setAttribute("aria-label", visible ? "隱藏密碼" : "顯示密碼");
+    btn.setAttribute("aria-pressed", String(visible));
+  });
   $("#moreToggle").addEventListener("click", () => {
     const box = $("#moreFields");
     box.hidden = !box.hidden;
@@ -2665,16 +2729,18 @@ function bindStaticEvents() {
   });
   $("#quickRepeat").addEventListener("change", () => {
     $("#quickRepeatFields").hidden = !$("#quickRepeat").checked;
+    updateQuickDatePickerVisibility();
   });
   $("#quickFrequency").addEventListener("change", () => {
     $("#quickTimesWrap").hidden = $("#quickFrequency").value !== "weekly";
+    updateQuickDatePickerVisibility();
   });
   $("#quickAddForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const title = $("#quickTitle").value.trim();
     if (!title) return showToast("先寫下一件想做的事");
     const targetWeek = state.selectedWeek;
-    if (!isWeekUnlocked(targetWeek)) return showToast("這一週還沒解鎖");
+    if (!isWeekUnlocked(targetWeek) && !isCycleResting()) return showToast("這一週還沒解鎖");
     if (!guardWeekEditable(targetWeek)) return;
     if (!dupAllowed && dupExists(title)) {
       $("#dupTitle").textContent = title;
@@ -2683,7 +2749,7 @@ function bindStaticEvents() {
     }
     const categoryId = $("#quickCategory").value,
       goal = $("#quickGoal").value,
-      scheduledDate = state.mode === "day" ? state.selectedDate : "",
+      scheduledDate = state.mode === "day" ? $("#quickDate").value : "",
       isRepeat = $("#quickRepeat").checked;
     if (isRepeat) {
       const frequency = $("#quickFrequency").value,
@@ -2699,6 +2765,11 @@ function bindStaticEvents() {
       };
       state.recurringRules.push(rule);
       justAdded = createRecurringTask(rule, targetWeek);
+      if (frequency === "weekly" && scheduledDate) {
+        const newHabit = state.tasks.find((t) => t.id === justAdded);
+        const firstUnplanned = newHabit?.occurrences.find((occ) => !occ.done && !occ.date);
+        if (firstUnplanned) firstUnplanned.date = scheduledDate;
+      }
     } else
       state.tasks.push({
         id: (justAdded = D.id()),
@@ -2723,7 +2794,7 @@ function bindStaticEvents() {
       isRepeat
         ? "已加入本週習慣"
         : state.mode === "day"
-          ? `已安排到 ${formatShortDate(scheduledDate)}`
+          ? scheduledDate ? `已安排到 ${formatShortDate(scheduledDate)}` : "已加入「這週還有」，等待安排日期"
           : "已經放進這週了",
     );
   });
@@ -3376,16 +3447,18 @@ function showToast(msg) {
   showToast.timer = setTimeout(() => t.classList.remove("show"), 1800);
 }
 function openYearReview() {
-  const currentExtra = isWeekArchived(CURRENT_WEEK)
-    ? 0
-    : currentLeafRecords(CURRENT_WEEK).length;
-  const completed =
-    state.archivedWeeks.reduce((n, w) => n + w.completed.length, 0) +
-    currentExtra;
-  const replans = state.events.filter((e) => e.type === "replan").length;
-  $("#yearReviewText").textContent = "這裡統計目前這一輪的完成與移週紀錄。";
+  const finished = finishedHistoryWeeks();
+  if (!finished.length) return;
+  const completed = finished.reduce((total, week) => {
+    const snapshot = state.archivedWeeks.find((w) => Number(w.week) === week);
+    return total + (snapshot ? (snapshot.completed || []).length : currentLeafRecords(week).length);
+  }, 0);
+  const replans = state.events.filter(
+    (e) => e.type === "replan" && finished.includes(Number(e.fromWeek)),
+  ).length;
+  $("#yearReviewText").textContent = "這裡統計本輪已結束週次的完成與移週紀錄。";
   $("#yearStats").innerHTML =
-    `<div><strong>${completed}</strong><span>片葉子</span></div><div><strong>${CURRENT_WEEK}</strong><span>週走過</span></div><div><strong>${replans}</strong><span>次移到其他週</span></div>`;
+    `<div><strong>${completed}</strong><span>片葉子</span></div><div><strong>${finished.length}</strong><span>週走過</span></div><div><strong>${replans}</strong><span>次移到其他週</span></div>`;
   $("#yearReviewDialog").showModal();
 }
 
