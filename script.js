@@ -726,8 +726,10 @@ function renderRestHome() {
   if (dayMode) renderDayStrip();
   else renderWeekStrip();
   const note = $("#restDateNote");
-  note.hidden = false;
-  note.textContent = `Week ${viewWeek} · ${formatShortDate(first)}～${formatShortDate(last)}（尚未開始）`;
+  note.hidden = dayMode;
+  note.textContent = dayMode
+    ? ""
+    : `Week ${viewWeek} · ${formatShortDate(first)}～${formatShortDate(last)}（尚未開始）`;
   $("#restPlanningBar").hidden = false;
   $("#toggleRestPlanner").textContent = "預先安排任務";
   $("#toggleRestPlanner").setAttribute("aria-expanded", "false");
@@ -922,7 +924,28 @@ function applyRowFeedback() {
   }
 }
 
+// Month is context only: keep the existing weekly/daily navigation intact.
+function renderCalendarMonthLabel() {
+  const dates = Object.values(weekDateMap(state.selectedWeek));
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const label = $("#calendarMonthLabel");
+  if (!first || !last) {
+    label.textContent = "";
+    return;
+  }
+  const firstYear = Number(first.slice(0, 4));
+  const lastYear = Number(last.slice(0, 4));
+  const firstMonth = Number(first.slice(5, 7));
+  const lastMonth = Number(last.slice(5, 7));
+  label.textContent = firstYear !== lastYear
+    ? `${firstYear} 年 ${firstMonth} 月－${lastYear} 年 ${lastMonth} 月`
+    : firstMonth !== lastMonth
+      ? `${firstYear} 年 ${firstMonth} 月－${lastMonth} 月`
+      : `${firstYear} 年 ${firstMonth} 月`;
+}
 function renderWeekStrip() {
+  renderCalendarMonthLabel();
   const el = $("#weekStrip");
   if (!el.children.length)
     el.innerHTML = Array.from(
@@ -934,17 +957,24 @@ function renderWeekStrip() {
     const n = Number(b.dataset.week),
       unlocked = isWeekUnlocked(n),
       archived = isWeekArchived(n),
-      enterable = canEnterWeek(n);
+      enterable = canEnterWeek(n),
+      // Red point follows the real date only, not the selected week.
+      realCurrent = Object.values(weekDateMap(n)).includes(TODAY);
     b.disabled = !enterable;
     b.setAttribute("aria-disabled", enterable ? "false" : "true");
+    b.setAttribute("aria-pressed", String(n === state.selectedWeek));
+    if (realCurrent) b.setAttribute("aria-current", "date");
+    else b.removeAttribute("aria-current");
+    b.setAttribute("aria-label", `第 ${n} 週${realCurrent ? "，目前所在週" : ""}${n === state.selectedWeek ? "，已選取" : ""}`);
     b.classList.toggle("locked", !unlocked && !isCycleResting());
     b.classList.toggle("archived", archived);
-    b.classList.toggle("now", !isCycleResting() && n === CURRENT_WEEK);
+    b.classList.toggle("now", realCurrent);
     b.classList.toggle("sel", n === state.selectedWeek);
     b.classList.toggle("past", n < CURRENT_WEEK);
   });
 }
 function renderDayStrip() {
+  renderCalendarMonthLabel();
   const el = $("#dayStrip"),
     dates = weekDateMap(state.selectedWeek),
     prev = state.selectedWeek - 1,
@@ -954,14 +984,13 @@ function renderDayStrip() {
   )
     .map((k) => {
       const date = dates[k];
-      return `<button type="button" class="dy ${!isCycleResting() && date === TODAY ? "today" : ""}" data-date="${date}"><span>${dayLabel(dates[k])}</span><strong>${Number(date.slice(8))}</strong></button>`;
+      const today = date === TODAY;
+      const selected = date === state.selectedDate;
+      return `<button type="button" class="dy ${today ? "today" : ""} ${selected ? "sel" : ""}" data-date="${date}" aria-label="${Number(date.slice(5, 7))} 月 ${Number(date.slice(8, 10))} 日，週${dayLabel(date)}${today ? "，今天" : ""}" aria-pressed="${selected}" ${today ? 'aria-current="date"' : ""}><span>${dayLabel(date)}</span><strong>${Number(date.slice(8))}</strong></button>`;
     })
     .join(
       "",
     )}</div><button type="button" class="day-week-nav" data-day-week="${next}" aria-label="下一週" ${canEnterWeek(next) ? "" : "disabled"}>›</button>`;
-  $$("#dayStrip .dy").forEach((b) =>
-    b.classList.toggle("sel", b.dataset.date === state.selectedDate),
-  );
 }
 function taskRow(t, occ) {
   const group = Array.isArray(occ) ? occ : null;

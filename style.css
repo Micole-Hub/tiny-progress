@@ -3793,3 +3793,168 @@ body {
 .legacy-draft-confirm input { margin-top: 5px; }
 #saveFailureGate .connection-card h2 { margin: 8px 0 16px; font-size: 24px; }
 .brand-wordmark small { letter-spacing: 0.015em; }
+
+
+/* ================= Tiny Progress nav refinement v2 =================
+   Flat primary navigation, wider active indicators, separate real-time marker.
+   This layer does not change the weekly/daily interaction model. */
+.calendar-period {
+  display: flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 0 2px;
+  margin: 2px 0 5px;
+}
+.calendar-month-label {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: .025em;
+}
+.week-strip { margin-top: 0; }
+.wk, .dy { isolation: isolate; }
+.wk::after, .dy::after {
+  height: 3px;
+  bottom: 0;
+  border-radius: 99px;
+  background: var(--green-deep);
+}
+.wk.sel::after { width: calc(100% - 8px); }
+.dy.sel::after { width: calc(100% - 6px); }
+/* A tiny red dot means 'right now'. Selection is solely the green bar. */
+.wk.now .week-number, .dy.today strong {
+  background: transparent;
+  color: var(--ink);
+}
+.wk.now .week-number::before, .dy.today strong::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: max(1px, calc(50% - 19px));
+  width: 7px;
+  height: 7px;
+  background: var(--today);
+  border: 2px solid var(--surface);
+  box-sizing: content-box;
+  border-radius: 50%;
+}
+.wk .week-number { position: relative; }
+.wk.now .week-number::before {
+  top: -2px;
+  right: -2px;
+}
+.dy strong { position: relative; }
+.dy.today strong::before { top: -4px; right: -5px; }
+.wk:hover:not(:disabled), .dy:hover:not(:disabled) { color: var(--green-deep); }
+.wk:focus-visible, .dy:focus-visible, .day-week-nav:focus-visible,
+.nav-item:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: -2px;
+}
+/* Primary navigation uses coffee; date/week selection remains green. */
+.nav-item:focus-visible {
+  outline-color: #8d7560;
+}
+.day-strip { margin-top: 0; }
+.day-strip-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  overflow-x: visible;
+  gap: 4px;
+}
+.day-strip-row .dy { min-width: 0; width: 100%; }
+.day-week-nav {
+  border-radius: 11px;
+  border-color: #e2e7df;
+  background: transparent;
+  box-shadow: none;
+}
+.day-week-nav:hover:not(:disabled) { background: #f1f6ef; }
+
+/* Phone: dock the nav to the screen edge instead of floating a separate capsule. */
+.bottom-nav {
+  --nav-coffee: #8d7560;
+  position: fixed;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  width: 100%;
+  max-width: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding: 5px 16px calc(6px + env(safe-area-inset-bottom, 0px));
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: rgba(255, 254, 250, .97);
+  box-shadow: none;
+  backdrop-filter: blur(14px);
+  transform: none;
+}
+.nav-item {
+  min-width: 0;
+  min-height: 58px;
+  gap: 4px;
+  border-radius: 0;
+  padding: 8px 8px 13px;
+  color: #7d867c;
+  transition: color .16s ease, background .16s ease;
+}
+.nav-item:hover { background: rgba(141, 117, 96, .065); }
+.nav-item.active { color: var(--nav-coffee); }
+.nav-item::after {
+  bottom: 5px;
+  height: 3px;
+  max-width: 114px;
+  background: var(--nav-coffee);
+}
+.nav-item.active::after { width: 76%; }
+.nav-item small { font-weight: 650; }
+.nav-icon svg { stroke-width: 1.75; }
+.cloud-status { color: #737b72; }
+.cloud-status.error { color: #b43a3a; }
+
+@media (min-width: 860px) {
+  /* Desktop: the tabs sit quietly inside the header plane. */
+  .bottom-nav {
+    top: 0;
+    right: max(28px, calc((100vw - 1120px) / 2));
+    left: auto;
+    bottom: auto;
+    width: 326px;
+    height: 76px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    transform: none;
+  }
+  .nav-item {
+    min-height: 76px;
+    grid-template-columns: auto auto;
+    align-content: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 10px 6px 15px;
+    border-radius: 0;
+  }
+  .nav-item::after { bottom: 0; }
+  .nav-item.active::after { width: 78%; max-width: 96px; }
+}
+@media (max-width: 430px) {
+  .day-strip { grid-template-columns: 27px minmax(0,1fr) 27px; gap: 3px; }
+  .day-strip-row { gap: 1px; }
+  .dy { padding-inline: 0; }
+  .dy strong { width: min(30px, 100%); height: 30px; }
+  .day-week-nav { width: 27px; height: 33px; }
+  .calendar-period { margin-top: 1px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wk::after, .dy::after, .nav-item::after { transition: none; }
+}
