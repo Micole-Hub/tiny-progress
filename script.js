@@ -1036,8 +1036,26 @@ function openTaskActions(t, row) {
   if (!t) return;
   setTaskActionContext(t, row);
   const archived = isWeekArchived(t.week);
+  const pool = isRecurring(t)
+    ? actionOccIds.length
+      ? t.occurrences.filter((o) => actionOccIds.includes(o.id))
+      : t.frequency === "daily"
+        ? t.occurrences.filter((o) => o.date === TODAY)
+        : t.occurrences
+    : [t];
+  const rowDone = pool.length > 0 && pool.every((o) => o.done);
   $("#actionTaskTitle").textContent = t.title;
-  // 完成／改回未完成只透過任務左側的圓圈操作，避免 ••• 出現重複按鈕。
+  $("#toggleTaskDoneBtn").hidden = archived;
+  $("#toggleTaskDoneBtn").textContent =
+    isRecurring(t) && state.mode === "week" && !actionOccIds.length
+      ? rowDone
+        ? "改回本週未完成"
+        : "完成本週全部次數"
+      : rowDone
+        ? "改回未完成"
+        : isCycleResting()
+          ? `提前完成（計入 Week ${t.week}）`
+          : "完成";
   $("#replanTaskBtn").hidden =
     archived || isRecurring(t) || taskDone(t) || t.week >= 12;
   // 未封存任務的「••• → 編輯」保持可見，不因勾選完成而消失。
@@ -2637,6 +2655,11 @@ function bindStaticEvents() {
   });
   $("#replayTutorialBtn").addEventListener("click", openTutorial);
 
+  $("#toggleTaskDoneBtn").addEventListener("click", () => {
+    const t = state.tasks.find((x) => x.id === actionTaskId);
+    $("#taskActionDialog").close();
+    if (t) toggleTaskCompletion(t, [...actionOccIds], null);
+  });
   $("#completionRecordBtn").addEventListener("click", () => {
     const t = state.tasks.find((x) => x.id === actionTaskId);
     $("#taskActionDialog").close();
