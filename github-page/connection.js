@@ -164,6 +164,52 @@ window.TPConnection = (() => {
   let statusTimer = null;
   let reauthForSave = false;
   let startCompleted = false;
+  // 計畫目標獨立儲存在 cycles.theme；只讀取，不改動 web_state。
+  // 水缸 cycle.directions 和這段計畫文字是不同的資料。
+  let planTheme = "";
+  let planCycleNumber = null;
+  let planThemeServer = "";
+  let planThemeRequest = 0;
+  let planThemeLastAttempt = 0;
+  let planThemeAttemptCycle = null;
+  let planThemeAttemptServer = "";
+  function cycleTheme() {
+    const current = Number(adapter?.get()?.cycle?.number);
+    return current === planCycleNumber && base === planThemeServer
+      ? planTheme
+      : "";
+  }
+  async function refreshCycleTheme() {
+    if (demo || !ready || !base || !auth || paused || !navigator.onLine) return;
+    const cycle = Number(adapter?.get()?.cycle?.number);
+    if (!Number.isSafeInteger(cycle) || cycle < 1) return;
+    const now = Date.now();
+    // 同一週期十分鐘內不重複詢問；登入／切換週期會讀取對應計畫。
+    if (cycle === planThemeAttemptCycle && base === planThemeAttemptServer &&
+        now - planThemeLastAttempt < 600000) return;
+    const sequence = ++planThemeRequest;
+    planThemeLastAttempt = now;
+    planThemeAttemptCycle = cycle;
+    planThemeAttemptServer = base;
+    try {
+      const rows = await request("/cycles");
+      if (sequence !== planThemeRequest ||
+          cycle !== Number(adapter?.get()?.cycle?.number)) return;
+      if (!Array.isArray(rows)) return;
+      const entry = rows.find((row) => Number(row?.cycleNumber) === cycle);
+      if (!entry) return;
+      const next = typeof entry.theme === "string" ? entry.theme.trim() : "";
+      const changed = planCycleNumber !== cycle ||
+        planThemeServer !== base || planTheme !== next;
+      planCycleNumber = cycle;
+      planThemeServer = base;
+      planTheme = next;
+      if (changed) adapter.onCycleTheme?.();
+    } catch (error) {
+      // 目標讀取失敗不得阻擋任務、登入或雲端存檔。
+      // 首頁仍可使用 web_state.cycle.direction 作為備援。
+    }
+  }
   const oldMeta = read(META);
   let oldUnsaved = oldMeta?.dirty &&
     localStorage.getItem("tiny-progress-cloud-first-legacy-reviewed") !== "yes"
@@ -255,6 +301,8 @@ window.TPConnection = (() => {
     adapter.replace(data.state);
     cacheConfirmed(data.state);
     gate(null);
+    // 只讀取舊計畫文字，不等待此請求，不影響登入或儲存。
+    void refreshCycleTheme();
   }
   async function reload() {
     const data = await request(statePath());
@@ -489,6 +537,8 @@ window.TPConnection = (() => {
           takeCloud(data);
           status("已更新雲端最新進度", "info", true);
         }
+        // 週期目標可能由週期管理更新，定期同步文字但不改資料。
+        void refreshCycleTheme();
       } catch (error) {
         // No offline edits when the cloud cannot be reached.
         if (dirty() || pendingSave) {
@@ -551,6 +601,7 @@ window.TPConnection = (() => {
   return {
     initial, save, start, demo,
     isConnected: () => !demo && Boolean(ready && base && auth && !paused),
-    flush, manage, selectCycle, isReady: () => ready && !paused,
+    flush, manage, selectCycle, cycleTheme,
+    isReady: () => ready && !paused,
   };
 })();
