@@ -4400,3 +4400,7 @@ body { background: linear-gradient(180deg, #fbf9f5 0px, #f7f4ef 390px); }
 @media (prefers-reduced-motion: reduce) {
   .mobile-tree-peek, .bottom-nav .nav-item { transition: none; }
 }
+
+/* 方向顏色與分類顏色採相同的預設色盤、系統色票與 HEX 外觀。 */
+#directionDialog .dialog-card { max-height: min(88vh, 780px); overflow-y: auto; }
+#completionChangeReasonDialog .dialog-card { max-width: 460px; }

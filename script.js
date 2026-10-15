@@ -599,16 +599,51 @@ function renderDirectionList() {
 let editingDirectionId = null,
   directionPickColor = PALETTE[0];
 function renderDirectionPalette() {
-  $("#directionPalette").innerHTML = PALETTE.map(
-    (c) =>
-      `<button type="button" class="palette-dot ${c === directionPickColor ? "on" : ""}" style="--c:${c}" data-color="${c}" aria-label="選擇顏色"></button>`,
-  ).join("");
-  $$("#directionPalette [data-color]").forEach((b) =>
-    b.addEventListener("click", () => {
-      directionPickColor = b.dataset.color;
-      renderDirectionPalette();
-    }),
-  );
+  // 與「分類與顏色」共用同一組 48 色、選取樣式與 HEX 色彩規則。
+  renderCategoryPresetPalette("directionPalette", directionPickColor, (color) => {
+    setDirectionColor(color);
+  });
+  const hex = $("#directionHexColor");
+  const native = $("#directionNativeColor");
+  const preview = $("#directionColorPreview");
+  hex.value = normalizeHexColor(directionPickColor) || "#9FC3DE";
+  hex.setAttribute("aria-invalid", "false");
+  $("#directionHexError").hidden = true;
+  $("#directionForm button[type='submit']").disabled = false;
+  native.value = hex.value;
+  preview.style.backgroundColor = hex.value;
+}
+function setDirectionColor(input) {
+  const value = normalizeHexColor(input);
+  if (!value) return false;
+  directionPickColor = value;
+  renderDirectionPalette();
+  return true;
+}
+function bindDirectionColorInputs() {
+  $("#directionNativeColor").addEventListener("input", (event) => {
+    setDirectionColor(event.target.value);
+  });
+  const hex = $("#directionHexColor");
+  hex.addEventListener("input", () => {
+    const value = /^#[0-9a-f]{6}$/i.test(hex.value.trim())
+      ? normalizeHexColor(hex.value)
+      : null;
+    const invalid = !value;
+    hex.setAttribute("aria-invalid", String(invalid));
+    $("#directionHexError").hidden = !invalid;
+    $("#directionForm button[type='submit']").disabled = invalid;
+    if (value) {
+      directionPickColor = value;
+      $("#directionColorPreview").style.backgroundColor = value;
+      $("#directionNativeColor").value = value;
+      renderCategoryPresetPalette("directionPalette", directionPickColor, setDirectionColor);
+    }
+  });
+  hex.addEventListener("blur", () => {
+    const value = normalizeHexColor(hex.value);
+    if (value) setDirectionColor(value);
+  });
 }
 function openDirectionDialog(id = null) {
   editingDirectionId = id;
@@ -1036,26 +1071,8 @@ function openTaskActions(t, row) {
   if (!t) return;
   setTaskActionContext(t, row);
   const archived = isWeekArchived(t.week);
-  const pool = isRecurring(t)
-    ? actionOccIds.length
-      ? t.occurrences.filter((o) => actionOccIds.includes(o.id))
-      : t.frequency === "daily"
-        ? t.occurrences.filter((o) => o.date === TODAY)
-        : t.occurrences
-    : [t];
-  const rowDone = pool.length > 0 && pool.every((o) => o.done);
   $("#actionTaskTitle").textContent = t.title;
-  $("#toggleTaskDoneBtn").hidden = archived;
-  $("#toggleTaskDoneBtn").textContent =
-    isRecurring(t) && state.mode === "week" && !actionOccIds.length
-      ? rowDone
-        ? "改回本週未完成"
-        : "完成本週全部次數"
-      : rowDone
-        ? "改回未完成"
-        : isCycleResting()
-          ? `提前完成（計入 Week ${t.week}）`
-          : "完成";
+  // 完成／改回未完成只透過任務左側的圓圈操作，避免 ••• 出現重複按鈕。
   $("#replanTaskBtn").hidden =
     archived || isRecurring(t) || taskDone(t) || t.week >= 12;
   // 未封存任務的「••• → 編輯」保持可見，不因勾選完成而消失。
@@ -1143,10 +1160,56 @@ function bindTaskRows() {
     });
   });
 }
-function toggleTaskCompletion(t, occIds, fromRect) {
+// 切換完成狀態：每一件一般任務，或每一個重複習慣發生次數，各自計算。
+// 前 3 次可直接切換；第 4 次起每次都要先填理由才會真正更動狀態。
+let pendingCompletionReasonAction = null;
+function completionChangesForClick(t, occIds) {
+  if (!isRecurring(t)) return [{ occurrenceId: null }];
+  const pool = occIds?.length
+    ? t.occurrences.filter((o) => occIds.includes(o.id))
+    : t.frequency === "daily"
+      ? t.occurrences.filter((o) => o.date === TODAY)
+      : t.occurrences;
+  const weekBulk = state.mode === "week" && !occIds?.length;
+  if (weekBulk) {
+    const allDone = t.occurrences.every((o) => o.done);
+    return t.occurrences
+      .filter((o) => allDone ? o.done : !o.done)
+      .map((o) => ({ occurrenceId: o.id }));
+  }
+  const occ = pool.find((o) => !o.done) || [...pool].reverse().find((o) => o.done);
+  return occ ? [{ occurrenceId: occ.id }] : [];
+}
+function needsCompletionChangeReason(t, occIds) {
+  return completionChangesForClick(t, occIds).some(({ occurrenceId }) =>
+    state.events.filter((event) =>
+      Number(event.taskId) === Number(t.id) &&
+      (event.type === "complete" || event.type === "uncomplete") &&
+      (!isRecurring(t) || String(event.occurrenceId) === String(occurrenceId))
+    ).length >= 3,
+  );
+}
+function requestCompletionChangeReason(t, occIds, fromRect) {
+  const dialog = $("#completionChangeReasonDialog");
+  if (dialog.open) return;
+  pendingCompletionReasonAction = (reason) =>
+    toggleTaskCompletion(t, occIds, fromRect, reason);
+  $("#completionChangeReasonTask").textContent = t.title;
+  $("#completionChangeReasonInput").value = "";
+  $("#completionChangeReasonError").hidden = true;
+  dialog.showModal();
+  $("#completionChangeReasonInput").focus();
+}
+function toggleTaskCompletion(t, occIds, fromRect, switchReason) {
   if (!t || !guardWeekEditable(t.week)) return;
   if (isCycleResting() && !restPlannerOpen)
     return showToast("請先打開預先安排任務");
+  // 不先改資料；原因取消或留白時，勾選狀態完全不變。
+  if (switchReason === undefined && needsCompletionChangeReason(t, occIds))
+    return requestCompletionChangeReason(t, occIds, fromRect);
+  const eventReason = String(switchReason || "").trim();
+  if (switchReason !== undefined && needsCompletionChangeReason(t, occIds) && !eventReason)
+    return showToast("超過三次變更後，請寫下原因");
   let becameComplete = false,
     leafKey = "",
     leafOccId = "",
@@ -1184,6 +1247,7 @@ function toggleTaskCompletion(t, occIds, fromRect) {
               week: t.week,
               date: TODAY,
               occurrenceId: o.id,
+              ...(eventReason ? { reason: eventReason } : {}),
             });
           } else {
             o.done = true;
@@ -1200,6 +1264,7 @@ function toggleTaskCompletion(t, occIds, fromRect) {
               week: t.week,
               date: TODAY,
               occurrenceId: o.id,
+              ...(eventReason ? { reason: eventReason } : {}),
               color: taskColor(t),
             });
           }
@@ -1233,6 +1298,7 @@ function toggleTaskCompletion(t, occIds, fromRect) {
           week: t.week,
           date: TODAY,
           occurrenceId: occ.id,
+          ...(eventReason ? { reason: eventReason } : {}),
         });
         state.footprintDeferred[t.week] = false;
       } else {
@@ -1250,6 +1316,7 @@ function toggleTaskCompletion(t, occIds, fromRect) {
           week: t.week,
           date: TODAY,
           occurrenceId: occ.id,
+          ...(eventReason ? { reason: eventReason } : {}),
           color: taskColor(t),
         });
       }
@@ -1269,6 +1336,7 @@ function toggleTaskCompletion(t, occIds, fromRect) {
         title: t.title,
         week: t.week,
         date: TODAY,
+        ...(eventReason ? { reason: eventReason } : {}),
       });
       state.footprintDeferred[t.week] = false;
     } else {
@@ -1282,6 +1350,7 @@ function toggleTaskCompletion(t, occIds, fromRect) {
         title: t.title,
         week: t.week,
         date: TODAY,
+        ...(eventReason ? { reason: eventReason } : {}),
         color: taskColor(t),
       });
     }
@@ -2021,28 +2090,16 @@ function openCompletionRecord(t) {
   const rows = [];
   if (isRecurring(t))
     t.occurrences
-      .filter((o) => o.done || o.note)
+      .filter((o) => String(o.note || "").trim())
       .forEach((o) =>
-        rows.push({
-          date: o.doneDate || o.date,
-          note: o.note || "",
-          noteEnabled: o.noteEnabledAtCompletion,
-        }),
+        rows.push({ date: o.doneDate || "", note: o.note }),
       );
-  else if (t.done || t.note)
-    rows.push({
-      date: t.doneDate,
-      note: t.note || "",
-      noteEnabled: t.noteEnabledAtCompletion,
-    });
-  $("#completionRecordBody").innerHTML = rows.length
-    ? rows
-        .map(
-          (x, i) =>
-            `<div class="completion-record-line"><strong>${x.date ? formatShortDate(x.date) : `完成 ${i + 1}`}</strong>${x.note ? `<p class="completion-record-note">${esc(x.note)}</p>` : ""}</div>`,
-        )
-        .join("")
-    : `<div class="empty-note">還沒有完成紀錄</div>`;
+  else if (String(t.note || "").trim())
+    rows.push({ date: t.doneDate || "", note: t.note });
+  // 沒有寫小記錄，就保持空白，不只顯示日期；實際完成日期仍在原始任務資料內。
+  $("#completionRecordBody").innerHTML = rows
+    .map((x) => `<div class="completion-record-line">${x.date ? `<strong>${formatShortDate(x.date)}</strong>` : ""}<p class="completion-record-note">${esc(x.note)}</p></div>`)
+    .join("");
   $("#completionRecordDialog").showModal();
 }
 
@@ -2605,6 +2662,7 @@ function bindStaticEvents() {
       renderAll();
     }
   });
+  bindDirectionColorInputs();
   $("#addDirectionBtn").addEventListener("click", () => openDirectionDialog());
   $("#directionForm").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -2615,6 +2673,9 @@ function bindStaticEvents() {
         Math.min(999, Number($("#directionTargetInput").value) || 1),
       );
     if (!name) return;
+    if (!normalizeHexColor(directionPickColor) ||
+        $("#directionHexColor").getAttribute("aria-invalid") === "true")
+      return showToast("請輸入正確的 HEX 顏色");
     if (
       state.cycle.directions.some(
         (d) => d.name === name && d.id !== editingDirectionId,
@@ -2655,11 +2716,26 @@ function bindStaticEvents() {
   });
   $("#replayTutorialBtn").addEventListener("click", openTutorial);
 
-  $("#toggleTaskDoneBtn").addEventListener("click", () => {
-    const t = state.tasks.find((x) => x.id === actionTaskId);
-    $("#taskActionDialog").close();
-    if (t) toggleTaskCompletion(t, [...actionOccIds], null);
+  $("#completionChangeReasonForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const reason = $("#completionChangeReasonInput").value.trim();
+    if (!reason) {
+      $("#completionChangeReasonError").hidden = false;
+      $("#completionChangeReasonInput").focus();
+      return;
+    }
+    const apply = pendingCompletionReasonAction;
+    pendingCompletionReasonAction = null;
+    $("#completionChangeReasonDialog").close();
+    if (apply) apply(reason);
   });
+  $("#completionChangeReasonCancel").addEventListener("click", () => {
+    $("#completionChangeReasonDialog").close();
+  });
+  $("#completionChangeReasonDialog").addEventListener("close", () => {
+    pendingCompletionReasonAction = null;
+  });
+
   $("#completionRecordBtn").addEventListener("click", () => {
     const t = state.tasks.find((x) => x.id === actionTaskId);
     $("#taskActionDialog").close();

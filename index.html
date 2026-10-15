@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261015-cycle2-final-v3" />
+    <link rel="stylesheet" href="style.css?v=20261015-reason-palette-v1" />
   </head>
   <body>
     <div class="app-shell">
@@ -388,8 +388,7 @@
         <p class="eyebrow">這件事情</p>
         <h3 id="actionTaskTitle"></h3>
         <div class="action-stack">
-          <button type="button" id="toggleTaskDoneBtn">完成</button
-          ><button type="button" id="completionRecordBtn" hidden>
+          <button type="button" id="completionRecordBtn" hidden>
             完成紀錄</button
           ><button type="button" id="editTaskBtn" class="edit-button">
             編輯</button
@@ -488,6 +487,22 @@
       </form>
     </dialog>
 
+    <dialog id="completionChangeReasonDialog" aria-labelledby="completionChangeReasonTitle">
+      <form id="completionChangeReasonForm" class="dialog-card">
+        <p class="eyebrow">完成狀態變更</p>
+        <h3 id="completionChangeReasonTitle">請留下這次變更的原因</h3>
+        <p class="dialog-help">「<strong id="completionChangeReasonTask"></strong>」已切換完成狀態至少 3 次。從第 4 次起，每次變更都需要原因，並保留在歷史事件中。</p>
+        <label class="dialog-label">變更原因
+          <textarea id="completionChangeReasonInput" rows="3" maxlength="200" required placeholder="例如：剛才不小心按錯，現在要改回來"></textarea>
+        </label>
+        <p class="category-color-error" id="completionChangeReasonError" hidden>請先填寫原因，才能變更完成狀態。</p>
+        <div class="dialog-actions">
+          <button type="button" class="cancel-button" id="completionChangeReasonCancel">取消，不變更</button>
+          <button type="submit" class="primary-button">確認變更</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="completionNoteDialog">
       <form method="dialog" class="dialog-card">
         <p class="eyebrow">完成紀錄</p>
@@ -568,9 +583,20 @@
             max="999"
             required
         /></label>
-        <div class="dialog-label">
-          <span>顏色</span>
-          <div class="palette-grid" id="directionPalette"></div>
+        <div class="category-picker-section">
+          <span class="category-picker-label">方向顏色</span>
+          <div class="category-preset-palette" id="directionPalette" aria-label="方向預設調色板"></div>
+          <div class="category-custom-controls">
+            <label class="category-native-picker" title="開啟系統調色板">
+              <span class="category-selected-sample" id="directionColorPreview"></span>
+              <span>自訂顏色</span>
+              <input type="color" id="directionNativeColor" aria-label="選擇方向自訂顏色" />
+            </label>
+            <label class="category-hex-label" for="directionHexColor">HEX 色碼
+              <input type="text" id="directionHexColor" spellcheck="false" autocapitalize="characters" maxlength="7" placeholder="#9FC3DE" inputmode="text" />
+            </label>
+          </div>
+          <span class="category-color-error" id="directionHexError" hidden>請輸入正確的 HEX 色碼，例如 #9FC3DE。</span>
         </div>
         <p class="dialog-help">改名或改目標，已經長出的葉子都還在</p>
         <div class="dialog-actions">
@@ -866,7 +892,7 @@
     <script src="github-page/config.js"></script>
     <script src="github-page/domain.js"></script>
     <script src="github-page/connection.js?v=20261015-cycle2-final-v3"></script>
-    <script src="script.js?v=20261015-cycle2-final-v3"></script>
+    <script src="script.js?v=20261015-reason-palette-v1"></script>
     <script src="github-page/cycle-management.js"></script>
   </body>
 </html>
