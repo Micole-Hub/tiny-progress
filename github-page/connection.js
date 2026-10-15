@@ -381,7 +381,6 @@ window.TPConnection = (() => {
     const url = ui("serverUrl");
     const password = ui("webPassword");
     const message = ui("connectionMessage");
-    ui("demoLink").href = location.pathname + "?demo=1";
     preserveLegacyDraft();
     ui("downloadLegacyDraft").onclick = downloadLegacyDraft;
     url.value = window.TP_CONFIG?.API_BASE_URL || localStorage.getItem("tp-v28-server") || "";
