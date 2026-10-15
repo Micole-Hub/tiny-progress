@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261013-responsive-ui-v8" />
+    <link rel="stylesheet" href="style.css?v=20261015-cycle2-final-v4" />
   </head>
   <body>
     <div class="app-shell">
@@ -69,15 +69,15 @@
             <span class="rest-banner-icon" aria-hidden="true">🌿</span>
             <div class="rest-banner-copy">
               <strong id="restNextDate"></strong>
-              <small>提前安排的任務會在正式開始後顯示。</small>
+              <small>預排任務可以提前完成，葉子算在安排的週次。</small>
             </div>
           </section>
 
           <section class="growth-banner soft-card" id="growthBanner">
             <div class="growth-copy">
               <div class="card-topline">
-                <span class="section-kicker">這 12 週想往這裡走</span>
-                <span class="locked-note">已確認</span>
+                <span class="section-kicker">12 週計畫目標</span>
+                <span class="locked-note">本輪計畫</span>
               </div>
               <p class="direction-text" id="directionText"></p>
               <div class="direction-tags" id="directionTags"></div>
@@ -134,7 +134,7 @@
               hidden
             ></div>
             <div class="rest-planning-bar" id="restPlanningBar" hidden>
-              <p id="restPlanningHint">預排的任務會在正式開始後顯示。</p>
+              <p id="restPlanningHint">可預排任務並提前完成，••• 操作選單也能使用。</p>
               <button type="button" class="secondary-button" id="toggleRestPlanner" aria-expanded="false" aria-controls="taskList quickAddForm focusPool habitTracker">預先安排任務</button>
             </div>
             <p class="rest-date-note" id="restDateNote" hidden></p>
@@ -388,8 +388,7 @@
         <p class="eyebrow">這件事情</p>
         <h3 id="actionTaskTitle"></h3>
         <div class="action-stack">
-          <button type="button" id="toggleTaskDoneBtn">完成</button
-          ><button type="button" id="completionRecordBtn" hidden>
+          <button type="button" id="completionRecordBtn" hidden>
             完成紀錄</button
           ><button type="button" id="editTaskBtn" class="edit-button">
             編輯</button
@@ -766,10 +765,9 @@
         </div>
         <div class="connection-actions">
           <button class="primary-button" type="submit">登入雲端</button>
-          <a id="demoLink" class="text-button" href="?demo=1">先看教學</a>
         </div>
         <p class="dialog-help">
-          密碼不會寫進網頁檔案。教學模式不會修改你的正式資料。
+          登入後會載入正式雲端資料；不會使用示範任務。
         </p>
       </form>
     </section>
@@ -866,8 +864,8 @@
     </dialog>
     <script src="github-page/config.js"></script>
     <script src="github-page/domain.js"></script>
-    <script src="github-page/connection.js?v=20261013-real-current-v5"></script>
-    <script src="script.js?v=20261013-responsive-ui-v8"></script>
+    <script src="github-page/connection.js?v=20261015-cycle2-final-v4"></script>
+    <script src="script.js?v=20261015-cycle2-final-v4"></script>
     <script src="github-page/cycle-management.js"></script>
   </body>
 </html>

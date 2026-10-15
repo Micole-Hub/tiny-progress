@@ -215,149 +215,7 @@ function recurringTask(
     occurrences: occ,
   };
 }
-const SEED_WEEK1_DATES = weekDateMap(1);
-const seedState = {
-  simulationWeekStart: CYCLE_START_YMD,
-  mode: "week",
-  selectedWeek: CURRENT_WEEK,
-  selectedDate: TODAY,
-  cycle: {
-    number: 2,
-    locked: true,
-    direction: "以獨立開發為主，一邊把技能學到夠用",
-    directions: [
-      {
-        id: "d1",
-        name: "獨立開發",
-        outcome: "完成 Flex Board 的靜態介面",
-        target: 30,
-        color: "#9fc3de",
-      },
-      {
-        id: "d2",
-        name: "學技能",
-        outcome: "CSS 學到夠用，再開始 JavaScript",
-        target: 18,
-        color: "#a9cb9f",
-      },
-    ],
-    goals: ["獨立開發", "學技能"],
-  },
-  preferences: {
-    completionNote: false,
-    weeklyReflection: true,
-    lineEnabled: true,
-    lineTime: "08:00",
-  },
-  categories: [
-    { id: "learn", name: "學習", color: "#9fc3de" },
-    { id: "life", name: "生活", color: "#e3b48a" },
-    { id: "health", name: "健康", color: "#a9cb9f" },
-    { id: "create", name: "創作", color: "#efb8cf" },
-  ],
-  recurringRules: [
-    {
-      id: "rr-8",
-      title: "閱讀 15 分鐘",
-      frequency: "weekly",
-      timesPerWeek: 2,
-      categoryId: "learn",
-      active: true,
-    },
-    {
-      id: "rr-11",
-      title: "記下一個收穫",
-      frequency: "daily",
-      timesPerWeek: 7,
-      categoryId: "health",
-      active: true,
-    },
-  ],
-  tasks: [
-    {
-      id: 1,
-      week: 1,
-      title: "整理 HTML 語意筆記",
-      done: false,
-      doneDate: "",
-      focusDate: SEED_WEEK1_DATES.mon,
-      goal: "學技能",
-      categoryId: "learn",
-      status: "active",
-      note: "",
-    },
-    {
-      id: 2,
-      week: 1,
-      title: "練習 DOM 操作",
-      done: false,
-      doneDate: "",
-      focusDate: SEED_WEEK1_DATES.wed,
-      goal: "學技能",
-      categoryId: "learn",
-      status: "active",
-      note: "事件監聽終於比較順了",
-    },
-    {
-      id: 3,
-      week: 1,
-      title: "Tiny Progress 新版首頁草圖",
-      done: false,
-      doneDate: "",
-      focusDate: TODAY,
-      goal: "獨立開發",
-      categoryId: "create",
-      status: "active",
-      note: "",
-    },
-    {
-      id: 4,
-      week: 1,
-      title: "整理 Tiny Progress 的 Week 流程",
-      done: false,
-      doneDate: "",
-      focusDate: SEED_WEEK1_DATES.sun,
-      goal: "獨立開發",
-      categoryId: "create",
-      status: "active",
-      note: "",
-    },
-    recurringTask(8, "閱讀 15 分鐘", "learn", "weekly", 2, 1),
-    recurringTask(11, "記下一個收穫", "health", "daily", 7, 2),
-    {
-      id: 20,
-      week: 2,
-      title: "讀完 JavaScript 函式章節",
-      done: false,
-      doneDate: "",
-      focusDate: "",
-      goal: "學技能",
-      categoryId: "learn",
-      status: "active",
-      note: "",
-    },
-    {
-      id: 21,
-      week: 2,
-      title: "Tiny Progress 接上真資料",
-      done: false,
-      doneDate: "",
-      focusDate: "",
-      goal: "獨立開發",
-      categoryId: "create",
-      status: "active",
-      note: "",
-    },
-  ],
-  archivedWeeks: [],
-  weekMeta: {},
-  footprintDeferred: {},
-  reflections: {},
-  events: [],
-  leafSlots: {},
-  onboarded: false,
-  tankReviewed: {},
-};
+// 正式版只讀取雲端資料；不再內建獨立的示範任務庫。
 
 let state = loadState();
 // 只控制休息期 UI，與雲端儲存的週次及任務資料分離。
@@ -397,11 +255,8 @@ let actionTaskId = null,
   categoryQuickTargetId = null,
   categoryQuickColor = PALETTE[0];
 
-function cloneSeed() {
-  return JSON.parse(JSON.stringify(seedState));
-}
 function loadState() {
-  return TPConnection.initial(seedState);
+  return TPConnection.initial();
 }
 function saveState() {
   TPConnection.save(state);
@@ -652,7 +507,10 @@ function directionLeafCounts(weekFilter = () => true) {
 }
 function renderDirection() {
   syncGoals();
-  $("#directionText").textContent = state.cycle.direction;
+  // The 12-week plan goal (cycles.theme) is not a water tank. Display it
+  // separately from cycle.directions and never overwrite state here.
+  $("#directionText").textContent =
+    TPConnection.cycleTheme() || state.cycle.direction;
   const ds = state.cycle.directions,
     counts = directionLeafCounts(),
     el = $("#directionTags");
@@ -817,7 +675,7 @@ function renderRestHome() {
   $("#restPlanningBar").hidden = false;
   $("#toggleRestPlanner").textContent = "預先安排任務";
   $("#toggleRestPlanner").setAttribute("aria-expanded", "false");
-  $("#restPlanningHint").textContent = "想先準備下一輪？任務可預先安排，正式開始前不計入完成。";
+  $("#restPlanningHint").textContent = "可以預先安排並提前完成；葉子會計入任務所屬的週次。";
   $("#taskList").hidden = true;
   $("#taskList").replaceChildren();
   $("#habitTracker").hidden = true;
@@ -890,9 +748,10 @@ function renderHome() {
   $("#restPlanningBar").hidden = !resting;
   $("#toggleRestPlanner").textContent = planningOpen ? "收起預排" : "預先安排任務";
   $("#toggleRestPlanner").setAttribute("aria-expanded", String(planningOpen));
+  const earlyLeaves = currentLeafRecords(viewWeek).length;
   $("#restPlanningHint").textContent = planningOpen
-    ? `這些事項是預排內容，${formatShortDate(firstWeekStart)} 開始後會自動顯示。`
-    : `已預排的任務先收起，${formatShortDate(firstWeekStart)} 開始後會自動顯示。`;
+    ? `點任務左側圓圈，可提前完成或改回未完成。Week ${viewWeek} 目前累積 ${earlyLeaves} 片葉子，正式開始後會出現在該週的樹上。`
+    : `預排任務已收起。Week ${viewWeek} 已累積 ${earlyLeaves} 片葉子；${formatShortDate(firstWeekStart)} 正式開始。`;
   renderTreeHome();
 
   let html = "";
@@ -924,8 +783,13 @@ function renderHome() {
       ? taskSectionLabel("本週任務", "本週需要完成的項目") +
         pending.map((t) => taskRow(t, null)).join("")
       : "";
-    if (finished.length)
-      html += `<details class="completed-tasks"><summary>已完成任務</summary>${finished.map((t) => taskRow(t, null)).join("")}</details>`;
+    if (finished.length) {
+      // 休息期預排的勾選圓圈可直接切換完成／未完成，不需要先展開折疊清單。
+      const finishedRows = finished.map((t) => taskRow(t, null)).join("");
+      html += planningOpen
+        ? taskSectionLabel("已提前完成", "點左側 ✓ 圓圈可改回未完成，葉子歸本週") + finishedRows
+        : `<details class="completed-tasks"><summary>已完成任務</summary>${finishedRows}</details>`;
+    }
     habitHtml = habits.map((t) => habitRow(t, null)).join("");
     if (!regular.length)
       html = habits.length
@@ -1127,6 +991,8 @@ function taskRow(t, occ) {
       : completed;
   const checkLabel = circleDone
     ? "改回未完成"
+    : isCycleResting()
+      ? `提前完成（葉子計入 Week ${t.week}）`
     : isRecurring(t) && state.mode === "day" && occurrenceDoneCount(t) > 0
       ? "再完成一次"
       : isRecurring(t) && state.mode === "week"
@@ -1147,6 +1013,8 @@ function habitRow(t, occ) {
       : t.occurrences.every((o) => o.done);
   const label = completed
     ? "改回未完成"
+    : isCycleResting()
+      ? `提前完成（葉子計入 Week ${t.week}）`
     : group
       ? "完成這次習慣"
       : "完成本週全部次數";
@@ -1168,28 +1036,13 @@ function openTaskActions(t, row) {
   if (!t) return;
   setTaskActionContext(t, row);
   const archived = isWeekArchived(t.week);
-  const pool = isRecurring(t)
-    ? actionOccIds.length
-      ? t.occurrences.filter((o) => actionOccIds.includes(o.id))
-      : t.frequency === "daily"
-        ? t.occurrences.filter((o) => o.date === TODAY)
-        : t.occurrences
-    : [t];
-  const rowDone = pool.length > 0 && pool.every((o) => o.done);
   $("#actionTaskTitle").textContent = t.title;
-  $("#toggleTaskDoneBtn").hidden = archived || isCycleResting();
-  $("#toggleTaskDoneBtn").textContent =
-    isRecurring(t) && state.mode === "week" && !actionOccIds.length
-      ? rowDone
-        ? "改回本週未完成"
-        : "完成本週全部次數"
-      : rowDone
-        ? "改回未完成"
-        : "完成";
+  // 完成／改回未完成只透過任務左側的圓圈操作，避免 ••• 出現重複按鈕。
   $("#replanTaskBtn").hidden =
     archived || isRecurring(t) || taskDone(t) || t.week >= 12;
-  // 原本條件寫反：尚未完成的任務應可編輯，完成的項目則查看完成紀錄。
-  $("#editTaskBtn").hidden = archived || rowDone;
+  // 未封存任務的「••• → 編輯」保持可見，不因勾選完成而消失。
+  // 歷史封存週次仍只能查看，不能在此修改。
+  $("#editTaskBtn").hidden = archived;
   $("#editTaskBtn").textContent = "編輯";
   $("#deleteTaskBtn").hidden = archived;
   $("#completionRecordBtn").hidden =
@@ -1273,8 +1126,9 @@ function bindTaskRows() {
   });
 }
 function toggleTaskCompletion(t, occIds, fromRect) {
-  if (isCycleResting()) return showToast("計畫還沒開始，先預排任務即可");
   if (!t || !guardWeekEditable(t.week)) return;
+  if (isCycleResting() && !restPlannerOpen)
+    return showToast("請先打開預先安排任務");
   let becameComplete = false,
     leafKey = "",
     leafOccId = "",
@@ -1425,7 +1279,9 @@ function toggleTaskCompletion(t, occIds, fromRect) {
       $("#completionNoteDialog").showModal();
     } else {
       showToast(
-        becameComplete
+        becameComplete && isCycleResting()
+          ? `提前完成，葉子計入 Week ${t.week}`
+          : becameComplete
           ? bulkWeekAction
             ? "本週習慣已全部完成"
             : inTree
@@ -2080,6 +1936,8 @@ function closeFootprint(defer = false) {
 }
 function maybeOpenFootprint(week, delay = 500) {
   week = Number(week);
+  // Early completion belongs to its scheduled week, but must not end that week.
+  if (isCycleResting() || compareIsoDate(TODAY, Object.values(weekDateMap(week))[0]) < 0) return;
   if (
     state.footprintDeferred[week] ||
     isWeekArchived(week) ||
@@ -2089,6 +1947,8 @@ function maybeOpenFootprint(week, delay = 500) {
   setTimeout(
     () => {
       if (
+        !isCycleResting() &&
+        compareIsoDate(TODAY, Object.values(weekDateMap(week))[0]) >= 0 &&
         !state.footprintDeferred[week] &&
         !isWeekArchived(week) &&
         isWeekComplete(week)
@@ -2777,11 +2637,6 @@ function bindStaticEvents() {
   });
   $("#replayTutorialBtn").addEventListener("click", openTutorial);
 
-  $("#toggleTaskDoneBtn").addEventListener("click", () => {
-    const t = state.tasks.find((x) => x.id === actionTaskId);
-    $("#taskActionDialog").close();
-    if (t) toggleTaskCompletion(t, [...actionOccIds], null);
-  });
   $("#completionRecordBtn").addEventListener("click", () => {
     const t = state.tasks.find((x) => x.id === actionTaskId);
     $("#taskActionDialog").close();
@@ -3667,6 +3522,7 @@ restartEnter($(".page.active"));
 TPConnection.start({
   get: () => state,
   toast: showToast,
+  onCycleTheme: () => renderDirection(),
   replace(next) {
     state = next;
     refreshClock();
@@ -3685,4 +3541,3 @@ TPConnection.start({
       }, 500);
   },
 }).catch((error) => showToast(error.message));
-if (TPConnection.demo && !state.onboarded) setTimeout(openTutorial, 500);
