@@ -355,7 +355,12 @@ window.TPConnection = (() => {
       }
       cacheConfirmed(cloud);
       gate(navigator.onLine ? null : "login");
-      status("已儲存至雲端", "info", true);
+      // The server has confirmed *sent*, but the user may have made further edits
+      // while the request was in flight. Do not claim everything is saved yet.
+      const newerChangesPending = dirty();
+      status(newerChangesPending
+        ? "上一批已儲存，最新變更仍在儲存中…"
+        : "已儲存至雲端", "info", !newerChangesPending);
     } catch (error) {
       if (error.status === 409 && conflictRetries < 3) {
         // Only merge while connected, not from an offline edit copy.

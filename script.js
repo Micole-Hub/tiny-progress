@@ -1365,7 +1365,7 @@ function toggleTaskCompletion(t, occIds, fromRect, switchReason) {
       $("#completionNoteInput").value = "";
       $("#completionNoteDialog").showModal();
     } else {
-      showToast(
+      showPendingCloudToast(
         becameComplete && isCycleResting()
           ? `提前完成，葉子計入 Week ${t.week}`
           : becameComplete
@@ -1451,7 +1451,7 @@ function renderFocusPool() {
       });
       justAdded = t.id;
       renderAll();
-      showToast("放進這天了");
+      showPendingCloudToast("放進這天了");
     }),
   );
 }
@@ -1979,7 +1979,7 @@ function renderFootprintCard(week) {
     if (snap) snap.reflection = state.reflections[week];
     saveState();
     renderFootprintCard(week);
-    showToast("感想存好了");
+    showPendingCloudToast("感想已送出");
   });
   $("[data-footprint-next]")?.addEventListener("click", () =>
     finalizeFootprintWeek(week),
@@ -2341,7 +2341,7 @@ function showHistoryWeek(week) {
     );
     if (snap) snap.reflection = state.reflections[week];
     saveState();
-    showToast("感想存好了，之後只能查看");
+    showPendingCloudToast("感想已送出，之後只能查看");
     showHistoryWeek(week);
   });
   $$("[data-reason-task]").forEach((b) =>
@@ -2701,7 +2701,7 @@ function bindStaticEvents() {
     commitDirections(list);
     $("#directionDialog").close();
     renderAll();
-    showToast("方向存好了");
+    showPendingCloudToast("方向已更新");
   });
   $("#deleteDirectionBtn").addEventListener("click", () => {
     if (state.cycle.directions.length <= 1) return;
@@ -2712,7 +2712,7 @@ function bindStaticEvents() {
     );
     $("#directionDialog").close();
     renderAll();
-    showToast("方向刪除了，葉子都還在");
+    showPendingCloudToast("方向已刪除，葉子仍保留");
   });
   $("#replayTutorialBtn").addEventListener("click", openTutorial);
 
@@ -2909,7 +2909,7 @@ function bindStaticEvents() {
     $("#moreFields").hidden = true;
     $("#moreToggle").textContent = "＋ 更多設定";
     renderAll();
-    showToast(
+    showPendingCloudToast(
       isRepeat
         ? "已加入本週習慣"
         : state.mode === "day"
@@ -2971,7 +2971,7 @@ function bindStaticEvents() {
       resizeRecurringTask(t, Number($("#editTaskTimes").value));
     $("#editTaskDialog").close();
     renderAll();
-    showToast("已更新");
+    showPendingCloudToast("編輯已更新");
   });
   $("#replanForm").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -3007,7 +3007,7 @@ function bindStaticEvents() {
       });
     $("#replanDialog").close();
     renderAll();
-    showToast(`移到 Week ${to} 了`);
+    showPendingCloudToast(`已移到 Week ${to}`);
   });
 
   $("#skipNoteBtn").addEventListener("click", () => {
@@ -3016,7 +3016,7 @@ function bindStaticEvents() {
     pendingNoteTaskId = null;
     pendingNoteOccId = "";
     pendingNoteOccIds = [];
-    showToast("這片葉子已經留下來了");
+    showToast("已略過完成小記；請以雲端同步提示確認儲存狀態");
     if (week) maybeOpenFootprint(week, 420);
   });
   $("#saveNoteBtn").addEventListener("click", () => {
@@ -3038,7 +3038,7 @@ function bindStaticEvents() {
     pendingNoteOccId = "";
     pendingNoteOccIds = [];
     saveState();
-    showToast("完成紀錄存好了");
+    showPendingCloudToast("完成紀錄已更新");
     if (week) maybeOpenFootprint(week, 420);
   });
 
@@ -3101,7 +3101,7 @@ function bindStaticEvents() {
       });
     $("#recurringDialog").close();
     renderAll();
-    showToast("重複習慣已更新");
+    showPendingCloudToast("重複習慣已更新");
   });
   $("#addCategoryBtn").addEventListener("click", () => openCategoryDialog());
   bindCategoryCustomColor("category", (color) => {
@@ -3121,7 +3121,7 @@ function bindStaticEvents() {
     if (normalizeHexColor(category.color) === color) return;
     category.color = color;
     renderAll();
-    showToast(`${category.name} 的顏色已更新`);
+    showPendingCloudToast(`${category.name} 的顏色已更新`);
   });
   $("#categoryForm").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -3184,7 +3184,7 @@ function performDelete(t, reason) {
       });
       t.status = "deleted";
       renderAll();
-      showToast("已刪除，原因留在 History 裡");
+      showPendingCloudToast("已刪除，原因留在 History 裡");
     },
     rows.length ? 300 : 0,
   );
@@ -3577,6 +3577,11 @@ function tutValid() {
 function formatShortDate(iso) {
   const [, m, d] = iso.split("-");
   return `${Number(m)}/${Number(d)}`;
+}
+// A successful local UI change is not yet a confirmed cloud save.
+// The sync banner in connection.js shows the authoritative result after PUT /api/state.
+function showPendingCloudToast(message) {
+  showToast(TPConnection.demo ? message : `${message} · 等待雲端確認`);
 }
 function showToast(msg) {
   const t = $("#toast");
