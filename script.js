@@ -510,7 +510,7 @@ function renderDirection() {
   // The 12-week plan goal (cycles.theme) is not a water tank. Display it
   // separately from cycle.directions and never overwrite state here.
   $("#directionText").textContent =
-    TPConnection.cycleTheme() || state.cycle.direction;
+    TPConnection.cycleTheme?.() || state.cycle.direction;
   const ds = state.cycle.directions,
     counts = directionLeafCounts(),
     el = $("#directionTags");
