@@ -792,22 +792,31 @@ function renderHome() {
   let html = "";
   let habitHtml = "";
   if (dayMode) {
-    const entries = [],
-      habits = [];
+    // 每日檢視把待完成／已完成都列出，讓今日剩餘事項一目了然。
+    // 這只是視覺分組，不改變任務所屬週、日期或完成狀態。
+    const todo = [], finished = [], habitTodo = [], habitFinished = [];
     activeTasks(viewWeek).forEach((t) => {
       if (isRecurring(t)) {
-        const dated = t.occurrences.filter(
-          (o) => o.date === state.selectedDate,
-        );
-        if (dated.length) habits.push(habitRow(t, dated));
-      } else if (t.focusDate === state.selectedDate)
-        entries.push(taskRow(t, null));
+        const dated = t.occurrences.filter((o) => o.date === state.selectedDate);
+        if (!dated.length) return;
+        const row = habitRow(t, dated);
+        (dated.every((o) => o.done) ? habitFinished : habitTodo).push(row);
+      } else if (t.focusDate === state.selectedDate) {
+        (taskDone(t) ? finished : todo).push(taskRow(t, null));
+      }
     });
-    html = entries.length
-      ? taskSectionLabel("今天安排", "完成後也會計入本週進度") +
-        entries.join("")
+    html = todo.length || finished.length
+      ? taskSectionLabel(`待完成（${todo.length}）`, "今天還沒完成的事項") +
+        (todo.join("") || `<div class="empty-note">今天安排的事項都完成了 ✓</div>`) +
+        taskSectionLabel(`已完成（${finished.length}）`, "今天已經完成的事項") +
+        (finished.join("") || `<div class="empty-note">尚無完成事項</div>`)
       : `<div class="empty-note">今天還沒有放進事情</div>`;
-    habitHtml = habits.join("");
+    habitHtml = habitTodo.length || habitFinished.length
+      ? taskSectionLabel(`待完成（${habitTodo.length}）`, "今天還沒完成的習慣") +
+        habitTodo.join("") +
+        taskSectionLabel(`已完成（${habitFinished.length}）`, "今天已完成的習慣") +
+        habitFinished.join("")
+      : "";
   } else {
     const tasks = activeTasks(viewWeek),
       regular = tasks.filter((t) => !isRecurring(t)),
@@ -1067,6 +1076,17 @@ function setTaskActionContext(t, row) {
   actionOccIds = rowIds(row);
   actionOccurrenceId = actionOccIds[0] || null;
 }
+function historicalCompletionNotes(t) {
+  if (!t) return [];
+  return state.events
+    .filter((e) => e.type === "uncomplete" &&
+      Number(e.taskId) === Number(t.id) &&
+      String(e.savedCompletionNote || "").trim())
+    .map((e) => ({ date: e.previousDoneDate || "", note: e.savedCompletionNote }));
+}
+function hasCompletionNoteHistory(t) {
+  return historicalCompletionNotes(t).length > 0;
+}
 function openTaskActions(t, row) {
   if (!t) return;
   setTaskActionContext(t, row);
@@ -1083,7 +1103,8 @@ function openTaskActions(t, row) {
   $("#completionRecordBtn").hidden =
     occurrenceDoneCount(t) === 0 &&
     !t.note &&
-    !t.occurrences?.some((o) => o.note);
+    !t.occurrences?.some((o) => o.note) &&
+    !hasCompletionNoteHistory(t);
   $("#taskActionDialog").showModal();
 }
 function openTaskEditor(t) {
@@ -1111,7 +1132,8 @@ function openTaskCard(t, row) {
     if (
       occurrenceDoneCount(t) > 0 ||
       t.note ||
-      t.occurrences?.some((o) => o.note)
+      t.occurrences?.some((o) => o.note) ||
+      hasCompletionNoteHistory(t)
     )
       openCompletionRecord(t);
     else showToast("這週已封存，可以到 History 查看");
@@ -1236,6 +1258,8 @@ function toggleTaskCompletion(t, occIds, fromRect, switchReason) {
             if (inTree)
               queueFall(t.week, key, taskColor(t), removedCount * 90);
             removedCount++;
+            const previousDoneDate = o.doneDate || "";
+            const savedCompletionNote = String(o.note || "").trim();
             o.done = false;
             o.doneDate = "";
             o.note = "";
@@ -1248,6 +1272,7 @@ function toggleTaskCompletion(t, occIds, fromRect, switchReason) {
               date: TODAY,
               occurrenceId: o.id,
               ...(eventReason ? { reason: eventReason } : {}),
+              ...(savedCompletionNote ? { savedCompletionNote, previousDoneDate } : {}),
             });
           } else {
             o.done = true;
@@ -1286,6 +1311,8 @@ function toggleTaskCompletion(t, occIds, fromRect, switchReason) {
       leafOccId = occ.id;
       if (occ.done) {
         if (inTree) queueFall(t.week, leafKey, taskColor(t));
+        const previousDoneDate = occ.doneDate || "";
+        const savedCompletionNote = String(occ.note || "").trim();
         occ.done = false;
         occ.doneDate = "";
         occ.note = "";
@@ -1299,6 +1326,7 @@ function toggleTaskCompletion(t, occIds, fromRect, switchReason) {
           date: TODAY,
           occurrenceId: occ.id,
           ...(eventReason ? { reason: eventReason } : {}),
+          ...(savedCompletionNote ? { savedCompletionNote, previousDoneDate } : {}),
         });
         state.footprintDeferred[t.week] = false;
       } else {
@@ -1326,6 +1354,8 @@ function toggleTaskCompletion(t, occIds, fromRect, switchReason) {
     leafKey = String(t.id);
     if (t.done) {
       if (inTree) queueFall(t.week, leafKey, taskColor(t));
+      const previousDoneDate = t.doneDate || "";
+      const savedCompletionNote = String(t.note || "").trim();
       t.done = false;
       t.doneDate = "";
       t.note = "";
@@ -1337,6 +1367,7 @@ function toggleTaskCompletion(t, occIds, fromRect, switchReason) {
         week: t.week,
         date: TODAY,
         ...(eventReason ? { reason: eventReason } : {}),
+        ...(savedCompletionNote ? { savedCompletionNote, previousDoneDate } : {}),
       });
       state.footprintDeferred[t.week] = false;
     } else {
@@ -2087,7 +2118,7 @@ function finalizeFootprintWeek(week) {
 function openCompletionRecord(t) {
   if (!t) return;
   $("#completionRecordTitle").textContent = t.title;
-  const rows = [];
+  const rows = historicalCompletionNotes(t);
   if (isRecurring(t))
     t.occurrences
       .filter((o) => String(o.note || "").trim())

@@ -4404,3 +4404,16 @@ body { background: linear-gradient(180deg, #fbf9f5 0px, #f7f4ef 390px); }
 /* 方向顏色與分類顏色採相同的預設色盤、系統色票與 HEX 外觀。 */
 #directionDialog .dialog-card { max-height: min(88vh, 780px); overflow-y: auto; }
 #completionChangeReasonDialog .dialog-card { max-width: 460px; }
+
+/* QA v1: keep completed-day sections visible, and avoid flashing login form. */
+#autoLoginLoading[hidden], #connectionForm[hidden] { display: none !important; }
+.auto-login-loading { text-align: center; padding-block: 32px; }
+.auto-login-loading h2 { font-size: 20px; margin: 14px 0 8px; }
+.auto-login-loading p { color: var(--muted); font-size: 13px; margin: 0; }
+.auto-login-spinner {
+  display: block; margin: 0 auto; width: 28px; height: 28px;
+  border: 3px solid var(--line); border-top-color: var(--green-deep);
+  border-radius: 50%; animation: tp-auth-spin .8s linear infinite;
+}
+@keyframes tp-auth-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .auto-login-spinner { animation: none; } }

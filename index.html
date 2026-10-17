@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261015-reason-palette-v1" />
+    <link rel="stylesheet" href="style.css?v=20261016-qa-stability-v1" />
   </head>
   <body>
     <div class="app-shell">
@@ -764,6 +764,11 @@
       aria-label="雲端登入"
       hidden
     >
+      <div id="autoLoginLoading" class="connection-card auto-login-loading" role="status" aria-live="polite" hidden>
+        <span class="auto-login-spinner" aria-hidden="true"></span>
+        <h2>正在恢復登入</h2>
+        <p>正在安全確認雲端連線，請稍候…</p>
+      </div>
       <form id="connectionForm" class="connection-card">
         <p class="eyebrow">TINY PROGRESS</p>
         <h1>登入 Tiny Progress</h1>
@@ -891,8 +896,8 @@
     </dialog>
     <script src="github-page/config.js"></script>
     <script src="github-page/domain.js"></script>
-    <script src="github-page/connection.js?v=20261015-cloud-confirm-v1"></script>
-    <script src="script.js?v=20261015-cloud-confirm-v1"></script>
+    <script src="github-page/connection.js?v=20261016-qa-stability-v1"></script>
+    <script src="script.js?v=20261016-qa-stability-v1"></script>
     <script src="github-page/cycle-management.js"></script>
   </body>
 </html>

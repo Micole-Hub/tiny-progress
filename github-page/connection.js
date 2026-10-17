@@ -439,6 +439,11 @@ window.TPConnection = (() => {
     url.value = window.TP_CONFIG?.API_BASE_URL || localStorage.getItem("tp-v28-server") || "";
     const session = read("tp-v28-session");
     if (!url.value && session?.base) url.value = session.base;
+    // Saved session may be valid. Do not flash the password form during verification.
+    // The app remains inert until the server confirms the session.
+    const autoRestore = !oldUnsaved && Boolean(session?.auth && session.base === url.value);
+    form.hidden = autoRestore;
+    ui("autoLoginLoading").hidden = !autoRestore;
 
     form.onsubmit = async (event) => {
       event.preventDefault();
@@ -507,7 +512,7 @@ window.TPConnection = (() => {
       }
     };
 
-    if (!oldUnsaved && session?.auth && session.base === url.value) {
+    if (autoRestore) {
       try {
         base = serverBase(session.base);
         auth = session.auth;
@@ -523,6 +528,10 @@ window.TPConnection = (() => {
           localStorage.removeItem("tp-v28-session");
         }
         gate("login");
+      } finally {
+        // Show manual login only after failed/expired automatic verification.
+        form.hidden = false;
+        ui("autoLoginLoading").hidden = true;
       }
     }
     if (startCompleted) return;
