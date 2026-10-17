@@ -718,6 +718,34 @@ function renderRestHome() {
   $("#focusPool").hidden = true;
   $("#quickAddForm").hidden = true;
 }
+// 清單排序只影響畫面，不改動 state.tasks、事件或雲端儲存順序。
+// 尚未完成維持加入清單的順序；完成的移到下方，依實際勾選完成的先後排列。
+function renderDoneLast(rows) {
+  if (!rows.length) return "";
+  const lastCompletedAt = new Map();
+  (state.events || []).forEach((event, index) => {
+    if (event?.type !== "complete") return;
+    const taskId = String(event.taskId);
+    lastCompletedAt.set(taskId, index);
+    if (event.occurrenceId != null)
+      lastCompletedAt.set(`${taskId}:${event.occurrenceId}`, index);
+  });
+  const completionOrder = ({ task, occurrenceIds }) => {
+    if (occurrenceIds?.length)
+      return occurrenceIds.reduce((last, oid) =>
+        Math.max(last, lastCompletedAt.get(`${task.id}:${oid}`) ?? -1), -1);
+    return lastCompletedAt.get(String(task.id)) ?? -1;
+  };
+  return rows
+    .map((row, index) => ({ ...row, index, order: row.done ? completionOrder(row) : -1 }))
+    .sort((a, b) =>
+      Number(a.done) - Number(b.done) ||
+      (a.done && b.done ? a.order - b.order : 0) ||
+      a.index - b.index,
+    )
+    .map((row) => row.html)
+    .join("");
+}
 function renderHome() {
   if (isCycleResting() && !restPlannerOpen) {
     renderRestHome();
@@ -792,53 +820,40 @@ function renderHome() {
   let html = "";
   let habitHtml = "";
   if (dayMode) {
-    // 每日檢視把待完成／已完成都列出，讓今日剩餘事項一目了然。
-    // 這只是視覺分組，不改變任務所屬週、日期或完成狀態。
-    const todo = [], finished = [], habitTodo = [], habitFinished = [];
+    // 每日與整週共用同一批任務，○／✓ 直接表示狀態，無須另外分區。
+    // 未指定日期的週任務：未完成者仍在「這週還有」；完成者直接可見。
+    const entries = [], habits = [];
     activeTasks(viewWeek).forEach((t) => {
       if (isRecurring(t)) {
         const dated = t.occurrences.filter((o) => o.date === state.selectedDate);
-        if (!dated.length) return;
-        const row = habitRow(t, dated);
-        (dated.every((o) => o.done) ? habitFinished : habitTodo).push(row);
-      } else if (t.focusDate === state.selectedDate) {
-        (taskDone(t) ? finished : todo).push(taskRow(t, null));
+        if (dated.length) habits.push({
+          task: t,
+          occurrenceIds: dated.map((o) => o.id),
+          done: dated.every((o) => o.done),
+          html: habitRow(t, dated),
+        });
+      } else if (t.focusDate === state.selectedDate || (!t.focusDate && taskDone(t))) {
+        entries.push({ task: t, done: taskDone(t), html: taskRow(t, null) });
       }
     });
-    html = todo.length || finished.length
-      ? taskSectionLabel(`待完成（${todo.length}）`, "今天還沒完成的事項") +
-        (todo.join("") || `<div class="empty-note">今天安排的事項都完成了 ✓</div>`) +
-        taskSectionLabel(`已完成（${finished.length}）`, "今天已經完成的事項") +
-        (finished.join("") || `<div class="empty-note">尚無完成事項</div>`)
-      : `<div class="empty-note">今天還沒有放進事情</div>`;
-    habitHtml = habitTodo.length || habitFinished.length
-      ? taskSectionLabel(`待完成（${habitTodo.length}）`, "今天還沒完成的習慣") +
-        habitTodo.join("") +
-        taskSectionLabel(`已完成（${habitFinished.length}）`, "今天已完成的習慣") +
-        habitFinished.join("")
-      : "";
+    html = renderDoneLast(entries) || `<div class="empty-note">這一天還沒有安排任務</div>`;
+    habitHtml = renderDoneLast(habits);
   } else {
-    const tasks = activeTasks(viewWeek),
-      regular = tasks.filter((t) => !isRecurring(t)),
-      pending = regular.filter((t) => !taskDone(t)),
-      finished = regular.filter(taskDone),
-      habits = tasks.filter(isRecurring);
-    html = pending.length
-      ? taskSectionLabel("本週任務", "本週需要完成的項目") +
-        pending.map((t) => taskRow(t, null)).join("")
-      : "";
-    if (finished.length) {
-      // 休息期預排的勾選圓圈可直接切換完成／未完成，不需要先展開折疊清單。
-      const finishedRows = finished.map((t) => taskRow(t, null)).join("");
-      html += planningOpen
-        ? taskSectionLabel("已提前完成", "點左側 ✓ 圓圈可改回未完成，葉子歸本週") + finishedRows
-        : `<details class="completed-tasks"><summary>已完成任務</summary>${finishedRows}</details>`;
-    }
-    habitHtml = habits.map((t) => habitRow(t, null)).join("");
-    if (!regular.length)
-      html = habits.length
-        ? ""
-        : `<div class="empty-note">這一週還沒有放進事情</div>`;
+    // 整週視角無論是否完成都同列表顯示，不要求指定日期。
+    const tasks = activeTasks(viewWeek);
+    const regular = tasks.filter((t) => !isRecurring(t));
+    const habits = tasks.filter(isRecurring);
+    html = renderDoneLast(regular.map((t) => ({
+      task: t,
+      done: taskDone(t),
+      html: taskRow(t, null),
+    }))) || (habits.length ? "" : `<div class="empty-note">這一週還沒有放進事情</div>`);
+    habitHtml = renderDoneLast(habits.map((t) => ({
+      task: t,
+      occurrenceIds: t.occurrences.map((o) => o.id),
+      done: t.occurrences.every((o) => o.done),
+      html: habitRow(t, null),
+    })));
   }
   const list = $("#taskList");
   list.hidden = resting && !planningOpen;
@@ -1437,7 +1452,11 @@ function renderFocusPool() {
   const choices = [];
   activeTasks(week).forEach((t) => {
     if (!isRecurring(t) && !t.done && t.focusDate !== state.selectedDate) {
-      choices.push({ t, occ: null, label: "放進這天", meta: "" });
+      choices.push({
+        t, occ: null,
+        label: t.focusDate ? "改排到這天" : "放進這天",
+        meta: t.focusDate ? `原排 ${formatShortDate(t.focusDate)}` : "尚未指定日期",
+      });
       return;
     }
     if (isRecurring(t) && t.frequency === "weekly") {
@@ -1453,7 +1472,7 @@ function renderFocusPool() {
     }
   });
   pool.innerHTML =
-    `<div class="focus-pool-head"><span>這週還有</span><small>安排到某一天後仍屬於本週</small></div>` +
+    `<div class="focus-pool-head"><span>這週還有（${choices.length}）</span><small>未安排與其他日期的待完成任務，仍屬於本週</small></div>` +
     (choices.length
       ? choices
           .map(
@@ -1461,7 +1480,7 @@ function renderFocusPool() {
               `<div class="focus-choice" style="--c:${taskColor(t)}"><i></i><span>${esc(t.title)}${meta ? `<small> · ${esc(meta)}</small>` : ""}</span><button class="text-button" type="button" data-focus-task="${t.id}" ${occ ? `data-focus-occ="${occ.id}"` : ""} ${weekly ? `data-focus-weekly="true"` : ""}>${label}</button></div>`,
           )
           .join("")
-      : `<div class="empty-note">這週目前沒有其他還沒安排日期的事情</div>`);
+      : `<div class="empty-note">這週沒有其他待安排事項</div>`);
   $$("[data-focus-task]").forEach((b) =>
     b.addEventListener("click", () => {
       const t = state.tasks.find((x) => x.id === Number(b.dataset.focusTask));
@@ -1488,14 +1507,18 @@ function renderFocusPool() {
 }
 function updateQuickDatePickerVisibility() {
   const isEveryDayHabit = $("#quickRepeat").checked && $("#quickFrequency").value === "daily";
-  $("#quickDateWrap").hidden = state.mode !== "day" || isCycleResting() && !restPlannerOpen || isEveryDayHabit;
+  const show = state.mode === "day" && !(isCycleResting() && !restPlannerOpen) && !isEveryDayHabit;
+  $("#quickDateWrap").hidden = !show;
+  $("#quickDate").required = show;
 }
 function renderQuickOptions() {
-  const dates = weekDateMap(state.selectedWeek);
-  $("#quickDate").innerHTML = `<option value="">待安排（放在這週還有）</option>` +
-    Object.values(dates).map((date) =>
-      `<option value="${date}" ${date === state.selectedDate ? "selected" : ""}>週${dayLabel(date)} ${formatShortDate(date)}</option>`
-    ).join("");
+  const dates = Object.values(weekDateMap(state.selectedWeek));
+  // 每日模式新增任務必須有確切日期；整週模式新增可以沒有日期。
+  // 預設選擇正在觀看的那一天，且只能選任務所屬週的七天。
+  const selected = dates.includes(state.selectedDate) ? state.selectedDate : dates[0];
+  $("#quickDate").innerHTML = dates.map((date) =>
+    `<option value="${date}" ${date === selected ? "selected" : ""}>週${dayLabel(date)} ${formatShortDate(date)}</option>`
+  ).join("");
   updateQuickDatePickerVisibility();
   $("#quickGoal").innerHTML =
     `<option value="">不連結方向</option>` +
@@ -2901,6 +2924,10 @@ function bindStaticEvents() {
       goal = $("#quickGoal").value,
       scheduledDate = state.mode === "day" ? $("#quickDate").value : "",
       isRepeat = $("#quickRepeat").checked;
+    if (state.mode === "day" &&
+        !($("#quickRepeat").checked && $("#quickFrequency").value === "daily") &&
+        !Object.values(weekDateMap(targetWeek)).includes(scheduledDate))
+      return showToast("每日模式新增任務，請先選擇這週中的一天");
     if (isRepeat) {
       const frequency = $("#quickFrequency").value,
         times = frequency === "daily" ? 7 : Number($("#quickTimes").value || 2);
@@ -2944,7 +2971,7 @@ function bindStaticEvents() {
       isRepeat
         ? "已加入本週習慣"
         : state.mode === "day"
-          ? scheduledDate ? `已安排到 ${formatShortDate(scheduledDate)}` : "已加入「這週還有」，等待安排日期"
+          ? `已安排到 ${formatShortDate(scheduledDate)}`
           : "已經放進這週了",
     );
   });
