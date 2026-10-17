@@ -679,8 +679,8 @@ function renderHistoryTanks(finishedWeeks = []) {
 function isCycleResting() {
   return Boolean(CYCLE_START_YMD && compareIsoDate(TODAY, CYCLE_START_YMD) < 0);
 }
-// Keep the original weekly/daily calendar, but pause every task surface until
-// this cycle's own startDate. Browsing never marks a week as started.
+// Rest days show the normal calendar with the task area collapsed by default.
+// The task list itself is unchanged; expanding it never starts the new cycle.
 function renderRestHome() {
   const dayMode = state.mode === "day";
   const viewWeek = state.selectedWeek;
@@ -708,9 +708,10 @@ function renderRestHome() {
   $("#restDateNote").hidden = true;
   $("#restDateNote").textContent = "";
   $("#restPlanningBar").hidden = false;
-  $("#toggleRestPlanner").textContent = "預先安排任務";
+  $("#toggleRestPlanner").textContent = "展開任務";
   $("#toggleRestPlanner").setAttribute("aria-expanded", "false");
-  $("#restPlanningHint").textContent = "可以預先安排並提前完成；葉子會計入任務所屬的週次。";
+  $("#restPlanningHint").hidden = true;
+  $("#restPlanningHint").textContent = "";
   $("#taskList").hidden = true;
   $("#taskList").replaceChildren();
   $("#habitTracker").hidden = true;
@@ -776,7 +777,8 @@ function renderHome() {
     archived = life === "archived";
   const entry = $("#footprintEntry");
   entry.hidden = resting || footprintWeek === viewWeek;
-  $("#restBanner").hidden = !showRest;
+  // 休息日只有任務區預設收合；不再顯示特殊任務提示卡。
+  $("#restBanner").hidden = true;
   if (showRest)
     $("#restNextDate").textContent = `Week 1 將於 ${formatShortDate(firstWeekStart)} 開始`;
   $("#homeTitle").textContent = showRest
@@ -803,18 +805,17 @@ function renderHome() {
   $("#weekStrip").hidden = dayMode;
   $("#dayStrip").hidden = !dayMode;
   dayMode ? renderDayStrip() : renderWeekStrip();
-  // 休息日保留日曆，收起任務、進度及新增表單。需要時才打開預排。
+  // 只有休息日預設收合任務。手動展開後，使用一般的任務欄位和進度顯示。
+  // 非休息日永遠正常顯示任務欄位，不顯示收合按鈕。
   $("#workCard").classList.toggle("resting", resting);
-  $("#workHeader").hidden = resting;
-  $("#progressTrack").hidden = resting;
-  $("#progressSummary").hidden = resting;
+  $("#workHeader").hidden = resting && !planningOpen;
+  $("#progressTrack").hidden = resting && !planningOpen;
+  $("#progressSummary").hidden = resting && !planningOpen;
   $("#restPlanningBar").hidden = !resting;
-  $("#toggleRestPlanner").textContent = planningOpen ? "收起預排" : "預先安排任務";
+  $("#toggleRestPlanner").textContent = planningOpen ? "收起任務" : "展開任務";
   $("#toggleRestPlanner").setAttribute("aria-expanded", String(planningOpen));
-  const earlyLeaves = currentLeafRecords(viewWeek).length;
-  $("#restPlanningHint").textContent = planningOpen
-    ? `點任務左側圓圈，可提前完成或改回未完成。Week ${viewWeek} 目前累積 ${earlyLeaves} 片葉子，正式開始後會出現在該週的樹上。`
-    : `預排任務已收起。Week ${viewWeek} 已累積 ${earlyLeaves} 片葉子；${formatShortDate(firstWeekStart)} 正式開始。`;
+  $("#restPlanningHint").hidden = true;
+  $("#restPlanningHint").textContent = "";
   renderTreeHome();
 
   let html = "";
@@ -1050,8 +1051,6 @@ function taskRow(t, occ) {
       : completed;
   const checkLabel = circleDone
     ? "改回未完成"
-    : isCycleResting()
-      ? `提前完成（葉子計入 Week ${t.week}）`
     : isRecurring(t) && state.mode === "day" && occurrenceDoneCount(t) > 0
       ? "再完成一次"
       : isRecurring(t) && state.mode === "week"
@@ -1072,8 +1071,6 @@ function habitRow(t, occ) {
       : t.occurrences.every((o) => o.done);
   const label = completed
     ? "改回未完成"
-    : isCycleResting()
-      ? `提前完成（葉子計入 Week ${t.week}）`
     : group
       ? "完成這次習慣"
       : "完成本週全部次數";
@@ -1240,7 +1237,7 @@ function requestCompletionChangeReason(t, occIds, fromRect) {
 function toggleTaskCompletion(t, occIds, fromRect, switchReason) {
   if (!t || !guardWeekEditable(t.week)) return;
   if (isCycleResting() && !restPlannerOpen)
-    return showToast("請先打開預先安排任務");
+    return showToast("請先展開任務");
   // 不先改資料；原因取消或留白時，勾選狀態完全不變。
   if (switchReason === undefined && needsCompletionChangeReason(t, occIds))
     return requestCompletionChangeReason(t, occIds, fromRect);
@@ -1412,9 +1409,7 @@ function toggleTaskCompletion(t, occIds, fromRect, switchReason) {
       $("#completionNoteDialog").showModal();
     } else {
       showPendingCloudToast(
-        becameComplete && isCycleResting()
-          ? `提前完成，葉子計入 Week ${t.week}`
-          : becameComplete
+        becameComplete
           ? bulkWeekAction
             ? "本週習慣已全部完成"
             : inTree

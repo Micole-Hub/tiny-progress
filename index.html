@@ -69,7 +69,7 @@
             <span class="rest-banner-icon" aria-hidden="true">🌿</span>
             <div class="rest-banner-copy">
               <strong id="restNextDate"></strong>
-              <small>預排任務可以提前完成，葉子算在安排的週次。</small>
+              <small>任務仍計入所屬週次。</small>
             </div>
           </section>
 
@@ -134,8 +134,8 @@
               hidden
             ></div>
             <div class="rest-planning-bar" id="restPlanningBar" hidden>
-              <p id="restPlanningHint">可預排任務並提前完成，••• 操作選單也能使用。</p>
-              <button type="button" class="secondary-button" id="toggleRestPlanner" aria-expanded="false" aria-controls="taskList quickAddForm focusPool habitTracker">預先安排任務</button>
+              <p id="restPlanningHint" hidden></p>
+              <button type="button" class="secondary-button" id="toggleRestPlanner" aria-expanded="false" aria-controls="taskList quickAddForm focusPool habitTracker">展開任務</button>
             </div>
             <p class="rest-date-note" id="restDateNote" hidden></p>
             <div class="task-list" id="taskList" aria-live="polite"></div>
@@ -897,7 +897,7 @@
     <script src="github-page/config.js"></script>
     <script src="github-page/domain.js"></script>
     <script src="github-page/connection.js?v=20261016-qa-stability-v1"></script>
-    <script src="script.js?v=20261017-completed-last-v1"></script>
+    <script src="script.js?v=20261017-rest-task-collapse-v1"></script>
     <script src="github-page/cycle-management.js"></script>
   </body>
 </html>
