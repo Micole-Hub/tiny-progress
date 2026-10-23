@@ -2139,6 +2139,8 @@ function finishedHistoryWeeks() {
 }
 function renderHistory() {
   const finished = finishedHistoryWeeks();
+  const confirmed = TPConnection.confirmedState();
+  window.TPMilestones?.renderGallery(confirmed, finished);
   renderHistoryTanks(finished);
   $("#yearReviewBtn").hidden = !finished.length;
   const mk = (w) => {
@@ -2342,6 +2344,8 @@ function showHistoryWeek(week) {
     leftover,
     daily,
   );
+  if (TPConnection.isReady())
+    window.TPMilestones?.renderWeekKeepsake(box, TPConnection.confirmedState(), week);
   $("[data-close-history]")?.addEventListener("click", closeHistory);
   $("[data-save-reflection]")?.addEventListener("click", () => {
     const good = $("#reviewGood").value.trim(),
@@ -3629,6 +3633,9 @@ function openYearReview() {
   $("#yearReviewDialog").showModal();
 }
 
+window.addEventListener("tp-cloud-confirmed", () => {
+  if (document.querySelector('[data-page="history"].active')) renderHistory();
+});
 bindStaticEvents();
 $("#mobileTreePeek").addEventListener("click", () => {
   $("#growthBanner").scrollIntoView({
