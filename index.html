@@ -3,6 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      // The former demo view is retired. Always use the production website.
+      if (new URLSearchParams(location.search).get("demo") === "1") {
+        location.replace("https://micole-hub.github.io/tiny-progress/");
+      }
+    </script>
     <meta name="theme-color" content="#f4f1ea" />
     <meta name="referrer" content="no-referrer" />
     <title>Tiny Progress · Every small step matters.</title>
