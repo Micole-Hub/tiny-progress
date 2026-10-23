@@ -780,6 +780,7 @@ window.TPConnection = (() => {
   }
   return {
     initial, save, start, demo,
+    confirmedState: () => demo ? (adapter?.get?.() || null) : read(CACHE),
     isConnected: () => !demo && Boolean(ready && base && auth && !paused),
     flush, manage, selectCycle, cycleTheme,
     isReady: () => ready && !paused,
