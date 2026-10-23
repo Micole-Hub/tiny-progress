@@ -118,7 +118,34 @@
     });
   }
 
-  if (root) root.TPMilestones = { renderJourney, calculate };
+  function renderWeekKeepsake(container, s, week) {
+    if (typeof document === "undefined" || !container || !s) return;
+    const w = Number(week);
+    if (!Number.isInteger(w) || w < 1 || w > 12) return;
+    const archived = (s.archivedWeeks || []).find(v => Number(v.week) === w);
+    const reflection = (s.reflections || {})[String(w)] || (archived && archived.reflection) || {};
+    const n = completedForWeek(s, w);
+    const saved = Boolean(reflection.savedAt);
+    const good = saved ? String(reflection.good || "").trim() : "";
+    const adjust = saved ? String(reflection.adjust || "").trim() : "";
+    const details = document.createElement("details");
+    details.className = "tp-keepsake";
+    details.innerHTML = '<summary><span aria-hidden="true" class="tp-keepsake-mark">✧</span>' +
+      '<span><strong>Week ' + w + ' 成果紀念卡</strong>' +
+      '<small>收藏已經走過的這一週</small></span><span class="tp-keepsake-open">展開</span></summary>' +
+      '<div class="tp-keepsake-paper">' +
+      '<span class="tp-keepsake-label">TINY PROGRESS · WEEK ' + w + '</span>' +
+      '<h3>這一週，我留下了進步。</h3>' +
+      '<div class="tp-keepsake-stats"><strong>' + n + '</strong><span>片完成的葉子</span></div>' +
+      (good ? '<p><b>做得不錯的地方</b>' + escapeHtml(good) + '</p>' : '') +
+      (adjust ? '<p><b>下週想調整</b>' + escapeHtml(adjust) + '</p>' : '') +
+      (!good && !adjust ? '<p>即使還沒寫感想，這一週也值得被保存。</p>' : '') +
+      '<small>依已儲存的雲端紀錄顯示 · 不影響原本的每週足跡</small>' +
+      '</div>';
+    container.prepend(details);
+  }
+
+  if (root) root.TPMilestones = { renderJourney, calculate, renderWeekKeepsake };
   if (typeof module !== "undefined" && module.exports)
-    module.exports = { renderJourney, calculate };
+    module.exports = { renderJourney, calculate, renderWeekKeepsake };
 })(typeof window === "undefined" ? null : window);
