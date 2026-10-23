@@ -786,21 +786,14 @@ function renderHome() {
     : dayMode
       ? "一天一點點，累積進度"
       : "這週慢慢長大";
-  $("#homeLede").textContent = showRest
-    ? "Rest is part of progress."
-    : dayMode
-      ? "今天完成的每一件，都會長進這週的樹"
-      : "一件一件完成，讓這週留下自己的樣子";
+  $("#homeLede").hidden = true;
   $("#workTitle").textContent = dayMode
     ? isToday
       ? "今天想完成什麼"
       : `${formatShortDate(state.selectedDate)} 想完成什麼`
     : "這週想完成什麼";
-  $("#workHint").textContent = archived
-    ? "這週已封存，完整紀錄留在 History"
-    : dayMode
-      ? "選擇本週中的一天；事情仍屬於本週"
-      : "把這週要完成的具體任務放在這裡";
+  $("#workHint").textContent = archived ? "這週已封存，請到 History 查看" : "";
+  $("#workHint").hidden = !archived;
   $("#quickTitle").placeholder = "加入本週事項";
   $("#weekStrip").hidden = dayMode;
   $("#dayStrip").hidden = !dayMode;
@@ -865,9 +858,7 @@ function renderHome() {
   const habitTracker = $("#habitTracker");
   habitTracker.hidden = !habitHtml || archived || (resting && !planningOpen);
   $("#habitTrackerTitle").textContent = dayMode ? "今天的習慣" : "習慣追蹤";
-  $("#habitTrackerHint").textContent = dayMode
-    ? "完成次數會計入本週"
-    : "固定重複的事，集中記錄在這裡";
+  $("#habitTrackerHint").textContent = "";
   $("#habitList").innerHTML = habitHtml;
   [...$("#habitList").querySelectorAll("[data-task-id]")].forEach((el, i) =>
     el.style.setProperty("--i", i),
@@ -1446,11 +1437,11 @@ function renderFocusPool() {
   pool.hidden = false;
   const choices = [];
   activeTasks(week).forEach((t) => {
-    if (!isRecurring(t) && !t.done && t.focusDate !== state.selectedDate) {
+    if (!isRecurring(t) && !t.done && !t.focusDate) {
       choices.push({
         t, occ: null,
-        label: t.focusDate ? "改排到這天" : "放進這天",
-        meta: t.focusDate ? `原排 ${formatShortDate(t.focusDate)}` : "尚未指定日期",
+        label: "放進這天",
+        meta: "",
       });
       return;
     }
@@ -1467,7 +1458,7 @@ function renderFocusPool() {
     }
   });
   pool.innerHTML =
-    `<div class="focus-pool-head"><span>這週還有（${choices.length}）</span><small>未安排與其他日期的待完成任務，仍屬於本週</small></div>` +
+    `<div class="focus-pool-head"><span>尚未安排日期（${choices.length}）</span></div>` +
     (choices.length
       ? choices
           .map(
@@ -1475,7 +1466,7 @@ function renderFocusPool() {
               `<div class="focus-choice" style="--c:${taskColor(t)}"><i></i><span>${esc(t.title)}${meta ? `<small> · ${esc(meta)}</small>` : ""}</span><button class="text-button" type="button" data-focus-task="${t.id}" ${occ ? `data-focus-occ="${occ.id}"` : ""} ${weekly ? `data-focus-weekly="true"` : ""}>${label}</button></div>`,
           )
           .join("")
-      : `<div class="empty-note">這週沒有其他待安排事項</div>`);
+      : `<div class="empty-note">這週沒有未指定日期的事項</div>`);
   $$("[data-focus-task]").forEach((b) =>
     b.addEventListener("click", () => {
       const t = state.tasks.find((x) => x.id === Number(b.dataset.focusTask));
@@ -3265,7 +3256,7 @@ function switchPage(page) {
   restartEnter($(`.page[data-page="${page}"]`));
 }
 
-const TUT_STEPS = 7;
+const TUT_STEPS = 8;
 let tutTasks = [],
   tutStep = 0,
   tutDraft = [],
@@ -3368,6 +3359,13 @@ function renderTutorial() {
   } else if (tutStep === 2) {
     body.innerHTML = pane(
       "",
+      "整週和每日怎麼看？",
+      "整週可以看這一週所有任務，也能新增不指定日期的事項。每日只看指定日期的任務，未指定日期的會留在下方等待安排。切換檢視不會複製任務，也不會更改週次。",
+      `<div class="tut-reflect"><p><strong>週次依真正的日期前進。</strong>你可以提前安排、提前完成，但不能因此提早跳到下一週。</p><p>完成記錄會計入所屬週次；若雲端還在儲存，請等確認成功再關閉網頁。</p></div>`,
+    );
+  } else if (tutStep === 3) {
+    body.innerHTML = pane(
+      "",
       "放進一件這週想做的事",
       "在下面寫一件事，按「加入」。這是練習，不會寫進正式資料。",
       `<form class="tut-add" id="tutAddForm"><input id="tutAddInput" maxlength="40" autocomplete="off" placeholder="例如：整理 HTML 筆記"><button class="primary-button" type="submit">加入</button></form><div class="tut-sandbox" id="tutList">${tutTasks.map((t) => tutRow(t, dir.color)).join("")}</div><p class="tut-note" id="tutAddMsg">${tutTasks.length ? "加好了，下一步就能完成它" : "加好之後，下一步就能完成它"}</p>`,
@@ -3391,7 +3389,7 @@ function renderTutorial() {
       $("#tutList").lastElementChild.classList.add("row-new");
       msg.textContent = "加好了，下一步就能完成它";
     });
-  } else if (tutStep === 3) {
+  } else if (tutStep === 4) {
     if (!tutTasks.length)
       tutTasks.push({ id: Date.now(), title: "整理 HTML 筆記", done: false });
     const stepPct = Math.max(8, Math.min(100, Math.round(100 / dir.target))),
@@ -3436,11 +3434,11 @@ function renderTutorial() {
         );
       }),
     );
-  } else if (tutStep === 4) {
+  } else if (tutStep === 5) {
     body.innerHTML = pane(
       tutTree(3, Math.max(tutDoneCount(), 3), "small"),
       "每週留一句感想",
-      "樹上的葉子，就是你完成的每一件事。週末到「本週足跡」寫一兩句就夠了。",
+      "樹上的葉子，就是你完成的每一件事。任何一天都可以到「本週足跡」寫一句，之後也能修改。",
       `<div class="tut-reflect"><label>這週做得不錯的地方<input id="tutGood" maxlength="80" placeholder="留一句就好"></label><label>下週想調整的地方<input id="tutAdjust" maxlength="80" placeholder="也可以只寫其中一格"></label><button class="primary-button" type="button" id="tutSaveRef">儲存感想</button></div><p class="tut-note" id="tutRefMsg">可以隨時回來補充或修改，簡單一句就好</p>`,
     );
     $("#tutSaveRef").addEventListener("click", () => {
@@ -3456,7 +3454,7 @@ function renderTutorial() {
       $("#tutSaveRef").textContent = "已儲存";
       msg.textContent = "存好了。這是練習，正式的感想要在本週足跡留下";
     });
-  } else if (tutStep === 5) {
+  } else if (tutStep === 6) {
     let title = tutTasks.find((t) => !t.done)?.title || tutTasks[0]?.title || "練習 DOM 操作";
     body.innerHTML = pane(
       "",
@@ -3539,7 +3537,7 @@ function renderTutorial() {
         else askReason(act);
       });
     });
-  } else if (tutStep === 6) {
+  } else if (tutStep === 7) {
     body.innerHTML = pane(
       `<div class="tut-done" aria-hidden="true">✓</div>`,
       "準備好了",
@@ -3547,7 +3545,7 @@ function renderTutorial() {
     );
   }
   // 樹上的葉子照順序一片一片長出來，而不是同時蹦出。
-  const leafPace = { 0: [0.95, 0.32], 4: [0.7, 0.12] }[tutStep];
+  const leafPace = { 0: [0.95, 0.32], 5: [0.7, 0.12] }[tutStep];
   if (leafPace)
     $$("#tutBody .tree-leaf").forEach(
       (el, i) =>
