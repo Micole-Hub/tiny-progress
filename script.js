@@ -3240,6 +3240,9 @@ function switchPage(page) {
     treeIntro = true;
     lastListKey = null;
     renderHome();
+  } else if (page === "history") {
+    // Re-render after startup, when demo data and confirmed cloud data are ready.
+    renderHistory();
   }
   restartEnter($(`.page[data-page="${page}"]`));
 }
