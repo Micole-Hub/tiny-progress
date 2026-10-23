@@ -2139,8 +2139,29 @@ function finishedHistoryWeeks() {
 }
 function renderHistory() {
   const finished = finishedHistoryWeeks();
-  // Read-only visual showcase; existing History and stored records are unchanged.
-  window.TPMilestones?.renderGallery(state, finished);
+  // Visual journey shares this page's true calendar and completed-week rules.
+  const firstDates = Object.values(weekDateMap(1));
+  window.TPMilestones?.renderJourney({
+    weeks: Array.from({ length: 12 }, (_, i) => {
+      const week = i + 1;
+      const dates = Object.values(weekDateMap(week));
+      const snapshot = state.archivedWeeks.find(x => Number(x.week) === week);
+      return {
+        number: week, start: dates[0], end: dates.at(-1),
+        finished: finished.includes(week),
+        leaves: snapshot ? (snapshot.completed || []).length : currentLeafRecords(week).length,
+      };
+    }),
+    resting: isCycleResting(),
+    currentWeek: CURRENT_WEEK,
+    today: TODAY,
+    tree: !isCycleResting() ? treeSvg(CURRENT_WEEK, currentLeafRecords(CURRENT_WEEK),
+      { slotOf: (key) => assignLeafSlots(CURRENT_WEEK, currentLeafRecords(CURRENT_WEEK))[key] }) : "",
+    onReviewWeek: week => {
+      showHistoryWeek(week);
+      $("#historyDetail").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    },
+  });
   renderHistoryTanks(finished);
   $("#yearReviewBtn").hidden = !finished.length;
   const mk = (w) => {
