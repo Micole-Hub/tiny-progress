@@ -67,8 +67,11 @@ function validate(c, env = process.env) {
   )
     throw Error("網站來源需為指定的 HTTPS 網域");
 }
-function install(app, c) {
+function install(app, c, deviceSessions) {
   const failures = new Map();
+  const hashDeviceToken = (value) => crypto.createHash("sha256").update(value).digest("hex");
+  const newDeviceToken = () => crypto.randomBytes(32).toString("base64url");
+  const validDeviceToken = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
   const token = () => {
     const data = Buffer.from(
       JSON.stringify({
@@ -109,7 +112,7 @@ function install(app, c) {
       return false;
     }
   };
-  app.post("/auth/login", (req, res) => {
+  app.post("/auth/login", async (req, res) => {
     const key = req.socket.remoteAddress,
       now = Date.now(),
       old = failures.get(key),
@@ -123,7 +126,51 @@ function install(app, c) {
       return res.status(401).json({ message: "密碼不正確" });
     }
     failures.delete(key);
-    res.json({ token: token(), expiresIn: 43200 });
+    try {
+      if (req.body?.remember === true) {
+        const deviceToken = newDeviceToken();
+        const saved = await deviceSessions.create(hashDeviceToken(deviceToken));
+        return res.json({
+          token: token(), expiresIn: 43200,
+          rememberToken: deviceToken, rememberExpiresAt: saved.expiresAt,
+        });
+      }
+      return res.json({ token: token(), expiresIn: 43200 });
+    } catch (error) {
+      console.error("[auth] 無法記住裝置：", error.message);
+      return res.status(503).json({ message: "目前無法記住裝置，請稍後重試或取消勾選後登入。" });
+    }
+  });
+  // A long-lived opaque device token is rotated server-side and never used as an API bearer.
+  // The server stores only its SHA-256 digest in GAS, with a fixed 30-day expiry.
+  app.post("/auth/refresh", async (req, res) => {
+    const oldToken = req.body?.rememberToken;
+    if (!validDeviceToken(oldToken))
+      return res.status(401).json({ message: "記住裝置已失效，請重新登入。" });
+    try {
+      const replacement = newDeviceToken();
+      const saved = await deviceSessions.rotate(hashDeviceToken(oldToken), hashDeviceToken(replacement));
+      return res.json({
+        token: token(), expiresIn: 43200,
+        rememberToken: replacement, rememberExpiresAt: saved.expiresAt,
+      });
+    } catch (error) {
+      const invalid = error.status === 401;
+      return res.status(invalid ? 401 : 503).json({
+        message: invalid ? "記住裝置已過期或登出，請重新登入。" : "暫時無法恢復登入，請稍後重試。",
+      });
+    }
+  });
+  app.post("/auth/logout", async (req, res) => {
+    const value = req.body?.rememberToken;
+    if (!validDeviceToken(value)) return res.json({ ok: true });
+    try {
+      await deviceSessions.revoke(hashDeviceToken(value));
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error("[auth] 無法撤銷裝置：", error.message);
+      return res.status(503).json({ message: "暫時無法撤銷記住裝置，請稍後重試。" });
+    }
   });
   app.use((req, res, next) => {
     res.set({

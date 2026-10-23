@@ -101,7 +101,11 @@ app.use(
     },
   }),
 );
-Access.install(app, ACCESS);
+Access.install(app, ACCESS, {
+  create: (hash) => gasPost("auth-remember-create", { hash }),
+  rotate: (oldHash, newHash) => gasPost("auth-remember-rotate", { oldHash, newHash }),
+  revoke: (hash) => gasPost("auth-remember-revoke", { hash }),
+});
 app.get("/api/state", async (req, res) => {
   try {
     res.json(await loadWebState(req.query.cycle));
@@ -116,22 +120,15 @@ app.put("/api/state", async (req, res) => {
     res.status(e.status || 400).json({ message: e.message });
   }
 });
-app.post("/internal/reminders", async (req, res) => {
+async function sendDueReminder() {
   try {
     const due = await gasPost("reminder-claim");
-    if (due.skipped) return res.json({ ok: true, skipped: due.skipped });
-    const message = scopeMessages(
-      [
-        Cards[due.kind](due.state, {
-          week: due.week,
-          webUrl: TINY_PROGRESS_WEB_URL,
-        }),
-      ],
-      due.state.cycle.number,
-    )[0];
+    if (due.skipped) return { ok: true, skipped: due.skipped };
+    const cardResult = Cards[due.kind](due.state, { week: due.week, webUrl: TINY_PROGRESS_WEB_URL });
+    const messages = scopeMessages(Array.isArray(cardResult) ? cardResult : [cardResult], due.state.cycle.number);
     const hash = crypto
       .createHash("sha256")
-      .update("v28-reminder:" + due.key)
+      .update("v29-reminder:" + due.key)
       .digest("hex");
     const retryKey =
       hash.slice(0, 8) +
@@ -150,7 +147,7 @@ app.post("/internal/reminders", async (req, res) => {
         "Content-Type": "application/json",
         "X-Line-Retry-Key": retryKey,
       },
-      body: JSON.stringify({ to: ACCESS.owner, messages: [message] }),
+      body: JSON.stringify({ to: ACCESS.owner, messages }),
       signal: AbortSignal.timeout(15000),
     });
     if (!response.ok && response.status !== 409)
@@ -159,27 +156,21 @@ app.post("/internal/reminders", async (req, res) => {
       cycle: due.state.cycle.number,
       key: due.key,
     });
-    res.json({ ok: true, sent: true });
-  } catch (e) {
-    res.status(503).json({ message: e.message });
-  }
+    return { ok: true, sent: true, kind: due.kind, key: due.key };
+  } catch (e) { throw e; }
+}
+app.post("/internal/reminders", async (req,res)=>{
+  try { res.json(await sendDueReminder()); }
+  catch(e){ res.status(503).json({message:e.message}); }
 });
 app.post("/internal/card", async (req, res) => {
   try {
     if (!["list", "draw", "monday", "footprint"].includes(req.body.kind))
       return res.status(400).json({ message: "卡片類型不正確" });
     const data = await loadWebState(req.body.cycle);
-    res.json({
-      message: scopeMessages(
-        [
-          Cards[req.body.kind](data.state, {
-            week: Number(req.body.week) || D.currentWeek(data.state),
-            webUrl: TINY_PROGRESS_WEB_URL,
-          }),
-        ],
-        data.state.cycle.number,
-      )[0],
-    });
+    const card = Cards[req.body.kind](data.state, {week: Number(req.body.week) || D.currentWeek(data.state),webUrl: TINY_PROGRESS_WEB_URL});
+    const messages = scopeMessages(Array.isArray(card)?card:[card],data.state.cycle.number);
+    res.json({ message: messages[0], messages });
   } catch (e) {
     res.status(e.status || 400).json({ message: e.message });
   }
@@ -437,6 +428,24 @@ async function runQueueRetryTick() {
   }
 }
 
+// Runs only when Render is awake. A sleeping service needs an external scheduler.
+let reminderTickInFlight = false;
+async function runReminderTick() {
+  if(reminderTickInFlight) return;
+  reminderTickInFlight=true;
+  try {
+    const result=await sendDueReminder();
+    if(result.sent) console.log(`[reminder] sent ${result.kind} ${result.key}`);
+  } catch(e) {console.warn("[reminder] tick failed:",e.message);}
+  finally {reminderTickInFlight=false;}
+}
+function startReminderScheduler() {
+  const delay=Number(process.env.REMINDER_CHECK_INTERVAL_MS||5*60*1000);
+  const tick=setInterval(()=>runReminderTick(),Math.max(60000,delay));
+  const first=setTimeout(()=>runReminderTick(),20000);
+  if(typeof tick.unref==="function")tick.unref();
+  if(typeof first.unref==="function")first.unref();
+}
 function startQueueRetryScheduler() {
   const firstTimer = setTimeout(() => {
     runQueueRetryTick().catch((error) =>
@@ -3128,6 +3137,7 @@ if (require.main === module)
   app.listen(PORT, () => {
     console.log(`Tiny Progress V2 後端啟動：http://localhost:${PORT}`);
     startQueueRetryScheduler();
+    startReminderScheduler();
   });
 module.exports = {
   app,
@@ -3139,16 +3149,9 @@ module.exports = {
 };
 
 async function loadWebState(cycle) {
+  // Viewing cards must not silently increment the cloud revision.
   const data = await gasPost("web-read", { cycle });
-  const before = JSON.stringify(data.state);
-  D.advance(data.state);
-  if (before !== JSON.stringify(data.state))
-    return gasPost("web-save", {
-      state: data.state,
-      expectedRevision: data.revision,
-      mutationId: crypto.randomUUID(),
-    });
-  return data;
+  return { ...data, state: D.advance(D.clone(data.state)) };
 }
 function scopeMessages(messages, cycle) {
   for (const msg of messages) {
@@ -3179,8 +3182,9 @@ async function tpRouteLineCommand({ sourceKey, userText, eventId }) {
     ? userText.slice(TP_POSTBACK_PREFIX.length)
     : null;
   const params = postback ? new URLSearchParams(postback) : null;
+  // Old LINE postbacks refer to legacy items. Never mutate that separate sheet.
   if (params && !params.has("a"))
-    return handleLineTextCommand({ sourceKey, userText });
+    return [Cards.quick("這是舊版卡片，請重新開啟本週清單 🌱", [{label:"本週清單",a:"list"}])];
   const commands = [
     "清單",
     "全部清單",
@@ -3199,21 +3203,19 @@ async function tpRouteLineCommand({ sourceKey, userText, eventId }) {
     "help",
     "攻略",
   ];
-  const data = await gasPost("line-state-read", { eventId });
+  const data = await gasPost("line-state-read", { eventId, userId: sourceKey });
   if (data.cached) return data.cached;
-  if (
-    !params &&
-    !commands.includes(userText) &&
-    !data.state._pending?.[sourceKey]
-  )
-    return handleLineTextCommand({ sourceKey, userText });
+  // Route every LINE message through canonical state; legacy text writes are disabled.
   for (let attempt = 0; attempt < 3; attempt++) {
     const current = attempt
-      ? await gasPost("line-state-read", { eventId })
+      ? await gasPost("line-state-read", { eventId, userId: sourceKey })
       : data;
     if (current.cached) return current.cached;
-    let next = D.clone(current.state),
+    let next = D.advance(D.clone(current.state)),
       messages;
+    // Automatic week/habit projection should not write merely because a card was read.
+    const readBaseline = JSON.stringify(D.publicState(next));
+    next._pending = { [sourceKey]: current.pending || undefined };
     try {
       if (
         params?.has("cycle") &&
@@ -3243,14 +3245,15 @@ async function tpRouteLineCommand({ sourceKey, userText, eventId }) {
     }
     scopeMessages(messages, next.cycle.number);
     try {
-      // GAS 負責儲存狀態；真正要回覆 LINE 的是 Bot.respond 產生的 messages。
-      // 不可直接 return GAS 回傳的 {state, revision}，否則會被轉成 [object Object]。
-      await gasPost("line-state-save", {
-        state: next,
-        expectedRevision: current.revision,
-        eventId,
-        messages,
+      // Persist only actual task changes. Pending conversation lives in GAS Cache, not web_state.
+      const changed = JSON.stringify(D.publicState(next)) !== readBaseline;
+      const pending = next._pending?.[sourceKey] || null;
+      if (changed) await gasPost("line-state-save", {
+        state: next, expectedRevision: current.revision, eventId, messages,
+        userId:sourceKey,pending,
       });
+      else if (JSON.stringify(pending) !== JSON.stringify(current.pending || null))
+        await gasPost("line-bot-pending-save", {userId:sourceKey,pending});
       return messages;
     } catch (e) {
       if (e.status !== 409 || attempt === 2) throw e;

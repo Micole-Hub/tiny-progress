@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261016-qa-stability-v1" />
+    <link rel="stylesheet" href="style.css?v=20261023-remember-device-v1" />
   </head>
   <body>
     <div class="app-shell">
@@ -62,7 +62,7 @@
             type="button"
             hidden
           >
-            本週足跡
+            本週足跡 · 隨時寫感想
           </button>
 
           <section class="rest-banner soft-card" id="restBanner" hidden aria-label="計畫休息期間">
@@ -284,7 +284,7 @@
             <div class="setting-row soft-card toggle-setting">
               <span
                 ><strong>每週記錄</strong
-                ><small>開啟後，本週足跡會讓你留下一點感想</small></span
+                ><small>開啟後，每天都能寫或修改本週感想，不必等到週末</small></span
               >
               <label class="switch"
                 ><input type="checkbox" id="weeklyReflectionToggle" /><i></i
@@ -338,12 +338,17 @@
                 ></label>
               </div>
               <div class="line-settings" id="lineSettings">
-                <label
-                  ><span>推送時間</span
-                  ><input type="time" id="lineTime" value="08:00"
-                /></label>
+                <label><span>週一安排時間</span><input type="time" id="lineMondayTime" value="08:00" /></label>
+                <label><span>週日足跡時間</span><input type="time" id="lineSundayTime" value="08:00" /></label>
+                <input type="hidden" id="lineTime" value="08:00" />
                 <p id="lineCadenceNote"></p>
               </div>
+            </div>
+            <div class="setting-block soft-card">
+              <div class="setting-block-head">
+                <span><strong>登入裝置</strong><small>使用完畢可以登出，並撤銷這台裝置的 30 天登入資格。</small></span>
+              </div>
+              <button type="button" id="logoutDevice" class="secondary-button setting-action">登出這台裝置</button>
             </div>
           </section>
         </section>
@@ -788,6 +793,10 @@
             <button type="button" id="toggleWebPassword" class="password-toggle" aria-label="顯示密碼" aria-pressed="false">顯示</button>
           </span>
         </label>
+        <label class="remember-device-option">
+          <input id="rememberDevice" type="checkbox" />
+          <span><strong>記住這台裝置（30 天）</strong><small>只建議在自己的電腦或手機勾選，公用裝置請保持關閉。</small></span>
+        </label>
         <p id="connectionMessage" role="status"></p>
         <div id="legacyDraftNotice" class="legacy-draft-notice" hidden>
           <strong>偵測到舊版未同步草稿</strong>
@@ -895,9 +904,9 @@
       </div>
     </dialog>
     <script src="github-page/config.js"></script>
-    <script src="github-page/domain.js"></script>
-    <script src="github-page/connection.js?v=20261016-qa-stability-v1"></script>
-    <script src="script.js?v=20261017-rest-task-collapse-v1"></script>
+    <script src="github-page/domain.js?v=20261022-sage-reflection-v1"></script>
+    <script src="github-page/connection.js?v=20261023-remember-device-v1"></script>
+    <script src="script.js?v=20261022-sage-reflection-v1"></script>
     <script src="github-page/cycle-management.js"></script>
   </body>
 </html>
