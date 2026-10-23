@@ -812,6 +812,17 @@
         </p>
       </form>
     </section>
+    <section id="cloudFailureGate" class="connection-gate" hidden aria-label="雲端連線中斷">
+      <div class="connection-card" role="alert" aria-labelledby="cloudFailureTitle" aria-describedby="cloudFailureText">
+        <p class="eyebrow">TINY PROGRESS</p>
+        <h2 id="cloudFailureTitle">已登入，正在重新連接雲端</h2>
+        <p id="cloudFailureText">暫時無法確認最新雲端資料，編輯已暫停。</p>
+        <div class="connection-actions">
+          <button class="primary-button" type="button" id="retryCloudRead">重試雲端連線</button>
+        </div>
+        <p class="dialog-help">已保留最後成功讀取的資料，不會建立離線副本。連線恢復後會自動重新載入。</p>
+      </div>
+    </section>
     <section id="saveFailureGate" class="connection-gate" hidden aria-label="雲端儲存失敗">
       <div class="connection-card" role="alertdialog" aria-labelledby="saveFailureTitle" aria-describedby="saveFailureText">
         <p class="eyebrow">TINY PROGRESS</p>

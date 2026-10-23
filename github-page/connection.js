@@ -159,6 +159,8 @@ window.TPConnection = (() => {
   let baseline = "";
   let inflight = false;
   let paused = false;
+  let cloudUnavailable = false;
+  let cloudRetrying = false;
   let pendingSave = null;
   let selectedCycle = null;
   let conflictRetries = 0;
@@ -235,6 +237,7 @@ window.TPConnection = (() => {
   function gate(kind) {
     ui("connectionGate").hidden = kind !== "login";
     ui("saveFailureGate").hidden = kind !== "save";
+    ui("cloudFailureGate").hidden = kind !== "cloud";
     document.querySelector(".app-shell").inert = kind !== null;
   }
   function cacheConfirmed(s) {
@@ -351,6 +354,7 @@ window.TPConnection = (() => {
     paused = false;
     conflictRetries = 0;
     ready = true;
+    cloudUnavailable = false;
     adapter.replace(data.state);
     cacheConfirmed(data.state);
     gate(null);
@@ -361,6 +365,45 @@ window.TPConnection = (() => {
     const data = await request(statePath());
     takeCloud(data);
     status("已載入雲端進度", "info", true);
+  }
+  // A failed cloud read is not necessarily an expired login. Keep the
+  // last confirmed snapshot protected and retry without asking for a password.
+  function cloudReadFailed(error) {
+    if (error?.status === 401) {
+      cloudUnavailable = false;
+      auth = "";
+      sessionStorage.removeItem(SESSION_KEY);
+      messageForLogin("登入已過期，請重新輸入密碼。");
+      return;
+    }
+    cloudUnavailable = true;
+    ui("cloudFailureText").textContent = navigator.onLine
+      ? "已登入，但暫時無法確認最新雲端資料。為避免資料不同步，編輯已暫停；恢復連線後會重新載入。"
+      : "目前沒有網路，編輯已暫停。連線恢復後會重新載入雲端資料。";
+    gate("cloud");
+    status("雲端資料暫時無法讀取，已暫停編輯", "error");
+  }
+  function messageForLogin(text) {
+    ui("connectionMessage").textContent = text;
+    gate("login");
+  }
+  async function retryCloudRead() {
+    if (cloudRetrying || !base || !navigator.onLine) return;
+    cloudRetrying = true;
+    ui("retryCloudRead").disabled = true;
+    try {
+      if (!auth && !(await renewDeviceSession())) {
+        const error = new Error("登入已過期");
+        error.status = 401;
+        throw error;
+      }
+      await reload();
+    } catch (error) {
+      cloudReadFailed(error);
+    } finally {
+      cloudRetrying = false;
+      ui("retryCloudRead").disabled = false;
+    }
   }
   function showFailure(error) {
     paused = true;
@@ -570,12 +613,20 @@ window.TPConnection = (() => {
         }
         if (!message.textContent.startsWith("已登入，但")) message.textContent = "";
       } catch (error) {
-        message.textContent = error.message;
-        gate("login");
+        if (auth && error.status !== 401) cloudReadFailed(error);
+        else {
+          if (error.status === 401) {
+            auth = "";
+            sessionStorage.removeItem(SESSION_KEY);
+          }
+          message.textContent = error.message;
+          gate("login");
+        }
       } finally {
         button.disabled = false;
       }
     };
+    ui("retryCloudRead").onclick = retryCloudRead;
     ui("retryFailedSave").onclick = async () => {
       if (!navigator.onLine) {
         ui("saveFailureText").textContent = "目前沒有網路，恢復連線後才能重新儲存。";
@@ -645,14 +696,7 @@ window.TPConnection = (() => {
         await reload();
         message.textContent = "";
       } catch (error) {
-        message.textContent = error.status === 401
-          ? "登入已過期，請重新輸入密碼。"
-          : "暫時無法讀取雲端，請稍後重試。未開啟離線編輯。";
-        if (error.status === 401) {
-          auth = "";
-          sessionStorage.removeItem(SESSION_KEY);
-        }
-        gate("login");
+        cloudReadFailed(error);
       } finally {
         // Show manual login only after failed or expired automatic verification.
         form.hidden = false;
@@ -662,6 +706,11 @@ window.TPConnection = (() => {
     if (startCompleted) return;
     startCompleted = true;
     const refresh = async () => {
+      if (cloudUnavailable && !document.hidden && navigator.onLine &&
+          !inflight && !paused && !dirty() && !pendingSave) {
+        await retryCloudRead();
+        return;
+      }
       if (!ready || !base || !auth || inflight || paused || dirty() ||
           document.hidden || document.querySelector("dialog[open]") ||
           document.activeElement?.matches("input,textarea,select") ||
@@ -679,16 +728,9 @@ window.TPConnection = (() => {
         // 週期目標可能由週期管理更新，定期同步文字但不改資料。
         void refreshCycleTheme();
       } catch (error) {
-        // No offline edits when the cloud cannot be reached.
-        if (dirty() || pendingSave) {
-          showFailure(error);
-        } else {
-          gate("login");
-          message.textContent = error.status === 401
-            ? "登入已過期，請重新登入。"
-            : "暫時無法連線到雲端，編輯已暫停。連線恢復後會重新載入。";
-          status("暫時無法連線到雲端，已暫停編輯", "error");
-        }
+        // A temporary GAS / Render error must not look like a logout.
+        if (dirty() || pendingSave) showFailure(error);
+        else cloudReadFailed(error);
       }
     };
     setInterval(refresh, 30000);
@@ -698,9 +740,7 @@ window.TPConnection = (() => {
       if (dirty() || pendingSave) {
         showFailure(new Error("網路中斷，這次修改仍未儲存。"));
       } else {
-        gate("login");
-        message.textContent = "目前離線，編輯已暫停。恢復網路後會重新載入雲端資料。";
-        status("目前離線，已暫停編輯", "error");
+        cloudReadFailed(new Error("網路中斷"));
       }
     });
     window.addEventListener("beforeunload", (event) => {
@@ -710,15 +750,16 @@ window.TPConnection = (() => {
       }
     });
     window.addEventListener("online", () => {
+      if (cloudUnavailable) {
+        void retryCloudRead();
+        return;
+      }
       if (!auth || !base) return;
       if (paused && (dirty() || pendingSave)) {
         paused = false;
         flush();
       } else if (ready && !dirty() && !pendingSave) {
-        reload().catch((error) => {
-          gate("login");
-          message.textContent = "無法重新讀取雲端，請再次登入：" + error.message;
-        });
+        reload().catch(cloudReadFailed);
       }
     });
   }
