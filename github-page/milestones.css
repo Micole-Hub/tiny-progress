@@ -1,0 +1,39 @@
+/* Optional History milestones. Existing tree, leaf and checkmark animations stay intact. */
+.tp-awards-section{margin:22px 0 28px;padding:22px;border:1px solid #e7e2d8;border-radius:24px;background:#fffdf9}
+.tp-awards-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tp-awards-head h2{margin:0;font-size:18px;font-weight:700;color:#3f433e}
+.tp-awards-count{padding:5px 10px;border-radius:999px;background:#f2f5ee;color:#59785c;font-weight:700;font-size:12px}
+.tp-awards-hint{margin:9px 0 17px;color:#747b71;font-size:12px;line-height:1.7}
+.tp-awards-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.tp-award{min-width:0;display:flex;align-items:center;flex-direction:column;gap:7px;min-height:176px;padding:18px 11px 13px;border:1px solid #ece6dc;border-radius:18px;text-align:center;background:#f8f4ee;color:#6d736a}
+.tp-award.is-earned{border-color:#e1d4b9;background:linear-gradient(160deg,#fffdf7,#f5f1e8);animation:tpAwardReveal .6s cubic-bezier(.2,.8,.2,1) both}
+.tp-award.is-locked{opacity:.66}
+.tp-award-symbol{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-size:26px;background:#e6e8e1;color:#858b80}
+.tp-award.is-earned .tp-award-symbol{background:#f0e4c9;color:#a47e3e;box-shadow:0 2px 12px rgba(170,135,79,.12)}
+.tp-award strong{color:#3f433e;font-size:14px}
+.tp-award small{font-size:11px;line-height:1.5;min-height:30px}
+.tp-award-state{font-size:11px;color:#947751;margin-top:auto}
+.tp-award.is-locked .tp-award-state{color:#8f948d}
+.tp-keepsake{border:1px solid #e3d7bc;border-radius:19px;background:#fffcf6;margin:0 0 22px;overflow:hidden}
+.tp-keepsake>summary{display:flex;align-items:center;gap:12px;padding:16px;cursor:pointer;list-style:none;color:#594c3d}
+.tp-keepsake>summary::-webkit-details-marker{display:none}
+.tp-keepsake-mark{display:grid;place-items:center;flex:none;width:42px;height:42px;border-radius:50%;background:#f0e4c9;color:#9a7940;font-size:25px}
+.tp-keepsake>summary>span:nth-child(2){display:grid;gap:3px}
+.tp-keepsake>summary strong{font-size:14px}
+.tp-keepsake>summary small{font-size:11px;color:#85776a}
+.tp-keepsake-open{margin-left:auto;font-size:12px;color:#8b7759;white-space:nowrap}
+.tp-keepsake[open] .tp-keepsake-open{font-size:0}
+.tp-keepsake[open] .tp-keepsake-open:after{content:"收合";font-size:12px}
+.tp-keepsake-paper{margin:0 13px 13px;padding:21px;border-radius:13px;background:linear-gradient(135deg,#fffefa,#f8f3e9);border:1px solid #eee5d4;animation:tpPaperUnfold .48s cubic-bezier(.2,.8,.2,1) both;transform-origin:top}
+.tp-keepsake-label{font-size:10px;letter-spacing:.1em;color:#8c815c;font-weight:700}
+.tp-keepsake-paper h3{font-size:18px;color:#4f5148;margin:10px 0 14px}
+.tp-keepsake-stats{display:flex;align-items:baseline;gap:8px;margin-bottom:14px;color:#59785c}
+.tp-keepsake-stats strong{font-size:34px;line-height:1}
+.tp-keepsake-stats span{font-size:12px}
+.tp-keepsake-paper p{font-size:13px;line-height:1.7;color:#555a52;overflow-wrap:anywhere}
+.tp-keepsake-paper p b{display:block;color:#7a6250;margin-bottom:3px}
+.tp-keepsake-paper>small{display:block;color:#908c83;font-size:10px;margin-top:18px}
+@keyframes tpAwardReveal{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes tpPaperUnfold{from{opacity:.4;transform:translateY(-8px) scaleY(.95)}to{opacity:1;transform:none}}
+@media(max-width:620px){.tp-awards-section{padding:17px}.tp-awards-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.tp-award{padding:12px 5px;min-height:161px}.tp-award small{font-size:10px}.tp-award strong{font-size:12px}.tp-award-symbol{width:40px;height:40px}}
+@media(prefers-reduced-motion:reduce){.tp-award.is-earned,.tp-keepsake-paper{animation:none}}

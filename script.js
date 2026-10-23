@@ -2139,6 +2139,8 @@ function finishedHistoryWeeks() {
 }
 function renderHistory() {
   const finished = finishedHistoryWeeks();
+  // Read-only visual showcase; existing History and stored records are unchanged.
+  window.TPMilestones?.renderGallery(state, finished);
   renderHistoryTanks(finished);
   $("#yearReviewBtn").hidden = !finished.length;
   const mk = (w) => {
@@ -2342,6 +2344,8 @@ function showHistoryWeek(week) {
     leftover,
     daily,
   );
+  // Decoration only. Uses existing weekly history without writing back to state.
+  window.TPMilestones?.renderWeekKeepsake(box, state, week);
   $("[data-close-history]")?.addEventListener("click", closeHistory);
   $("[data-save-reflection]")?.addEventListener("click", () => {
     const good = $("#reviewGood").value.trim(),
