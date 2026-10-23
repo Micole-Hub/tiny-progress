@@ -37,9 +37,7 @@
   const isoDate = (v) => {
     const d = toSafeDate(v);
     if (!d) return "";
-    const source = d instanceof Date ? d : new Date(d);
-    if (Number.isNaN(source.getTime())) return "";
-    return source.toISOString().slice(0, 10);
+    return d.toISOString().slice(0, 10);
   };
   const today = () =>
     new Intl.DateTimeFormat("en-CA", {
@@ -156,6 +154,10 @@
         weeklyReflection: true,
         lineEnabled: false,
         lineTime: "08:00",
+        lineMondayTime: "08:00",
+        lineSundayTime: "08:00",
+        lineMondayEnabled: true,
+        lineSundayEnabled: true,
       },
       categories: [
         { id: "learn", name: "學習", color: "#9fc3de" },
@@ -410,6 +412,12 @@
       !/^([01]\d|2[0-3]):[0-5]\d$/.test(s.preferences.lineTime)
     )
       fail("提醒時間不正確");
+    for (const key of ["lineMondayTime", "lineSundayTime"])
+      if (s.preferences[key] !== undefined && !/^([01]\d|2[0-3]):[0-5]\d$/.test(s.preferences[key]))
+        fail("LINE 推播時間不正確");
+    for (const key of ["lineMondayEnabled", "lineSundayEnabled"])
+      if (s.preferences[key] !== undefined && typeof s.preferences[key] !== "boolean")
+        fail("LINE 提醒開關不正確");
     for (const k of [
       "weekMeta",
       "footprintDeferred",
@@ -525,12 +533,19 @@
         )
           fail("封存紀錄不能修改", 409);
       }
+    // Reflections are living notes: allow edits even after a week ends.
+    // Task history, archived task records, and the original savedAt stay protected.
+    for (const [w, r] of Object.entries(next.reflections)) {
+      if (JSON.stringify(current.reflections[w]) === JSON.stringify(r)) continue;
+      if (!/^(?:[1-9]|1[0-2])$/.test(w) || !r || typeof r !== "object" || Array.isArray(r) ||
+          typeof r.good !== "string" || typeof r.adjust !== "string" ||
+          r.good.length > 80 || r.adjust.length > 80 ||
+          (!r.good.trim() && !r.adjust.trim()) || !r.savedAt)
+        fail("每週感想格式不正確", 409);
+    }
     for (const [w, r] of Object.entries(current.reflections))
-      if (
-        r?.savedAt &&
-        JSON.stringify(r) !== JSON.stringify(next.reflections[w])
-      )
-        fail("已儲存的感想不能修改", 409);
+      if (r?.savedAt && r.savedAt !== next.reflections[w]?.savedAt)
+        fail("已儲存感想的首次儲存時間不能更改", 409);
     if (
       JSON.stringify(next.events.slice(0, current.events.length)) !==
       JSON.stringify(current.events)

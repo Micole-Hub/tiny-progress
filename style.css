@@ -4269,7 +4269,7 @@ body {
    One cohesive final layer: warm paper, gentle hierarchy, and reachable actions.
    No data model or cloud logic changes. */
 :root {
-  --bg: #f7f4ef;
+  --bg: #e9f0e8; /* 淡鼠尾草綠：僅作為頁面背景 */
   --surface: #fffefa;
   --surface-2: #faf7f1;
   --surface-3: #eef3eb;
@@ -4284,7 +4284,7 @@ body {
   --shadow-soft: 0 8px 24px rgba(78, 70, 52, 0.045);
 }
 html, body { background: var(--bg); }
-body { background: linear-gradient(180deg, #fbf9f5 0px, #f7f4ef 390px); }
+body { background: linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px); }
 .topbar { background: rgba(255,254,250,.96); border-bottom: 1px solid var(--line); }
 .page-wrap { width: min(1160px, calc(100% - 48px)); padding-top: 28px; }
 .soft-card { background: var(--surface); border: 1px solid var(--line); border-radius: 19px; box-shadow: var(--shadow-soft); }
@@ -4417,3 +4417,25 @@ body { background: linear-gradient(180deg, #fbf9f5 0px, #f7f4ef 390px); }
 }
 @keyframes tp-auth-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .auto-login-spinner { animation: none; } }
+
+/* Tiny Progress: opt-in remembered device login */
+.connection-card label.remember-device-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  cursor: pointer;
+  margin: 14px 0;
+}
+.remember-device-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  accent-color: #637d6b;
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 4px;
+  margin: 2px 0 0;
+}
+.remember-device-option span { display: grid; gap: 4px; }
+.remember-device-option strong { font-size: 14px; }
+.remember-device-option small { color: var(--muted); line-height: 1.55; }

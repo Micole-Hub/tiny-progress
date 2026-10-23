@@ -4,7 +4,9 @@ window.TPConnection = (() => {
   const D = window.TPDomain,
     demo = new URLSearchParams(location.search).get("demo") === "1";
   const CACHE = "tiny-progress-v28-cache",
-    META = "tiny-progress-v28-sync";
+    META = "tiny-progress-v28-sync",
+    SESSION_KEY = "tp-v28-session",
+    REMEMBER_KEY = "tp-v29-remember";
   const read = (key, storage = localStorage) => {
     try {
       return JSON.parse(storage.getItem(key) || "null");
@@ -264,12 +266,20 @@ window.TPConnection = (() => {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  async function request(path, { method = "GET", body } = {}) {
+  // Short-lived API access stays in sessionStorage. Only an opted-in, rotating
+  // device token (never the password) is kept across browser sessions.
+  const currentRemember = () => read(REMEMBER_KEY);
+  const saveAccess = () => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ base, auth }));
+    localStorage.removeItem(SESSION_KEY); // Migrate old 12-hour login storage.
+  };
+  let refreshPromise = null;
+  async function requestOnce(path, { method = "GET", body } = {}) {
     const res = await fetch(base + path, {
       method,
       headers: {
         "Content-Type": "application/json",
-        ...(auth ? { Authorization: "Bearer " + auth } : {}),
+        ...(auth && !path.startsWith("/auth/") ? { Authorization: "Bearer " + auth } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(45000),
@@ -286,6 +296,49 @@ window.TPConnection = (() => {
       throw error;
     }
     return data;
+  }
+  async function renewDeviceSession() {
+    if (refreshPromise) return refreshPromise;
+    const remembered = currentRemember();
+    if (!remembered?.token || remembered.base !== base) return false;
+    if (remembered.expiresAt && Number(remembered.expiresAt) <= Date.now()) {
+      localStorage.removeItem(REMEMBER_KEY);
+      return false;
+    }
+    refreshPromise = (async () => {
+      try {
+        const next = await requestOnce("/auth/refresh", {
+          method: "POST", body: { rememberToken: remembered.token },
+        });
+        auth = next.token;
+        saveAccess();
+        localStorage.setItem(REMEMBER_KEY, JSON.stringify({
+          base, token: next.rememberToken, expiresAt: next.rememberExpiresAt,
+        }));
+        return true;
+      } catch (error) {
+        if (error.status === 401 && currentRemember()?.token === remembered.token) {
+          // Another browser tab might already have rotated the shared token.
+          localStorage.removeItem(REMEMBER_KEY);
+          sessionStorage.removeItem(SESSION_KEY);
+          auth = "";
+        }
+        throw error;
+      }
+    })();
+    try { return await refreshPromise; }
+    finally { refreshPromise = null; }
+  }
+  async function request(path, options = {}) {
+    try {
+      return await requestOnce(path, options);
+    } catch (error) {
+      // Refresh transparently when the 12-hour access token expires.
+      // Avoid refreshing auth endpoints, and retry each API operation at most once.
+      if (error.status !== 401 || path.startsWith("/auth/") ||
+          !(await renewDeviceSession())) throw error;
+      return requestOnce(path, options);
+    }
   }
   function statePath() {
     return "/api/state" + (selectedCycle ? "?cycle=" + selectedCycle : "");
@@ -434,14 +487,27 @@ window.TPConnection = (() => {
     const url = ui("serverUrl");
     const password = ui("webPassword");
     const message = ui("connectionMessage");
+    const rememberInput = ui("rememberDevice");
     preserveLegacyDraft();
     ui("downloadLegacyDraft").onclick = downloadLegacyDraft;
+    // Preserve existing active sessions during the upgrade, but stop persisting
+    // access tokens in localStorage from this version onward.
+    const oldSession = read(SESSION_KEY);
+    const session = read(SESSION_KEY, sessionStorage) || oldSession;
+    if (oldSession?.auth) {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(oldSession));
+      localStorage.removeItem(SESSION_KEY);
+    }
+    const remembered = currentRemember();
     url.value = window.TP_CONFIG?.API_BASE_URL || localStorage.getItem("tp-v28-server") || "";
-    const session = read("tp-v28-session");
     if (!url.value && session?.base) url.value = session.base;
-    // Saved session may be valid. Do not flash the password form during verification.
-    // The app remains inert until the server confirms the session.
-    const autoRestore = !oldUnsaved && Boolean(session?.auth && session.base === url.value);
+    if (!url.value && remembered?.base) url.value = remembered.base;
+    rememberInput.checked = Boolean(remembered?.token && remembered.base === url.value);
+    // No password flash: first verify an existing access token or remembered device.
+    const autoRestore = !oldUnsaved && Boolean(
+      (session?.auth && session.base === url.value) ||
+      (remembered?.token && remembered.base === url.value)
+    );
     form.hidden = autoRestore;
     ui("autoLoginLoading").hidden = !autoRestore;
 
@@ -460,11 +526,34 @@ window.TPConnection = (() => {
           throw new Error("要完成目前未儲存的修改，請登入原本的 Render 服務。 ");
         base = chosenBase;
         auth = "";
-        const login = await request("/auth/login", {
-          method: "POST", body: { password: password.value },
+        const login = await requestOnce("/auth/login", {
+          method: "POST", body: {
+            password: password.value, remember: rememberInput.checked,
+          },
         });
         auth = login.token;
-        localStorage.setItem("tp-v28-session", JSON.stringify({ base, auth }));
+        saveAccess();
+        if (login.rememberToken) {
+          localStorage.setItem(REMEMBER_KEY, JSON.stringify({
+            base, token: login.rememberToken, expiresAt: login.rememberExpiresAt,
+          }));
+        } else {
+          const previous = currentRemember();
+          if (previous?.token) {
+            // Opting out of remembered login must also revoke an older device token.
+            const oldBase = base;
+            base = previous.base;
+            try {
+              await requestOnce("/auth/logout", {
+                method: "POST", body: { rememberToken: previous.token },
+              });
+              localStorage.removeItem(REMEMBER_KEY);
+            } catch {
+              // Do not silently claim that the old device was revoked.
+              message.textContent = "已登入，但先前的記住裝置尚未撤銷，請在設定頁重試登出。";
+            } finally { base = oldBase; }
+          }
+        }
         localStorage.setItem("tp-v28-server", base);
         password.value = "";
         if (reauthForSave && pendingSave) {
@@ -479,7 +568,7 @@ window.TPConnection = (() => {
           localStorage.setItem("tiny-progress-cloud-first-legacy-reviewed", "yes");
           oldUnsaved = null;
         }
-        message.textContent = "";
+        if (!message.textContent.startsWith("已登入，但")) message.textContent = "";
       } catch (error) {
         message.textContent = error.message;
         gate("login");
@@ -512,24 +601,60 @@ window.TPConnection = (() => {
       }
     };
 
+    // Explicit logout revokes the remembered device server-side.
+    ui("logoutDevice").onclick = async () => {
+      if (inflight || dirty() || pendingSave) {
+        status("有尚未儲存的修改，請先確認雲端已儲存再登出。", "error");
+        return;
+      }
+      const button = ui("logoutDevice");
+      button.disabled = true;
+      try {
+        const saved = currentRemember();
+        if (saved?.token) {
+          const currentBase = base;
+          base = serverBase(saved.base);
+          try {
+            await requestOnce("/auth/logout", {
+              method: "POST", body: { rememberToken: saved.token },
+            });
+          } finally { base = currentBase; }
+        }
+        sessionStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(REMEMBER_KEY);
+        localStorage.removeItem(CACHE);
+        localStorage.removeItem(META);
+        auth = "";
+        ready = false;
+        location.reload();
+      } catch (error) {
+        status("無法安全登出並撤銷裝置，請確認網路後重試：" + error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    };
+
     if (autoRestore) {
       try {
-        base = serverBase(session.base);
-        auth = session.auth;
-        message.textContent = "正在載入雲端進度…";
+        base = serverBase(url.value);
+        auth = session?.base === base ? session.auth : "";
+        message.textContent = "正在確認雲端登入…";
+        if (!auth && !(await renewDeviceSession()))
+          throw Object.assign(new Error("登入已過期，請重新輸入密碼。"), {status: 401});
         await reload();
         message.textContent = "";
       } catch (error) {
         message.textContent = error.status === 401
           ? "登入已過期，請重新輸入密碼。"
-          : "暫時無法讀取雲端，請稍後重試登入。未開啟離線編輯。";
+          : "暫時無法讀取雲端，請稍後重試。未開啟離線編輯。";
         if (error.status === 401) {
           auth = "";
-          localStorage.removeItem("tp-v28-session");
+          sessionStorage.removeItem(SESSION_KEY);
         }
         gate("login");
       } finally {
-        // Show manual login only after failed/expired automatic verification.
+        // Show manual login only after failed or expired automatic verification.
         form.hidden = false;
         ui("autoLoginLoading").hidden = true;
       }

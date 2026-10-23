@@ -1999,18 +1999,17 @@ function renderFootprintCard(week) {
       : `<div class="footprint-empty">這週還沒有完成紀錄</div>`;
   }
   const archived = isWeekArchived(week),
-    complete = isWeekComplete(week),
     r = reviewObj(state.reflections[week]);
-  const reflection = state.preferences.weeklyReflection && !reflectionSaved(r);
+  const reflection = state.preferences.weeklyReflection;
   const remaining = activeTasks(week).filter((t) => !isRecurring(t) && !t.done);
   if (remaining.length)
     body += `<div class="footprint-day"><strong>還有 ${remaining.length} 件</strong>${remaining.map((t) => `<div class="footprint-item"><span>${esc(t.title)}</span>${!archived && week < 12 ? `<button type="button" class="text-button" data-footprint-move="${t.id}">移週</button>` : ""}</div>`).join("")}</div>`;
   const editor = reflection
-    ? `<div class="footprint-reflection"><label>這週做得不錯的地方<input id="footprintGood" type="text" maxlength="80" value="${esc(r.good)}" placeholder="留下一句就好"></label><label>下週想調整的地方<input id="footprintAdjust" type="text" maxlength="80" value="${esc(r.adjust)}" placeholder="也可以只寫其中一格"></label><button class="primary-button" type="button" data-footprint-save>儲存感想</button><p class="footprint-help">儲存後只能查看；不會立即封存這一週</p></div>`
+    ? `<div class="footprint-reflection"><label>這週做得不錯的地方<input id="footprintGood" type="text" maxlength="80" value="${esc(r.good)}" placeholder="留下一句就好"></label><label>下週想調整的地方<input id="footprintAdjust" type="text" maxlength="80" value="${esc(r.adjust)}" placeholder="也可以只寫其中一格"></label><button class="primary-button" type="button" data-footprint-save>${r.savedAt ? "更新感想" : "儲存感想"}</button><p class="footprint-help">哪天想到都可以寫，之後也能修改；感想不會提前封存週次。</p></div>`
     : r.savedAt
       ? `<div class="footprint-reflection"><p>${esc(r.good)}</p><p>${esc(r.adjust)}</p></div>`
       : "";
-  const action = `${editor}<div class="footprint-actions">${complete && !archived ? `<button class="primary-button" type="button" data-footprint-next>${week < 12 ? "收好本週，前往下一週" : "收好本輪"}</button>` : ""}<button class="text-button" type="button" data-footprint-later>回本週</button></div>`;
+  const action = `${editor}<div class="footprint-actions"><button class="text-button" type="button" data-footprint-later>回本週</button></div>`;
   card.innerHTML = `<div class="footprint-head"><div><p class="eyebrow">Week ${week}</p><h2 id="footprintTitle">本週足跡</h2></div><small>${count} 片葉子</small></div><p class="footprint-summary">這週真正完成的事，都留在這裡。</p><div class="footprint-list">${body}</div>${action}`;
   $("[data-footprint-later]")?.addEventListener("click", () =>
     closeFootprint(true),
@@ -2019,20 +2018,20 @@ function renderFootprintCard(week) {
     const good = $("#footprintGood").value.trim(),
       adjust = $("#footprintAdjust").value.trim();
     if (!good && !adjust) return showToast("先留下一點這週的想法");
+    const previous = reviewObj(state.reflections[week]);
+    const now = new Date().toISOString();
     state.reflections[week] = {
       good,
       adjust,
-      savedAt: new Date().toISOString(),
+      savedAt: previous.savedAt || now,
+      updatedAt: now,
     };
     const snap = state.archivedWeeks.find((x) => Number(x.week) === week);
     if (snap) snap.reflection = state.reflections[week];
     saveState();
     renderFootprintCard(week);
-    showPendingCloudToast("感想已送出");
+    showPendingCloudToast("感想已儲存，之後仍可修改");
   });
-  $("[data-footprint-next]")?.addEventListener("click", () =>
-    finalizeFootprintWeek(week),
-  );
   $$("[data-footprint-move]").forEach((b) =>
     b.addEventListener("click", () => {
       const t = state.tasks.find(
@@ -2104,34 +2103,6 @@ function syncFootprintState() {
     }
     document.body.classList.remove("footprint-open");
   }
-}
-function finalizeFootprintWeek(week) {
-  if (isWeekArchived(week)) return;
-  if (!isWeekComplete(week)) return showToast("這週還有事情沒完成");
-  archiveWeek(week, "review");
-  saveState();
-  const next = week < 12 ? week + 1 : null,
-    layer = $("#weekFootprintLayer");
-  const finish = () => {
-    footprintWeek = null;
-    if (layer) {
-      layer.classList.remove("closing");
-      layer.hidden = true;
-      layer.setAttribute("aria-hidden", "true");
-    }
-    document.body.classList.remove("footprint-open");
-    if (next && isWeekUnlocked(next)) {
-      state.selectedWeek = next;
-      state.selectedDate = defaultDateForWeek(next);
-      treeIntro = true;
-      showToast(`Week ${next} 已經可以開始安排`);
-    } else showToast("這一輪收好了");
-    renderAll();
-  };
-  if (motionOk() && layer) {
-    layer.classList.add("closing");
-    setTimeout(finish, 280);
-  } else finish();
 }
 function openCompletionRecord(t) {
   if (!t) return;
@@ -2373,24 +2344,23 @@ function showHistoryWeek(week) {
   );
   $("[data-close-history]")?.addEventListener("click", closeHistory);
   $("[data-save-reflection]")?.addEventListener("click", () => {
-    if (reflectionSaved(state.reflections[week]))
-      return showToast("這週的感想已經存好了");
-    if (!weekMetaFor(week).autoArchived)
-      return showToast("這週的感想請從本週足跡留下");
     const good = $("#reviewGood").value.trim(),
       adjust = $("#reviewAdjust").value.trim();
     if (!good && !adjust) return showToast("先留下一點這週的想法");
+    const previous = reviewObj(state.reflections[week]);
+    const now = new Date().toISOString();
     state.reflections[week] = {
       good,
       adjust,
-      savedAt: new Date().toISOString(),
+      savedAt: previous.savedAt || now,
+      updatedAt: now,
     };
     const snap = state.archivedWeeks.find(
       (x) => Number(x.week) === Number(week),
     );
     if (snap) snap.reflection = state.reflections[week];
     saveState();
-    showPendingCloudToast("感想已送出，之後只能查看");
+    showPendingCloudToast("感想已儲存，之後仍可修改");
     showHistoryWeek(week);
   });
   $$("[data-reason-task]").forEach((b) =>
@@ -2418,7 +2388,6 @@ function historyDetailHtml(
 ) {
   const r = reviewObj(review),
     saved = reflectionSaved(review),
-    meta = weekMetaFor(week),
     archived = isWeekArchived(week);
   const line = (x) => {
     const head = x.rec ? `完成 ${x.n} 次` : "";
@@ -2439,10 +2408,10 @@ function historyDetailHtml(
     ? `<div class="history-section"><p class="field-label">還留在這週的</p>${leftover.map((x) => `<div class="history-line"><i class="leaf-dot hollow"></i><span>${esc(x.title)}</span>${x.recurring ? `<small>還差 ${x.left} 次</small>` : ""}${archived ? "" : `<div class="reason-chips">${REASONS.map((rs) => `<button type="button" class="reason-chip ${x.reason === rs ? "on" : ""}" data-reason-task="${x.id}" data-reason="${rs}">${rs}</button>`).join("")}</div>`}</div>`).join("")}</div>`
     : "";
   let reviewBlock = "";
-  if (saved) {
+  if (state.preferences.weeklyReflection) {
+    reviewBlock = `<div class="reflection-editor history-section"><p class="field-label">每週感想</p><label class="review-label">這週做得不錯的地方<input id="reviewGood" type="text" maxlength="80" value="${esc(r.good)}" placeholder="留下一句就好"></label><label class="review-label">下週想調整的地方<input id="reviewAdjust" type="text" maxlength="80" value="${esc(r.adjust)}" placeholder="也可以只寫其中一格"></label><button class="primary-button" type="button" data-save-reflection="${week}">${saved ? "更新感想" : "儲存感想"}</button><p class="week-state-note">想寫就寫，也可以之後補充或修改；不會更動已封存的任務紀錄。</p></div>`;
+  } else if (saved) {
     reviewBlock = `<div class="history-section"><p class="field-label">感想</p><div class="history-readonly-review">${r.good ? `<p><small>這週做得不錯的地方</small><br>${esc(r.good)}</p>` : ""}${r.adjust ? `<p><small>下週想調整的地方</small><br>${esc(r.adjust)}</p>` : ""}</div></div>`;
-  } else if (meta.autoArchived && state.preferences.weeklyReflection) {
-    reviewBlock = `<div class="reflection-editor history-section"><p class="field-label">補上這週的感想</p><label class="review-label">這週做得不錯的地方<input id="reviewGood" type="text" maxlength="80" value="${esc(r.good)}" placeholder="留下一句就好"></label><label class="review-label">下週想調整的地方<input id="reviewAdjust" type="text" maxlength="80" value="${esc(r.adjust)}" placeholder="也可以只寫其中一格"></label><button class="primary-button" type="button" data-save-reflection="${week}">儲存</button><p class="week-state-note">儲存後不能再修改</p></div>`;
   }
   const encouragement = saved
     ? `<p>${encouragementMessage(week, count)}</p>`
@@ -2458,15 +2427,12 @@ function renderSettings() {
   $("#completionNoteToggle").checked = state.preferences.completionNote;
   $("#weeklyReflectionToggle").checked = state.preferences.weeklyReflection;
   $("#lineToggle").checked = state.preferences.lineEnabled;
-  $("#lineTime").value = state.preferences.lineTime;
+  $("#lineTime").value = state.preferences.lineTime || "08:00";
+  $("#lineMondayTime").value = state.preferences.lineMondayTime || state.preferences.lineTime || "08:00";
+  $("#lineSundayTime").value = state.preferences.lineSundayTime || state.preferences.lineTime || "08:00";
   $("#lineSettings").hidden = !state.preferences.lineEnabled;
-  const daily = state.mode === "day";
-  $("#lineSummary").textContent = daily
-    ? `每天約 ${state.preferences.lineTime} 提醒`
-    : `週一、週日約 ${state.preferences.lineTime}`;
-  $("#lineCadenceNote").textContent = daily
-    ? "每天送出本週清單，週日改送本週足跡；提醒約在設定時間後送出"
-    : "週一送本週安排、週日送本週足跡；提醒約在設定時間後送出";
+  $("#lineSummary").textContent = `週一 ${$("#lineMondayTime").value} · 週日 ${$("#lineSundayTime").value}`;
+  $("#lineCadenceNote").textContent = "週一安排與週日足跡各自依設定時間推播；每日與每週模式都會收到。";
   renderDirectionList();
   renderRecurringList();
   renderCategoryList();
@@ -3107,8 +3073,12 @@ function bindStaticEvents() {
     state.preferences.lineEnabled = e.target.checked;
     renderAll();
   });
-  $("#lineTime").addEventListener("change", (e) => {
-    state.preferences.lineTime = e.target.value;
+  $("#lineMondayTime").addEventListener("change", (e) => {
+    state.preferences.lineMondayTime = e.target.value;
+    renderAll();
+  });
+  $("#lineSundayTime").addEventListener("change", (e) => {
+    state.preferences.lineSundayTime = e.target.value;
     renderAll();
   });
 
@@ -3446,7 +3416,7 @@ function renderTutorial() {
       tutTree(3, Math.max(tutDoneCount(), 3), "small"),
       "每週留一句感想",
       "樹上的葉子，就是你完成的每一件事。週末到「本週足跡」寫一兩句就夠了。",
-      `<div class="tut-reflect"><label>這週做得不錯的地方<input id="tutGood" maxlength="80" placeholder="留一句就好"></label><label>下週想調整的地方<input id="tutAdjust" maxlength="80" placeholder="也可以只寫其中一格"></label><button class="primary-button" type="button" id="tutSaveRef">儲存感想</button></div><p class="tut-note" id="tutRefMsg">儲存後就不能再改，所以簡單一句就好</p>`,
+      `<div class="tut-reflect"><label>這週做得不錯的地方<input id="tutGood" maxlength="80" placeholder="留一句就好"></label><label>下週想調整的地方<input id="tutAdjust" maxlength="80" placeholder="也可以只寫其中一格"></label><button class="primary-button" type="button" id="tutSaveRef">儲存感想</button></div><p class="tut-note" id="tutRefMsg">可以隨時回來補充或修改，簡單一句就好</p>`,
     );
     $("#tutSaveRef").addEventListener("click", () => {
       const good = $("#tutGood"),
