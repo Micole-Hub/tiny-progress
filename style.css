@@ -4439,3 +4439,16 @@ body { background: linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px); }
 .remember-device-option span { display: grid; gap: 4px; }
 .remember-device-option strong { font-size: 14px; }
 .remember-device-option small { color: var(--muted); line-height: 1.55; }
+
+/* v29 editorial polish: keep actions and status labels legible, reduce repeated captions. */
+.settings-page-title{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.settings-page-title h1{margin:0}
+.settings-help-button{flex:none;min-height:38px;padding:6px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.settings-list .setting-block-head small:empty,.settings-list .toggle-setting small:empty{display:none}
+.settings-list .line-setting-title{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px 14px}
+.settings-list .line-setting-title small{color:var(--ink-2);font-size:12px;line-height:1.5}
+.focus-pool-head{align-items:center}
+.focus-pool-head small:empty{display:none}
+.work-header p[hidden],.home-lede[hidden]{display:none!important}
+.tut-pane p{line-height:1.75}
+@media(max-width:620px){.settings-page-title{align-items:center}.settings-help-button{font-size:12px}.settings-list .line-setting-title{display:grid;gap:3px}}
