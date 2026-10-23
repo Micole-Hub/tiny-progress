@@ -4452,3 +4452,6 @@ body { background: linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px); }
 .work-header p[hidden],.home-lede[hidden]{display:none!important}
 .tut-pane p{line-height:1.75}
 @media(max-width:620px){.settings-page-title{align-items:center}.settings-help-button{font-size:12px}.settings-list .line-setting-title{display:grid;gap:3px}}
+
+/* Keep user feedback visible above the Week Footprint dialog, but below login gates. */
+.toast{z-index:180}
