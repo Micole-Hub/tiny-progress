@@ -501,7 +501,7 @@ window.TPConnection = (() => {
   }
   function initial(seed) {
     if (demo) {
-      const s = D.clone(seed);
+      const s = D.clone(seed || D.empty());
       s.schemaVersion = 27;
       s.cycle.startDate = s.cycle.startDate || s.simulationWeekStart || D.monday(D.today());
       s.weekMeta ||= {};
