@@ -162,7 +162,8 @@
             </section>
 
             <div class="focus-pool" id="focusPool" hidden></div>
-            <form class="quick-add" id="quickAddForm">
+            <button class="quick-add-opener" id="openQuickAddBtn" type="button" aria-expanded="false" aria-controls="quickAddForm">＋ 新增任務</button>
+            <form class="quick-add" id="quickAddForm" hidden>
               <div class="quick-row">
                 <input
                   id="quickTitle"
@@ -189,9 +190,9 @@
                 ＋ 更多設定
               </button>
               <div class="more-fields" id="moreFields" hidden>
-              <label class="quick-date-field" id="quickDateWrap">
+                <label class="quick-date-field" id="quickDateWrap">
                 <span>安排在哪一天</span>
-                <select id="quickDate" aria-label="安排在哪一天" required></select>
+                <select id="quickDate" aria-label="安排在哪一天"></select>
                 
               </label>
               <div class="repeat-box quick-type-box">
