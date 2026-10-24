@@ -3,8 +3,6 @@
   "use strict";
 
   const TOTAL = 12;
-  const TRAIL = "M125 50 H875 V150 H125 V250 H875";
-  const STOPS = [0, 250, 500, 750, 850, 1100, 1350, 1600, 1700, 1950, 2200, 2450];
   function clean(value) {
     return String(value == null ? "" : value).replace(/[&<>"']/g, c =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -43,8 +41,7 @@
         Number(item.leaves || 0) + " 片葉子已留下" : "這一週正在進行中");
       eyebrow = "正在前進 · WEEK " + String(currentWeek).padStart(2, "0");
     }
-    return { weeks, finished, resting, active, allDone, currentWeek, title, subtitle, eyebrow,
-      route: resting ? 0 : STOPS[allDone ? 11 : currentWeek - 1], };
+    return { weeks, finished, resting, active, allDone, currentWeek, title, subtitle, eyebrow };
   }
   const leaf = '<svg viewBox="0 0 32 32" aria-hidden="true">' +
     '<path d="M8 24c.5-11 7.5-16 18-18-.7 12.4-5.6 19-14 19" fill="currentColor" opacity=".85"/>' +
@@ -58,26 +55,29 @@
     const pct = Math.round(p.finished / TOTAL * 100);
     const stages = p.weeks.map(w => {
       const number = Number(w.number);
-      const row = number <= 4 ? 1 : number <= 8 ? 2 : 3;
-      const column = row === 2 ? 9 - number : row === 1 ? number : number - 8;
       const status = w.finished ? "finished" :
         p.active && number === p.currentWeek ? "current" :
         p.resting && number === 1 ? "start" : "future";
       const clickable = status === "finished" && typeof config.onReviewWeek === "function";
       const tag = clickable ? "button" : "div";
-      const label = status === "finished" ? (Number(w.leaves || 0) + " 片葉子") :
-        status === "current" ? "我在這裡" :
-        status === "start" ? "準備出發" :
-        Number(w.leaves || 0) > 0 ? ("已預做 " + Number(w.leaves)) : "尚未到達";
+      // Future weeks don't repeat the same muted sentence twelve times.
+      const note = status === "finished" ? Number(w.leaves || 0) + " 片葉子" :
+        status === "current" ? "正在前進" :
+        status === "start" ? shortDate(w.start) + " 開始" :
+        Number(w.leaves || 0) > 0 ? "已預做 " + Number(w.leaves) : "";
+      const accessible = note || "尚未開始";
       return '<' + tag + ' class="tp-journey-stop is-' + status + '"' +
-        ' style="grid-row:' + row + ';grid-column:' + column + '"' +
-        (clickable ? ' type="button" data-journey-week="' + number + '" title="查看 Week ' + number + ' 的歷史紀錄"' : '') +
-        ' aria-label="Week ' + number + '，' + clean(label) + '">' +
-        '<span class="tp-journey-node">' + (status === "current" || status === "start" ? leaf :
-          status === "finished" ? '<span class="tp-journey-done" aria-hidden="true">✓</span>' :
-          '<span class="tp-journey-number" aria-hidden="true">' + number + '</span>') + '</span>' +
-        '<strong>W' + String(number).padStart(2, "0") + '</strong>' +
-        '<small>' + clean(label) + '</small></' + tag + '>';
+        (clickable ? ' type="button" data-journey-week="' + number +
+          '" title="查看 Week ' + number + ' 的歷史紀錄"' : '') +
+        ' aria-label="Week ' + number + '，' + clean(accessible) + '">' +
+        '<span class="tp-journey-node" aria-hidden="true">' +
+          (status === "current" || status === "start" ? leaf :
+           status === "finished" ? '<span class="tp-journey-done">✓</span>' :
+           '<span class="tp-journey-number">' + String(number).padStart(2, "0") + '</span>') +
+        '</span><span class="tp-journey-stop-copy"><strong>W' +
+        String(number).padStart(2, "0") + '</strong>' +
+        (note ? '<small>' + clean(note) + '</small>' : '') +
+        '</span></' + tag + '>';
     }).join("");
     el.className = "tp-journey-section";
     el.setAttribute("aria-label", "12 週進度旅程");
@@ -100,22 +100,29 @@
           'aria-valuenow="' + p.finished + '" aria-label="已結束的週數">' +
           '<span style="width:' + pct + '%"></span></div>' +
       '</div>' +
-      '<div class="tp-journey-trail">' +
-        '<svg class="tp-journey-lines" viewBox="0 0 1000 300" preserveAspectRatio="none" aria-hidden="true">' +
-          '<path d="' + TRAIL + '" class="tp-journey-line-base"/>' +
-          '<path d="' + TRAIL + '" class="tp-journey-line-filled" stroke-dasharray="' +
-            p.route + ' 2451"/>' +
-        '</svg>' +
+      '<div class="tp-journey-trail" aria-label="十二週總覽">' +
         stages +
       '</div>' +
       '<p class="tp-journey-hint">' +
-        (p.finished ? "點選已走過的週次，就能打開原本的成長樹與紀錄。" :
-          "每一週按真實日期慢慢前進，原本的成長樹與葉子動畫都在。") +
+        (p.finished ? "點選已走過的週次，可回看當週紀錄。" :
+          p.resting ? "週次會依真正的日期前進；Week 1 結束後才會出現歷史紀錄。" :
+          "每週結束後，才會留下可回看的歷史紀錄。") +
       '</p>';
     el.querySelectorAll("[data-journey-week]").forEach(button => {
       button.addEventListener("click", () =>
         config.onReviewWeek(Number(button.dataset.journeyWeek)));
     });
+  }
+
+  // Read existing state only; keepsake must never change saved task records.
+  const escapeHtml = clean;
+  function completedForWeek(s, week) {
+    if (!s) return 0;
+    const archived = (s.archivedWeeks || []).find(x => Number(x.week) === Number(week));
+    if (archived) return (archived.completed || []).length;
+    return (s.tasks || []).filter(t => Number(t.week) === Number(week) && t.status === "active")
+      .reduce((n, t) => n + (Array.isArray(t.occurrences) && t.occurrences.length
+        ? t.occurrences.filter(o => o.done).length : Number(Boolean(t.done))), 0);
   }
 
   function renderWeekKeepsake(container, s, week) {
