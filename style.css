@@ -4455,3 +4455,14 @@ body { background: linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px); }
 
 /* Keep user feedback visible above the Week Footprint dialog, but below login gates. */
 .toast{z-index:180}
+
+/* History empty state: secondary inline note, not a giant duplicate card. */
+.history-grid:has(> .history-empty-compact){display:block}
+.history-empty-compact{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  min-height:0;padding:12px 16px;margin:0;
+  background:transparent;border:0;box-shadow:none;
+  color:#7c8b7b;text-align:center;
+}
+.history-empty-compact strong{font-size:12px;font-weight:500;color:inherit}
+.history-empty-compact>span{font-size:17px;color:#87a187}
