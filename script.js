@@ -218,6 +218,11 @@ function recurringTask(
 // 正式版只讀取雲端資料；不再內建獨立的示範任務庫。
 
 let state = loadState();
+// Lens preference lives on this device, not in the authoritative task database.
+try {
+  const preference = localStorage.getItem("tp-view-preference");
+  if (preference === "week" || preference === "day") state.mode = preference;
+} catch {}
 // 只控制休息期 UI，與雲端儲存的週次及任務資料分離。
 let restPlannerOpen = false;
 // 休息日的日曆日期獨立於 12 週任務，切換箭頭不會更動雲端計畫。
@@ -473,6 +478,12 @@ function renderAll() {
   saveState();
 }
 function renderHeader() {
+  const pulse = $("#cyclePulseLabel");
+  if (pulse) pulse.textContent = `Week ${CURRENT_WEEK} / 12`;
+  const note = $("#cyclePulseNote");
+  if (note) note.textContent = isCycleResting() ? "尚未開始" : "目前週次";
+  const fill = $("#cyclePulseFill");
+  if (fill) fill.style.width = `${isCycleResting() ? 0 : Math.min(100, CURRENT_WEEK / 12 * 100)}%`;
   $("#historyCycleLabel").textContent = `Cycle ${state.cycle.number}`;
   $("#homeEyebrow").textContent =
     `Cycle ${state.cycle.number} · ${state.mode === "day" ? "每日檢視" : "整週檢視"}`;
@@ -699,10 +710,10 @@ function renderRestHome() {
   $("#workHeader").hidden = true;
   $("#progressTrack").hidden = true;
   $("#progressSummary").hidden = true;
-  $("#weekStrip").hidden = dayMode;
+  $("#weekStrip").hidden = false;
   $("#dayStrip").hidden = !dayMode;
+  renderWeekStrip();
   if (dayMode) renderDayStrip();
-  else renderWeekStrip();
   // The week range / future status now lives directly above the date strip.
   // Keep the legacy element hidden so information is not repeated at the bottom.
   $("#restDateNote").hidden = true;
@@ -795,9 +806,10 @@ function renderHome() {
   $("#workHint").textContent = archived ? "這週已封存，請到 History 查看" : "";
   $("#workHint").hidden = !archived;
   $("#quickTitle").placeholder = "加入本週事項";
-  $("#weekStrip").hidden = dayMode;
+  $("#weekStrip").hidden = false;
   $("#dayStrip").hidden = !dayMode;
-  dayMode ? renderDayStrip() : renderWeekStrip();
+  renderWeekStrip();
+  if (dayMode) renderDayStrip();
   // 只有休息日預設收合任務。手動展開後，使用一般的任務欄位和進度顯示。
   // 非休息日永遠正常顯示任務欄位，不顯示收合按鈕。
   $("#workCard").classList.toggle("resting", resting);
@@ -1434,13 +1446,12 @@ function renderFocusPool() {
     pool.hidden = true;
     return;
   }
-  pool.hidden = false;
   const choices = [];
   activeTasks(week).forEach((t) => {
     if (!isRecurring(t) && !t.done && !t.focusDate) {
       choices.push({
         t, occ: null,
-        label: "放進這天",
+        label: "排到這天",
         meta: "",
       });
       return;
@@ -1452,13 +1463,14 @@ function renderFocusPool() {
           t,
           occ: null,
           weekly: true,
-          label: "安排一次",
-          meta: `每週習慣 · 尚有 ${remaining.length} 次`,
+          label: "排到這天",
+          meta: `每週習慣 · 本週還剩 ${remaining.length} 次`,
         });
     }
   });
+  pool.hidden = !choices.length;
   pool.innerHTML =
-    `<div class="focus-pool-head"><span>尚未安排日期（${choices.length}）</span></div>` +
+    `<div class="focus-pool-head"><span>本週還沒排（${choices.length}）</span></div>` +
     (choices.length
       ? choices
           .map(
@@ -1492,18 +1504,16 @@ function renderFocusPool() {
   );
 }
 function updateQuickDatePickerVisibility() {
-  const isEveryDayHabit = $("#quickRepeat").checked && $("#quickFrequency").value === "daily";
-  const show = state.mode === "day" && !(isCycleResting() && !restPlannerOpen) && !isEveryDayHabit;
-  $("#quickDateWrap").hidden = !show;
-  $("#quickDate").required = show;
+  $("#quickDateWrap").hidden = false;
+  $("#quickDate").required = false;
 }
 function renderQuickOptions() {
   const dates = Object.values(weekDateMap(state.selectedWeek));
-  // 每日模式新增任務必須有確切日期；整週模式新增可以沒有日期。
-  // 預設選擇正在觀看的那一天，且只能選任務所屬週的七天。
+  // Same task schema in both views; only the default selected date differs.
   const selected = dates.includes(state.selectedDate) ? state.selectedDate : dates[0];
-  $("#quickDate").innerHTML = dates.map((date) =>
-    `<option value="${date}" ${date === selected ? "selected" : ""}>週${dayLabel(date)} ${formatShortDate(date)}</option>`
+  const initialDate = state.mode === "day" ? selected : "";
+  $("#quickDate").innerHTML = `<option value="" ${initialDate ? "" : "selected"}>本週任一天</option>` + dates.map((date) =>
+    `<option value="${date}" ${date === initialDate ? "selected" : ""}>週${dayLabel(date)} ${formatShortDate(date)}</option>`
   ).join("");
   updateQuickDatePickerVisibility();
   $("#quickGoal").innerHTML =
@@ -2852,6 +2862,7 @@ function bindStaticEvents() {
   $$("[data-mode]").forEach((b) =>
     b.addEventListener("click", () => {
       state.mode = b.dataset.mode;
+      try { localStorage.setItem("tp-view-preference", state.mode); } catch {}
       renderAll();
     }),
   );
@@ -2899,12 +2910,10 @@ function bindStaticEvents() {
     }
     const categoryId = $("#quickCategory").value,
       goal = $("#quickGoal").value,
-      scheduledDate = state.mode === "day" ? $("#quickDate").value : "",
+      scheduledDate = $("#quickDate").value,
       isRepeat = $("#quickRepeat").checked;
-    if (state.mode === "day" &&
-        !($("#quickRepeat").checked && $("#quickFrequency").value === "daily") &&
-        !Object.values(weekDateMap(targetWeek)).includes(scheduledDate))
-      return showToast("每日模式新增任務，請先選擇這週中的一天");
+    if (scheduledDate && !Object.values(weekDateMap(targetWeek)).includes(scheduledDate))
+      return showToast("日期需要在選取的週次內");
     if (isRepeat) {
       const frequency = $("#quickFrequency").value,
         times = frequency === "daily" ? 7 : Number($("#quickTimes").value || 2);
@@ -2942,12 +2951,13 @@ function bindStaticEvents() {
     $("#quickRepeatFields").hidden = true;
     $("#quickTimesWrap").hidden = true;
     $("#moreFields").hidden = true;
+    $("#moreToggle").setAttribute("aria-expanded", "false");
     $("#moreToggle").textContent = "＋ 更多設定";
     renderAll();
     showPendingCloudToast(
       isRepeat
         ? "已加入本週習慣"
-        : state.mode === "day"
+        : scheduledDate
           ? `已安排到 ${formatShortDate(scheduledDate)}`
           : "已經放進這週了",
     );
@@ -3675,6 +3685,10 @@ TPConnection.start({
   onCycleTheme: () => renderDirection(),
   replace(next) {
     state = next;
+    try {
+      const preference = localStorage.getItem("tp-view-preference");
+      if (preference === "week" || preference === "day") state.mode = preference;
+    } catch {}
     refreshClock();
     syncGoals();
     lastListKey = null;
