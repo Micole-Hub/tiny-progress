@@ -4545,3 +4545,12 @@ body { background: linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px); }
 /* Size the tutorial card against its dialog, including scrollbar space. */
 #tutorialDialog { width: min(430px, calc(100% - 28px)); max-width: calc(100% - 28px); }
 #tutorialDialog .tutorial-card { width: 100%; min-width: 0; }
+
+/* Single today marker: coral ring only, with no extra floating red dot. */
+.week-strip .wk.is-real-current .week-number::before,
+.day-strip-row .dy.is-real-current strong::before,
+.week-strip .wk.now .week-number::before,
+.day-strip-row .dy.today strong::before { content: none !important; }
+#taskList .task-row, #habitList .habit-row { cursor: default; }
+#taskList .task-check, #habitList .task-check,
+#taskList .task-more, #habitList .task-more { cursor: pointer; }
