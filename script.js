@@ -1072,6 +1072,7 @@ function taskRow(t, occ) {
     <button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button>
   </article>`;
 }
+function weeklyHabitProgress(t) { return `本週 ${occurrenceDoneCount(t)}/${t.targetCount} 次`; }
 function habitRow(t, occ) {
   const group = Array.isArray(occ) ? occ : null,
     color = taskColor(t),
@@ -1086,7 +1087,7 @@ function habitRow(t, occ) {
       : "完成本週全部次數";
   return `<article class="habit-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}" tabindex="0" aria-label="${completed ? "查看完成紀錄" : "編輯"}：${esc(t.title)}">
     <button class="task-check" type="button" aria-label="${label}">${completed ? "✓" : ""}</button>
-    <div class="habit-main"><strong>${esc(t.title)}</strong><span>${t.frequency === "daily" ? "每天" : "每週"} · ${count}/${t.targetCount}</span></div>
+    <div class="habit-main"><strong>${esc(t.title)}</strong><span>${weeklyHabitProgress(t)}</span></div>
     <button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button>
   </article>`;
 }
@@ -1471,7 +1472,7 @@ function renderFocusPool() {
           occ: null,
           weekly: true,
           label: "排到這天",
-          meta: `每週習慣 · 本週還剩 ${remaining.length} 次`,
+          meta: `${weeklyHabitProgress(t)} · 還剩 ${remaining.length} 次未排`,
         });
     }
   });
