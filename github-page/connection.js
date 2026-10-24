@@ -160,7 +160,6 @@ window.TPConnection = (() => {
   let inflight = false;
   let paused = false;
   let cloudUnavailable = false;
-  let confirmedSnapshot = null;
   let cloudRetrying = false;
   let pendingSave = null;
   let selectedCycle = null;
@@ -243,14 +242,11 @@ window.TPConnection = (() => {
   }
   function cacheConfirmed(s) {
     if (demo) return;
-    // Read-only visual awards use this snapshot, not unsaved edits.
-    confirmedSnapshot = JSON.parse(JSON.stringify(s));
     try {
       localStorage.setItem(CACHE, JSON.stringify(s));
     } catch {
       // Cache is optional: cloud saves must not fail when browser storage is full.
     }
-    window.dispatchEvent(new Event("tp-cloud-confirmed"));
   }
   function preserveLegacyDraft() {
     if (!oldUnsaved) return;
@@ -501,7 +497,7 @@ window.TPConnection = (() => {
   }
   function initial(seed) {
     if (demo) {
-      const s = D.clone(seed || D.empty());
+      const s = D.clone(seed);
       s.schemaVersion = 27;
       s.cycle.startDate = s.cycle.startDate || s.simulationWeekStart || D.monday(D.today());
       s.weekMeta ||= {};
@@ -784,7 +780,6 @@ window.TPConnection = (() => {
   }
   return {
     initial, save, start, demo,
-    confirmedState: () => demo ? (adapter?.get?.() || null) : confirmedSnapshot,
     isConnected: () => !demo && Boolean(ready && base && auth && !paused),
     flush, manage, selectCycle, cycleTheme,
     isReady: () => ready && !paused,
