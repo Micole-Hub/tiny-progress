@@ -838,7 +838,7 @@ function renderHome() {
           done: dated.every((o) => o.done),
           html: habitRow(t, dated),
         });
-      } else if (t.focusDate === state.selectedDate || (!t.focusDate && taskDone(t))) {
+      } else if (t.focusDate === state.selectedDate) {
         entries.push({ task: t, done: taskDone(t), html: taskRow(t, null) });
       }
     });
@@ -1043,6 +1043,7 @@ function taskRow(t, occ) {
     meta.push(
       `<span class="chip" style="--c:${color}">${esc(cat.name)}</span>`,
     );
+  if (state.mode === "week" && t.focusDate) meta.push(`<span class="task-date-tag">${formatShortDate(t.focusDate)}</span>`);
   const circleDone =
     isRecurring(t) &&
     t.frequency === "daily" &&
