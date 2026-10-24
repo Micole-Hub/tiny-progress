@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      // The former demo view is retired. Always use the production website.
+      if (new URLSearchParams(location.search).get("demo") === "1") {
+        location.replace("https://micole-hub.github.io/tiny-progress/");
+      }
+    </script>
+    <meta name="theme-color" content="#f4f1ea" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Tiny Progress · 本機隔離預覽</title>
+    <meta name="description" content="Tiny Progress，記錄每週的小小進度。Every small step matters. 休息也是前進的一部分。" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css?v=20261024-week-first-v1" />
+    <link rel="stylesheet" href="github-page/milestones.css?v=20261024-journey-clean-v2" />
+    <style>
+      .local-preview-alert { position:relative;z-index:50;background:#314b38;color:#fffdf7;text-align:center;padding:9px 16px;font:600 12px/1.5 "Noto Sans TC",sans-serif; }
+      .local-preview-alert strong { margin-right:7px }
+      .local-preview-alert small { color:#e7f2e8;font-size:11px; }
+    </style>
+  </head>
+  <body>
+    <div class="local-preview-alert" role="status"><strong>🧪 本機隔離預覽</strong><small>示意日期 10/26 · 不登入、不連正式 API、不會儲存到 Google Sheets</small></div>
+    <div class="app-shell">
+      <header class="topbar">
+        <a
+          class="brand"
+          href="#"
+          id="brandHome"
+          aria-label="Tiny Progress 首頁"
+        >
+          <span class="brand-mark">∞</span><span class="brand-wordmark"><strong>Tiny Progress</strong><small>Every small step matters.</small></span>
+        </a>
+      </header>
+      <div id="syncPanel" class="cloud-status" role="status" aria-live="polite" hidden>
+        <span id="syncStatus">載入中…</span>
+      </div>
+
+      <main class="page-wrap">
+        <section
+          class="page active"
+          data-page="home"
+          aria-labelledby="homeTitle"
+        >
+          <div class="cycle-pulse" id="cyclePulse" role="status" aria-live="off">
+            <div class="cycle-pulse-copy"><strong id="cyclePulseLabel">Week 1 / 12</strong><span id="cyclePulseNote">本週進度</span></div>
+            <div class="cycle-pulse-track" aria-hidden="true"><span id="cyclePulseFill"></span></div>
+          </div>
+          <div class="home-head">
+            <p class="eyebrow" id="homeEyebrow"></p>
+            <h1 id="homeTitle">這週慢慢長大</h1>
+            <p class="home-lede" id="homeLede">
+              一件一件完成，讓這週留下自己的樣子
+            </p>
+            <div class="home-mode-control" id="homeModeControl" role="group" aria-label="切換週與每日檢視">
+              <button type="button" data-mode="week" aria-pressed="true">整週</button>
+              <button type="button" data-mode="day" aria-pressed="false">每日</button>
+            </div>
+          </div>
+
+          <div class="preview-bar" id="previewBar" hidden>
+            <span id="previewLabel">預習中 · Week 2</span>
+            <button class="text-button" id="returnCurrentWeekBtn" type="button">
+              回到本週
+            </button>
+          </div>
+          <button
+            class="footprint-entry"
+            id="footprintEntry"
+            type="button"
+            hidden
+          >
+            本週足跡
+          </button>
+
+          <section class="rest-banner soft-card" id="restBanner" hidden aria-label="計畫休息期間">
+            <span class="rest-banner-icon" aria-hidden="true">🌿</span>
+            <div class="rest-banner-copy">
+              <strong id="restNextDate"></strong>
+              <small>任務仍計入所屬週次。</small>
+            </div>
+          </section>
+
+          <section class="growth-banner soft-card" id="growthBanner">
+            <div class="growth-copy">
+              <details class="growth-goal-details" id="growthGoalDetails">
+                <summary><span class="section-kicker">12 週目標</span><strong class="direction-text" id="directionText"></strong><span class="growth-goal-arrow" aria-hidden="true">⌄</span></summary>
+                <div class="growth-goal-content">
+                  <div class="direction-tags" id="directionTags"></div>
+                  <div class="tank-hint" id="tankHint" hidden></div>
+                </div>
+              </details>
+            </div>
+            <aside class="week-tree-panel" aria-label="本週成長樹">
+              <span class="tree-number" id="treeNumber">TREE 04</span>
+              <div class="tree-stage" id="homeTree"></div>
+              <div class="tree-summary">
+                <strong id="homeLeafCount">0</strong
+                ><span>片葉子在這週長出來</span>
+              </div>
+            </aside>
+          </section>
+
+          <!-- UI-only live preview of the same growth tree. Hidden outside phone layout. -->
+          <button type="button" id="mobileTreePeek" class="mobile-tree-peek" hidden aria-label="查看本週完整成長樹">
+            <span class="mobile-tree-peek-art" id="miniTreeArt" aria-hidden="true"></span>
+            <span class="mobile-tree-peek-copy"><strong>我的成長樹</strong><small><span id="miniTreeLeafCount">0</span> 片葉子正在累積</small></span>
+            <span class="mobile-tree-peek-arrow" aria-hidden="true">↓</span>
+          </button>
+
+          <section class="work-card soft-card" id="workCard">
+            <div class="work-header" id="workHeader">
+              <div>
+                <h2 id="workTitle">這週想完成什麼</h2>
+                <p id="workHint">完成一件，就替這週多留下一片葉子</p>
+              </div>
+              <div class="progress-number" aria-label="本週任務完成進度">
+                <small>本週任務</small><strong id="doneCount">0</strong
+                ><span>/</span><span id="totalCount">0</span><span>項</span>
+              </div>
+            </div>
+            <div class="progress-track" id="progressTrack" aria-hidden="true">
+              <span id="progressFill"></span>
+            </div>
+            <p id="progressSummary" class="progress-summary"></p>
+
+            <div class="calendar-period" id="calendarPeriod" aria-live="off">
+              <div class="calendar-period-main">
+                <span class="calendar-month-label" id="calendarMonthLabel"></span>
+                <div class="calendar-view-line">
+                  <strong id="calendarViewTitle"></strong>
+                  <span id="calendarWeekRange" class="calendar-week-range" hidden></span>
+                  <span id="calendarPhase" class="calendar-phase" hidden></span>
+                </div>
+              </div>
+            </div>
+            <div class="week-strip" id="weekStrip" aria-label="12 週主導覽"></div>
+            <div
+              class="day-strip"
+              id="dayStrip"
+              aria-label="這一週的 7 天"
+              hidden
+            ></div>
+            <div class="rest-planning-bar" id="restPlanningBar" hidden>
+              <p id="restPlanningHint" hidden></p>
+              <button type="button" class="secondary-button" id="toggleRestPlanner" aria-expanded="false" aria-controls="taskList quickAddForm focusPool habitTracker">展開任務</button>
+            </div>
+            <p class="rest-date-note" id="restDateNote" hidden></p>
+            <div class="work-content" id="workContent">
+            <div class="task-list" id="taskList" aria-live="polite"></div>
+            <section class="habit-tracker" id="habitTracker" hidden>
+              <div class="habit-tracker-head">
+                <strong id="habitTrackerTitle">習慣追蹤</strong>
+                <small id="habitTrackerHint"></small>
+              </div>
+              <div class="habit-list" id="habitList" aria-live="polite"></div>
+            </section>
+
+            <div class="focus-pool" id="focusPool" hidden></div>
+            <button class="quick-add-opener" id="openQuickAddBtn" type="button" aria-expanded="false" aria-controls="quickAddForm">＋ 新增任務</button>
+            <form class="quick-add" id="quickAddForm" hidden>
+              <div class="quick-row">
+                <input
+                  id="quickTitle"
+                  type="text"
+                  maxlength="200"
+                  autocomplete="off"
+                  placeholder="這週想加入什麼"
+                  aria-label="事情名稱"
+                />
+                <button
+                  class="primary-button add-button"
+                  type="submit"
+                  aria-label="加入"
+                >
+                  ＋
+                </button>
+              </div>
+              <button
+                class="more-toggle"
+                type="button"
+                id="moreToggle"
+                aria-expanded="false"
+              >
+                ＋ 更多設定
+              </button>
+              <div class="more-fields" id="moreFields" hidden>
+                <label class="quick-date-field" id="quickDateWrap">
+                <span>安排在哪一天</span>
+                <select id="quickDate" aria-label="安排在哪一天"></select>
+                
+              </label>
+              <div class="repeat-box quick-type-box">
+                <label class="repeat-row">
+                  <span
+                    ><strong>設為重複習慣</strong
+                    ></span
+                  >
+                  <input type="checkbox" id="quickRepeat" />
+                </label>
+                <div class="repeat-fields" id="quickRepeatFields" hidden>
+                  <label
+                    ><span>頻率</span
+                    ><select id="quickFrequency">
+                      <option value="daily">每天</option>
+                      <option value="weekly">每週</option>
+                    </select></label
+                  >
+                  <label id="quickTimesWrap" hidden
+                    ><span>每週幾次</span
+                    ><select id="quickTimes"></select
+                  ></label>
+                </div>
+              </div>
+                <label
+                  ><span>想前進的方向</span
+                  ><select id="quickGoal"></select
+                ></label>
+                <label
+                  ><span>分類</span
+                  ><select id="quickCategory"></select
+                ></label>
+              </div>
+            </form>
+            </div>
+
+          </section>
+        </section>
+
+        <section
+          class="page"
+          data-page="history"
+          aria-labelledby="historyTitle"
+        >
+          <div class="simple-page-head history-heading-row">
+            <div>
+              <p class="eyebrow" id="historyCycleLabel">Cycle 1</p>
+              <h1 id="historyTitle">一週一週長出來的樣子</h1>
+              
+            </div>
+            <button class="secondary-button" id="yearReviewBtn" type="button">
+              本輪回顧
+            </button>
+          </div>
+          <section
+            class="history-tanks soft-card"
+            id="historyTanks"
+            hidden
+          ></section>
+          <section class="tp-awards-section" id="tpMilestones" aria-label="十二週進度小徑"></section>
+          <section class="history-grid" id="historyGrid"></section>
+          <section
+            class="history-detail soft-card"
+            id="historyDetail"
+            hidden
+          ></section>
+        </section>
+
+        <section
+          class="page"
+          data-page="settings"
+          aria-labelledby="settingsTitle"
+        >
+          <div class="simple-page-head">
+            <p class="eyebrow">PREFERENCES</p>
+            <div class="settings-page-title">
+              <h1 id="settingsTitle">設定</h1>
+              <button class="text-button settings-help-button" id="replayTutorialBtn" type="button" aria-label="重新觀看新手教學">使用教學</button>
+            </div>
+          </div>
+
+          <section class="settings-list">
+            <div class="setting-block soft-card">
+              <div class="setting-block-head">
+                <span
+                  ><strong>12 週計畫</strong
+                  ></span
+                >
+              </div>
+              <button
+                type="button"
+                id="openCycleManagement"
+                class="secondary-button setting-action"
+              >
+                管理 12 週計畫
+              </button>
+            </div>
+            <div class="setting-row soft-card toggle-setting">
+              <span
+                ><strong>完成後小記</strong
+                ></span
+              >
+              <label class="switch"
+                ><input type="checkbox" id="completionNoteToggle" aria-label="完成後小記" /><i></i
+              ></label>
+            </div>
+
+            <div class="setting-row soft-card toggle-setting">
+              <span
+                ><strong>每週記錄</strong
+                ></span
+              >
+              <label class="switch"
+                ><input type="checkbox" id="weeklyReflectionToggle" aria-label="每週記錄" /><i></i
+              ></label>
+            </div>
+
+            <div class="setting-block soft-card" id="directionBlock">
+              <div class="setting-block-head">
+                <span
+                  ><strong>我的方向</strong
+                  ></span
+                ><button class="text-button" id="addDirectionBtn" type="button">
+                  ＋ 新增
+                </button>
+              </div>
+              <div id="directionList" class="manage-list"></div>
+            </div>
+
+            <div class="setting-block soft-card">
+              <div class="setting-block-head">
+                <span
+                  ><strong>重複習慣管理</strong
+                  ></span
+                >
+              </div>
+              <div id="recurringList" class="manage-list"></div>
+            </div>
+
+            <div class="setting-block soft-card" id="categorySettingsBlock">
+              <div class="setting-block-head">
+                <span
+                  ><strong>分類與顏色</strong
+                  ></span
+                ><button class="text-button" id="addCategoryBtn" type="button">
+                  ＋ 新增
+                </button>
+              </div>
+              <div id="categoryList" class="manage-list"></div>
+            </div>
+
+            <div class="setting-block soft-card">
+              <div class="setting-block-head">
+                <span
+                   class="line-setting-title"><strong>LINE 推送</strong
+                  ><small id="lineSummary"></small></span
+                ><label class="switch"
+                  ><input type="checkbox" id="lineToggle" aria-label="LINE 推送" /><i></i
+                ></label>
+              </div>
+              <div class="line-settings" id="lineSettings">
+                <label><span>週一安排時間</span><input type="time" id="lineMondayTime" value="08:00" /></label>
+                <label><span>週日足跡時間</span><input type="time" id="lineSundayTime" value="08:00" /></label>
+                <input type="hidden" id="lineTime" value="08:00" />
+                <p id="lineCadenceNote"></p>
+              </div>
+            </div>
+            <div class="setting-block soft-card">
+              <div class="setting-block-head">
+                <span><strong>登入裝置</strong></span>
+              </div>
+              <button type="button" id="logoutDevice" class="secondary-button setting-action">登出這台裝置</button>
+            </div>
+          </section>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="主要導覽">
+        <button class="nav-item active" type="button" data-page-target="home">
+          <span class="nav-icon"
+            ><svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4.8 11.2 12 5.4l7.2 5.8v7.1a1.4 1.4 0 0 1-1.4 1.4H6.2a1.4 1.4 0 0 1-1.4-1.4z"
+              />
+              <path d="M9.3 19.7v-5.5h5.4v5.5" /></svg></span
+          ><small>本週</small>
+        </button>
+        <button class="nav-item" type="button" data-page-target="history">
+          <span class="nav-icon"
+            ><svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 20a8 8 0 1 0-7.1-4.3" />
+              <path d="M4 11.5V16h4.5" />
+              <path d="M12 8v4.4l3 1.8" /></svg></span
+          ><small>足跡</small>
+        </button>
+        <button class="nav-item" type="button" data-page-target="settings">
+          <span class="nav-icon"
+            ><svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4.5 7.2h9.2" />
+              <path d="M18 7.2h1.5" />
+              <circle cx="15.8" cy="7.2" r="2.1" />
+              <path d="M4.5 16.8H6" />
+              <path d="M10.3 16.8h9.2" />
+              <circle cx="8.2" cy="16.8" r="2.1" /></svg></span
+          ><small>設定</small>
+        </button>
+      </nav>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <dialog id="taskActionDialog">
+      <form method="dialog" class="dialog-card">
+        <p class="eyebrow">這件事情</p>
+        <h3 id="actionTaskTitle"></h3>
+        <div class="action-stack">
+          <button type="button" id="completionRecordBtn" hidden>
+            完成紀錄</button
+          ><button type="button" id="editTaskBtn" class="edit-button">
+            編輯</button
+          ><button type="button" id="replanTaskBtn">移到其他週</button
+          ><button type="button" class="danger-action" id="deleteTaskBtn">
+            刪除
+          </button>
+        </div>
+        <div class="dialog-actions">
+          <button value="cancel" class="cancel-button">關閉</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="editTaskDialog">
+      <form method="dialog" class="dialog-card" id="editTaskForm">
+        <p class="eyebrow">EDIT</p>
+        <h3>編輯事情</h3>
+        <label class="dialog-label"
+          >名稱<input id="editTaskTitle" type="text" maxlength="200"
+        /></label>
+        <label class="dialog-label"
+          >想前進的方向<select id="editTaskGoal"></select
+        ></label>
+        <label class="dialog-label"
+          >分類<select id="editTaskCategory"></select
+        ></label>
+        <label class="dialog-label" id="editTaskDateWrap"
+          >放在哪一天<select id="editTaskDate"></select
+        ></label>
+        <label class="dialog-label" id="editTaskTimesWrap" hidden
+          >每週次數<select id="editTaskTimes"></select
+        ></label>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="cancel-button"
+            data-close-dialog="editTaskDialog"
+          >
+            取消</button
+          ><button type="submit" class="primary-button">儲存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="deleteDialog">
+      <form method="dialog" class="dialog-card" id="deleteForm">
+        <p class="eyebrow">刪除</p>
+        <h3 id="deleteTaskTitle"></h3>
+        <label class="dialog-label"
+          >用一句話寫下原因<input
+            id="deleteReason"
+            type="text"
+            required
+            maxlength="60"
+            placeholder="為什麼不做了"
+        /></label>
+        <p class="dialog-help">不做了，要寫原因，會留在 History</p>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="cancel-button"
+            data-close-dialog="deleteDialog"
+          >
+            取消</button
+          ><button type="submit" class="danger-button">刪除</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="replanDialog">
+      <form method="dialog" class="dialog-card" id="replanForm">
+        <p class="eyebrow">移到其他週</p>
+        <h3 id="replanTaskTitle"></h3>
+        <label class="dialog-label"
+          >移到哪一週<select id="replanWeek"></select
+        ></label>
+        <label class="dialog-label"
+          >用一句話寫下原因<input
+            id="replanReason"
+            type="text"
+            required
+            maxlength="60"
+            placeholder="為什麼移到這一週"
+        /></label>
+        <p class="dialog-help">離開這一週，要寫原因</p>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="cancel-button"
+            data-close-dialog="replanDialog"
+          >
+            取消</button
+          ><button type="submit" class="primary-button">確認</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="completionChangeReasonDialog" aria-labelledby="completionChangeReasonTitle">
+      <form id="completionChangeReasonForm" class="dialog-card">
+        <p class="eyebrow">完成狀態變更</p>
+        <h3 id="completionChangeReasonTitle">請留下這次變更的原因</h3>
+        <p class="dialog-help">「<strong id="completionChangeReasonTask"></strong>」已切換完成狀態至少 3 次。從第 4 次起，每次變更都需要原因，並保留在歷史事件中。</p>
+        <label class="dialog-label">變更原因
+          <textarea id="completionChangeReasonInput" rows="3" maxlength="200" required placeholder="例如：剛才不小心按錯，現在要改回來"></textarea>
+        </label>
+        <p class="category-color-error" id="completionChangeReasonError" hidden>請先填寫原因，才能變更完成狀態。</p>
+        <div class="dialog-actions">
+          <button type="button" class="cancel-button" id="completionChangeReasonCancel">取消，不變更</button>
+          <button type="submit" class="primary-button">確認變更</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="completionNoteDialog">
+      <form method="dialog" class="dialog-card">
+        <p class="eyebrow">完成紀錄</p>
+        <h3 id="noteTaskTitle"></h3>
+        <label class="dialog-label"
+          >想替這次完成留一句嗎<textarea
+            id="completionNoteInput"
+            rows="3"
+            maxlength="2000"
+            placeholder="可以空著"
+          ></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button value="skip" class="cancel-button" id="skipNoteBtn">
+            略過</button
+          ><button value="save" class="primary-button" id="saveNoteBtn">
+            儲存
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="recurringDialog">
+      <form method="dialog" class="dialog-card" id="recurringForm">
+        <p class="eyebrow">重複習慣</p>
+        <h3 id="recurringDialogTitle">新增重複習慣</h3>
+        <label class="dialog-label"
+          >名稱<input
+            id="recurringTitleInput"
+            type="text"
+            maxlength="200" /></label
+        ><label class="dialog-label"
+          >分類<select id="recurringCategory"></select
+        ></label
+        ><label class="dialog-label"
+          >想前進的方向<select id="recurringGoal"></select></label
+        ><label class="dialog-label"
+          >頻率<select id="recurringFrequency">
+            <option value="daily">每天</option>
+            <option value="weekly">每週</option>
+          </select></label
+        ><label class="dialog-label" id="recurringTimesWrap" hidden
+          >每週幾次<select id="recurringTimes"></select
+        ></label>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="cancel-button"
+            data-close-dialog="recurringDialog"
+          >
+            取消</button
+          ><button type="submit" class="primary-button">儲存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="directionDialog">
+      <form method="dialog" class="dialog-card" id="directionForm">
+        <p class="eyebrow">方向</p>
+        <h3 id="directionDialogTitle">新增方向</h3>
+        <label class="dialog-label"
+          >名稱<input
+            id="directionNameInput"
+            type="text"
+            required
+            maxlength="12" /></label
+        ><label class="dialog-label"
+          >成果（做到什麼算完成）<input
+            id="directionOutcomeInput"
+            type="text"
+            maxlength="40"
+            placeholder="例如：完成靜態介面" /></label
+        ><label class="dialog-label"
+          >目標葉子數<input
+            id="directionTargetInput"
+            type="number"
+            min="1"
+            max="999"
+            required
+        /></label>
+        <div class="category-picker-section">
+          <span class="category-picker-label">方向顏色</span>
+          <div class="category-preset-palette" id="directionPalette" aria-label="方向預設調色板"></div>
+          <div class="category-custom-controls">
+            <label class="category-native-picker" title="開啟系統調色板">
+              <span class="category-selected-sample" id="directionColorPreview"></span>
+              <span>自訂顏色</span>
+              <input type="color" id="directionNativeColor" aria-label="選擇方向自訂顏色" />
+            </label>
+            <label class="category-hex-label" for="directionHexColor">HEX 色碼
+              <input type="text" id="directionHexColor" spellcheck="false" autocapitalize="characters" maxlength="7" placeholder="#9FC3DE" inputmode="text" />
+            </label>
+          </div>
+          <span class="category-color-error" id="directionHexError" hidden>請輸入正確的 HEX 色碼，例如 #9FC3DE。</span>
+        </div>
+        <p class="dialog-help">改名或改目標，已經長出的葉子都還在</p>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="danger-button quiet"
+            id="deleteDirectionBtn"
+            hidden
+          >
+            刪除</button
+          ><button
+            type="button"
+            class="cancel-button"
+            data-close-dialog="directionDialog"
+          >
+            取消</button
+          ><button type="submit" class="primary-button">儲存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dupDialog">
+      <div class="dialog-card">
+        <p class="eyebrow">提醒一下</p>
+        <h3>這週已經有「<span id="dupTitle"></span>」了</h3>
+        <p class="dialog-help">還是要再新增一個嗎？</p>
+        <div class="dialog-actions">
+          <button type="button" class="cancel-button" id="dupCancel">
+            不新增</button
+          ><button type="button" class="primary-button" id="dupConfirm">
+            還是新增
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="tutorialDialog">
+      <div class="tutorial-card">
+        <div class="tut-top">
+          <div class="tut-dots" id="tutDots"></div>
+          <span class="tut-count" id="tutCount"></span>
+        </div>
+        <div id="tutBody" class="tut-body"></div>
+        <div class="tut-actions">
+          <button type="button" class="text-button" id="tutSkip">略過</button
+          ><span class="spacer"></span
+          ><button type="button" class="cancel-button" id="tutBack">
+            上一步</button
+          ><button type="button" class="primary-button" id="tutNext" autofocus>
+            下一步
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="categoryDialog">
+      <form method="dialog" class="dialog-card" id="categoryForm">
+        <p class="eyebrow">分類</p>
+        <h3 id="categoryDialogTitle">新增分類</h3>
+        <label class="dialog-label"
+          >名稱<input id="categoryNameInput" type="text" maxlength="60"
+        /></label>
+        <div class="category-picker-section">
+          <span class="category-picker-label">分類顏色</span>
+          <div class="category-preset-palette" id="categoryPalette" aria-label="分類預設調色板"></div>
+          <div class="category-custom-controls">
+            <label class="category-native-picker" title="開啟系統調色板">
+              <span class="category-selected-sample" id="categoryColorPreview"></span>
+              <span>自訂顏色</span>
+              <input type="color" id="categoryNativeColor" aria-label="選擇自訂顏色" />
+            </label>
+            <label class="category-hex-label" for="categoryHexColor">HEX 色碼
+              <input type="text" id="categoryHexColor" spellcheck="false" autocapitalize="characters" maxlength="7" placeholder="#9FC3DE" inputmode="text" />
+            </label>
+          </div>
+          <small class="category-color-error" id="categoryHexError" hidden>請輸入正確的色碼，例如 #9FC3DE</small>
+        </div>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="cancel-button"
+            data-close-dialog="categoryDialog"
+          >
+            取消</button
+          ><button type="submit" class="primary-button">儲存</button>
+        </div>
+      </form>
+    </dialog>
+
+
+    <!-- 分類清單共用調色板：先預覽，按套用才變更雲端 state。 -->
+    <dialog id="categoryColorDialog" aria-labelledby="categoryColorDialogTitle">
+      <form method="dialog" class="dialog-card category-color-dialog" id="categoryColorForm">
+        <p class="eyebrow">分類顏色</p>
+        <h3 id="categoryColorDialogTitle">調整顏色</h3>
+        <p class="category-color-dialog-help">選擇一個喜歡的顏色，也能輸入色碼。</p>
+        <div class="category-preset-palette" id="categoryQuickPalette" aria-label="預設調色板"></div>
+        <div class="category-custom-controls">
+          <label class="category-native-picker" title="開啟系統調色板">
+            <span class="category-selected-sample" id="categoryQuickColorPreview"></span>
+            <span>自訂顏色</span>
+            <input type="color" id="categoryQuickNativeColor" aria-label="選擇自訂顏色" />
+          </label>
+          <label class="category-hex-label" for="categoryQuickHexColor">HEX 色碼
+            <input type="text" id="categoryQuickHexColor" spellcheck="false" autocapitalize="characters" maxlength="7" placeholder="#9FC3DE" inputmode="text" />
+          </label>
+        </div>
+        <small class="category-color-error" id="categoryQuickHexError" hidden>請輸入正確的色碼，例如 #9FC3DE</small>
+        <div class="dialog-actions">
+          <button type="button" class="cancel-button" data-close-dialog="categoryColorDialog">取消</button>
+          <button type="submit" class="primary-button" id="applyCategoryColor">套用顏色</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="yearReviewDialog">
+      <div class="dialog-card year-review-card">
+        <button class="dialog-x" id="closeYearReview" type="button">×</button>
+        <div class="year-scene">
+          <span class="year-orbit">🌿</span>
+          <p class="eyebrow">本輪回顧</p>
+          <h2>這一輪，真的留下來了</h2>
+          <p id="yearReviewText"></p>
+          <div class="year-stats" id="yearStats"></div>
+          <p class="year-letter">謝謝願意慢慢長大的自己</p>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="completionRecordDialog">
+      <div class="dialog-card">
+        <p class="eyebrow">完成紀錄</p>
+        <h3 id="completionRecordTitle"></h3>
+        <div id="completionRecordBody" class="completion-record-body"></div>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="primary-button"
+            id="closeCompletionRecord"
+          >
+            知道了
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <div
+      class="footprint-layer"
+      id="weekFootprintLayer"
+      hidden
+      aria-hidden="true"
+    >
+      <section
+        class="footprint-card"
+        id="weekFootprintCard"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="footprintTitle"
+      ></section>
+    </div>
+
+    <section
+      id="connectionGate"
+      class="connection-gate"
+      aria-label="雲端登入"
+      hidden
+    >
+      <div id="autoLoginLoading" class="connection-card auto-login-loading" role="status" aria-live="polite" hidden>
+        <span class="auto-login-spinner" aria-hidden="true"></span>
+        <h2>正在恢復登入</h2>
+        <p>正在安全確認雲端連線，請稍候…</p>
+      </div>
+      <form id="connectionForm" class="connection-card">
+        <p class="eyebrow">TINY PROGRESS</p>
+        <h1>登入 Tiny Progress</h1>
+        <p>登入後自動載入雲端進度。網路中斷時會暫停編輯，不會建立另一份離線資料。</p>
+        <label
+          >伺服器網址<input
+            id="serverUrl"
+            type="url"
+            autocomplete="url"
+            placeholder="https://你的服務.onrender.com"
+            required
+        /></label>
+        <label
+          >私人登入密碼
+          <span class="password-control">
+            <input id="webPassword" type="password" autocomplete="current-password" required />
+            <button type="button" id="toggleWebPassword" class="password-toggle" aria-label="顯示密碼" aria-pressed="false">顯示</button>
+          </span>
+        </label>
+        <label class="remember-device-option">
+          <input id="rememberDevice" type="checkbox" />
+          <span><strong>記住這台裝置（30 天）</strong><small>只建議在自己的電腦或手機勾選，公用裝置請保持關閉。</small></span>
+        </label>
+        <p id="connectionMessage" role="status"></p>
+        <div id="legacyDraftNotice" class="legacy-draft-notice" hidden>
+          <strong>偵測到舊版未同步草稿</strong>
+          <p>新版不會自動把舊草稿覆蓋到雲端。若草稿重要，請先下載備份，再登入查看正式資料。</p>
+          <button type="button" id="downloadLegacyDraft" class="secondary-button">下載舊草稿備份</button>
+          <label class="legacy-draft-confirm"><input type="checkbox" id="legacyDraftConfirmed" />我已確認草稿備份，繼續使用雲端資料</label>
+        </div>
+        <div class="connection-actions">
+          <button class="primary-button" type="submit">登入雲端</button>
+        </div>
+        <p class="dialog-help">
+          登入後會載入正式雲端資料；不會使用示範任務。
+        </p>
+      </form>
+    </section>
+    <section id="cloudFailureGate" class="connection-gate" hidden aria-label="雲端連線中斷">
+      <div class="connection-card" role="alert" aria-labelledby="cloudFailureTitle" aria-describedby="cloudFailureText">
+        <p class="eyebrow">TINY PROGRESS</p>
+        <h2 id="cloudFailureTitle">已登入，正在重新連接雲端</h2>
+        <p id="cloudFailureText">暫時無法確認最新雲端資料，編輯已暫停。</p>
+        <div class="connection-actions">
+          <button class="primary-button" type="button" id="retryCloudRead">重試雲端連線</button>
+        </div>
+        <p class="dialog-help">已保留最後成功讀取的資料，不會建立離線副本。連線恢復後會自動重新載入。</p>
+      </div>
+    </section>
+    <section id="saveFailureGate" class="connection-gate" hidden aria-label="雲端儲存失敗">
+      <div class="connection-card" role="alertdialog" aria-labelledby="saveFailureTitle" aria-describedby="saveFailureText">
+        <p class="eyebrow">TINY PROGRESS</p>
+        <h2 id="saveFailureTitle">這次修改還沒儲存成功</h2>
+        <p id="saveFailureText">目前無法連線到雲端。為避免產生不同步資料，編輯已暫停。</p>
+        <div class="connection-actions">
+          <button class="primary-button" type="button" id="retryFailedSave">重試這次儲存</button>
+          <button class="primary-button" type="button" id="reloginFailedSave" hidden>重新登入並儲存</button>
+          <button class="secondary-button" type="button" id="discardFailedSave">放棄未儲存的修改</button>
+        </div>
+        <p class="dialog-help">放棄後會重新讀取雲端最後成功儲存的版本。網路恢復前不能離線編輯。</p>
+      </div>
+    </section>
+    <dialog id="cycleDialog">
+      <div class="dialog-card">
+        <button type="button" class="dialog-x" data-close-dialog="cycleDialog">
+          ×
+        </button>
+        <h3>12 週計畫管理</h3>
+        <p class="dialog-help">
+          平常安排每週事項不需要進來。這裡只用來切換或建立 12 週計畫，以及調整週次日期。
+        </p>
+        <p id="cycleMessage" role="status"></p>
+        <button
+          type="button"
+          id="cycleSyncSettings"
+          class="text-button"
+          hidden
+        >
+          前往設定雲端同步
+        </button>
+        <label class="dialog-label"
+          >要查看哪一輪<select id="cycleSelect"></select
+        ></label>
+        <div class="dialog-actions">
+          <button type="button" id="viewCycle" class="secondary-button">
+            查看選擇的計畫</button
+          ><button type="button" id="currentCycle" class="text-button">
+            回到目前計畫
+          </button>
+        </div>
+        <form id="newCycleForm">
+          <h4>開始新的 12 週計畫</h4>
+          <p class="dialog-help">
+            開始一段新的 12 週安排；之前的計畫會保留在紀錄中。
+          </p>
+          <label class="dialog-label"
+            >新計畫開始日期<input type="date" id="newCycleDate" required /></label
+          ><label class="dialog-label"
+            >這 12 週想完成的方向<input
+              id="newCycleTheme"
+              maxlength="200"
+              required /></label
+          ><button class="primary-button" type="submit">建立新計畫</button>
+        </form>
+        <form id="changeCycleStartForm">
+          <h4>調整尚未開始的計畫日期</h4>
+          <p class="dialog-help">
+            先在上方選擇還沒開始的計畫，再設定新的開始日期。
+          </p>
+          <label class="dialog-label"
+            >新的開始日期<input
+              type="date"
+              id="changeCycleDate"
+              required /></label
+          ><button class="secondary-button" type="submit">
+            更新開始日期
+          </button>
+        </form>
+        <form id="postponeForm">
+          <h4>本週需要多一點時間？</h4>
+          <p class="dialog-help">
+            將本週和後續週次一起往後順延；每週最多延後一次。
+          </p>
+          <label class="dialog-label"
+            >順延幾天<select id="postponeDays">
+              <option value="1">1 天</option>
+              <option value="2">2 天</option>
+              <option value="3">3 天</option>
+              <option value="4">4 天</option>
+              <option value="5">5 天</option>
+              <option value="6">6 天</option>
+              <option value="7">7 天</option>
+            </select></label
+          ><label class="dialog-label"
+            >簡單記錄原因<input id="postponeReason" maxlength="200" required
+          /></label>
+          <button class="secondary-button" type="submit">順延本週與後續日期</button>
+        </form>
+      </div>
+    </dialog>
+    <script src="github-page/config.js"></script>
+    <script src="github-page/domain.js?v=20261022-sage-reflection-v1"></script>
+    <script src="github-page/local-preview-connection.js"></script>
+    <script src="github-page/milestones.js?v=20261024-journey-clean-v2"></script>
+    <script src="script.js?v=20261024-week-first-v1"></script>
+    <script src="github-page/cycle-management.js"></script>
+  </body>
+</html>
