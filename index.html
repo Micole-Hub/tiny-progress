@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <script>
       // The former demo view is retired. Always use the production website.
       if (new URLSearchParams(location.search).get("demo") === "1") {
@@ -10,6 +10,12 @@
       }
     </script>
     <meta name="theme-color" content="#f4f1ea" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Tiny Progress" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="referrer" content="no-referrer" />
     <title>Tiny Progress · Every small step matters.</title>
     <meta name="description" content="Tiny Progress，記錄每週的小小進度。Every small step matters. 休息也是前進的一部分。" />
@@ -19,7 +25,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261024-stage1-weekday-v1" />
+    <link rel="stylesheet" href="style.css?v=20261024-stage2-v2" />
     <link rel="stylesheet" href="github-page/milestones.css?v=20261024-journey-clean-v2" />
   </head>
   <body>
@@ -84,6 +90,7 @@
               <div class="card-topline">
                 <span class="section-kicker">12 週計畫目標</span>
                 <span class="locked-note">本輪計畫</span>
+                <button type="button" class="text-button growth-toggle" id="growthToggle" aria-expanded="false" aria-controls="directionTags">展開</button>
               </div>
               <p class="direction-text" id="directionText"></p>
               <div class="direction-tags" id="directionTags"></div>
@@ -105,6 +112,15 @@
             <span class="mobile-tree-peek-copy"><strong>我的成長樹</strong><small><span id="miniTreeLeafCount">0</span> 片葉子正在累積</small></span>
             <span class="mobile-tree-peek-arrow" aria-hidden="true">↓</span>
           </button>
+
+          <section class="lens-ask soft-card" id="lensAsk" hidden aria-label="選擇習慣的檢視方式">
+            <strong>你習慣怎麼安排？</strong>
+            <small>之後打開會直接進到這個檢視，隨時可以在上方切換。</small>
+            <div class="lens-ask-row">
+              <button type="button" class="secondary-button" data-lens-pick="week">整週<small>先看整週再排</small></button>
+              <button type="button" class="secondary-button" data-lens-pick="day">每日<small>一天一天安排</small></button>
+            </div>
+          </section>
 
           <section class="work-card soft-card" id="workCard">
             <div class="work-header" id="workHeader">
@@ -364,7 +380,7 @@
                 d="M4.8 11.2 12 5.4l7.2 5.8v7.1a1.4 1.4 0 0 1-1.4 1.4H6.2a1.4 1.4 0 0 1-1.4-1.4z"
               />
               <path d="M9.3 19.7v-5.5h5.4v5.5" /></svg></span
-          ><small>Home</small>
+          ><small>本週</small>
         </button>
         <button class="nav-item" type="button" data-page-target="history">
           <span class="nav-icon"
@@ -372,7 +388,7 @@
               <path d="M12 20a8 8 0 1 0-7.1-4.3" />
               <path d="M4 11.5V16h4.5" />
               <path d="M12 8v4.4l3 1.8" /></svg></span
-          ><small>History</small>
+          ><small>足跡</small>
         </button>
         <button class="nav-item" type="button" data-page-target="settings">
           <span class="nav-icon"
@@ -383,7 +399,7 @@
               <path d="M4.5 16.8H6" />
               <path d="M10.3 16.8h9.2" />
               <circle cx="8.2" cy="16.8" r="2.1" /></svg></span
-          ><small>Settings</small>
+          ><small>設定</small>
         </button>
       </nav>
     </div>
@@ -920,7 +936,11 @@
     <script src="github-page/domain.js?v=20261022-sage-reflection-v1"></script>
     <script src="github-page/connection.js?v=20261023-remember-device-v1"></script>
     <script src="github-page/milestones.js?v=20261024-journey-clean-v2"></script>
-    <script src="script.js?v=20261024-stage1-weekday-v1"></script>
+    <script src="script.js?v=20261024-stage2-v2"></script>
     <script src="github-page/cycle-management.js"></script>
+    <script>
+      if ("serviceWorker" in navigator && location.protocol.startsWith("http"))
+        addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    </script>
   </body>
 </html>

@@ -699,10 +699,10 @@ function renderRestHome() {
   $("#workHeader").hidden = true;
   $("#progressTrack").hidden = true;
   $("#progressSummary").hidden = true;
-  $("#weekStrip").hidden = dayMode;
+  $("#weekStrip").hidden = false;
   $("#dayStrip").hidden = !dayMode;
+  renderWeekStrip();
   if (dayMode) renderDayStrip();
-  else renderWeekStrip();
   // The week range / future status now lives directly above the date strip.
   // Keep the legacy element hidden so information is not repeated at the bottom.
   $("#restDateNote").hidden = true;
@@ -794,9 +794,10 @@ function renderHome() {
     : "這週想完成什麼";
   $("#workHint").textContent = archived ? "這週已封存，請到 History 查看" : "";
   $("#workHint").hidden = !archived;
-  $("#weekStrip").hidden = dayMode;
+  $("#weekStrip").hidden = false;
   $("#dayStrip").hidden = !dayMode;
-  dayMode ? renderDayStrip() : renderWeekStrip();
+  renderWeekStrip();
+  if (dayMode) renderDayStrip();
   // 只有休息日預設收合任務。手動展開後，使用一般的任務欄位和進度顯示。
   // 非休息日永遠正常顯示任務欄位，不顯示收合按鈕。
   $("#workCard").classList.toggle("resting", resting);
@@ -898,6 +899,7 @@ function renderHome() {
     : "0%";
   $("#quickAddForm").hidden = archived || (resting && !planningOpen);
   renderQuickOptions();
+  renderLensAsk();
 }
 function applyRowFeedback() {
   const rows = (id) =>
@@ -951,7 +953,7 @@ function renderCalendarMonthLabel() {
       ? `${firstYear} 年 ${firstMonth} 月－${lastMonth} 月`
       : `${firstYear} 年 ${firstMonth} 月`;
 
-  title.textContent = `Week ${state.selectedWeek}`;
+  title.textContent = `Week ${state.selectedWeek} / 12`;
   // Week view gives the date range once. Day view already shows 7 individual dates.
   range.textContent = `${formatShortDate(first)}～${formatShortDate(last)}`;
   range.hidden = state.mode !== "week";
@@ -2442,6 +2444,24 @@ function historyDetailHtml(
     : "";
   return `<div class="history-detail-head"><span>Week ${week}${archived ? " · 已封存" : ""}</span><button class="text-button" type="button" data-close-history>收起</button></div><h3>這週留下來的進度</h3><div class="history-section"><p class="field-label">完成 ${count} 次</p>${daily ? `<p class="daily-line">${esc(daily)}</p>` : ""}${completed.length ? completed.map(line).join("") : `<div class="empty-note">這週還沒有完成紀錄</div>`}</div>${left}${replanned.length ? `<div class="history-section"><p class="field-label">移到其他週</p>${replanned.map((x) => `<div class="history-line history-change"><span>→</span><span>${esc(x)}</span></div>`).join("")}</div>` : ""}${deleted.length ? `<div class="history-section"><p class="field-label">刪除</p>${deleted.map((x) => `<div class="history-line history-delete"><span>×</span><span>${esc(x)}</span></div>`).join("")}</div>` : ""}${reviewBlock}${encouragement}`;
 }
+const LENS_KEY = "tp-lens-pref";
+function readLensPref() {
+  try {
+    const v = localStorage.getItem(LENS_KEY);
+    return v === "week" || v === "day" ? v : "";
+  } catch {
+    return "";
+  }
+}
+function saveLensPref(mode) {
+  try {
+    localStorage.setItem(LENS_KEY, mode);
+  } catch {}
+}
+function renderLensAsk() {
+  const card = $("#lensAsk");
+  if (card) card.hidden = Boolean(readLensPref()) || isCycleResting();
+}
 function renderSettings() {
   $$("[data-mode]").forEach((b) => {
     const selected = b.dataset.mode === state.mode;
@@ -2860,6 +2880,20 @@ function bindStaticEvents() {
   $$("[data-mode]").forEach((b) =>
     b.addEventListener("click", () => {
       state.mode = b.dataset.mode;
+      saveLensPref(state.mode);
+      renderAll();
+    }),
+  );
+  $("#growthToggle")?.addEventListener("click", () => {
+    const copy = $("#growthBanner .growth-copy");
+    const open = copy.classList.toggle("open");
+    $("#growthToggle").textContent = open ? "收起" : "展開";
+    $("#growthToggle").setAttribute("aria-expanded", String(open));
+  });
+  $$("[data-lens-pick]").forEach((b) =>
+    b.addEventListener("click", () => {
+      state.mode = b.dataset.lensPick;
+      saveLensPref(state.mode);
       renderAll();
     }),
   );
@@ -3683,6 +3717,8 @@ TPConnection.start({
     state = next;
     refreshClock();
     syncGoals();
+    const lensPref = readLensPref();
+    if (lensPref && state.mode !== lensPref) state.mode = lensPref;
     lastListKey = null;
     prevDone = null;
     flyingKeys.clear();
