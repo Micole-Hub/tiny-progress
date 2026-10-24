@@ -3389,13 +3389,13 @@ function renderTutorial() {
       "整週和每日是同一份任務的兩個視角。請選擇平常想先看到哪一個，之後也能隨時切換。",
       `<div class="tut-reflect"><div class="tp-lens-choice" role="group" aria-label="預設檢視"><button type="button" data-tut-lens="week" aria-pressed="${state.mode === "week"}">整週安排</button><button type="button" data-tut-lens="day" aria-pressed="${state.mode === "day"}">每日安排</button></div><p>週次依真正的日期前進。任務屬於週，日期可留空；每日鏡頭會把未排日期的任務放在「本週還沒排」。</p><p>提前安排或完成不會讓週次提早跳轉。雲端顯示成功儲存後，才算完成同步。</p></div>`,
     );
-    $("[data-tut-lens]").forEach(button =>
+    $$("[data-tut-lens]").forEach(button =>
       button.addEventListener("click", () => {
         const lens = button.dataset.tutLens;
         if (lens !== "week" && lens !== "day") return;
         state.mode = lens;
         try { localStorage.setItem("tp-view-preference", lens); } catch {}
-        $("[data-tut-lens]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tutLens === lens)));
+        $$("[data-tut-lens]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tutLens === lens)));
       })
     );
   } else if (tutStep === 3) {

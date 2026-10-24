@@ -4541,3 +4541,7 @@ body { background: linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px); }
 .work-content .focus-choice>span{min-width:0}
 .work-content .focus-choice button{font-size:12px!important;padding:7px 10px;max-width:115px}
 @media(max-width:760px){.work-content{width:100%}.work-content .habit-tracker,.work-content .focus-pool{padding:10px 12px}.work-content .focus-choice{grid-template-columns:8px minmax(0,1fr)auto}.work-content .focus-choice button{margin:0}.work-content .habit-main strong{font-size:13px}}
+
+/* Size the tutorial card against its dialog, including scrollbar space. */
+#tutorialDialog { width: min(430px, calc(100% - 28px)); max-width: calc(100% - 28px); }
+#tutorialDialog .tutorial-card { width: 100%; min-width: 0; }

@@ -51,7 +51,7 @@ const page = fs.readFileSync(path.join(root,"script.js"),"utf8");
 const html = fs.readFileSync(path.join(root,"index.html"),"utf8");
 const css = fs.readFileSync(path.join(root,"style.css"),"utf8");
 assert(!page.includes('data-footprint-next'));
-assert(html.includes('本週足跡 · 隨時寫感想'));
+assert(/<button\b[^>]*id="footprintEntry"[^>]*>[\s\S]*?本週足跡[\s\S]*?<\/button>/.test(html));
 assert(css.includes('--bg: #e9f0e8'));
 assert(css.includes('linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px)'));
 console.log("PASS UI: no early archive button, note entry, pale sage page background");
