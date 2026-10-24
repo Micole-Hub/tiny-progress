@@ -4519,3 +4519,9 @@ body { background: linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px); }
 .tp-lens-choice{display:flex;gap:9px;margin:5px 0 12px}
 .tp-lens-choice button{flex:1;min-height:45px;border:1px solid var(--line);background:var(--surface);border-radius:12px;cursor:pointer;font-weight:700}
 .tp-lens-choice button[aria-pressed="true"]{border-color:var(--green);background:#eaf3e8;color:var(--green-deep)}
+
+/* Compact add flow shared by both lenses. */
+#quickAddForm[hidden],#openQuickAddBtn[hidden]{display:none!important}
+.quick-add-opener{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:47px;margin:14px 0 0;padding:10px 16px;border:1px dashed #abc0a7;border-radius:13px;background:#f5f9f3;color:var(--green-deep);font-size:14px;font-weight:700;cursor:pointer}
+.quick-add-opener:hover{background:#edf5eb}
+.quick-add-opener:focus-visible{outline:2px solid var(--green-deep);outline-offset:3px}
