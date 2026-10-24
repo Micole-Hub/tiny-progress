@@ -3,6 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      // The former demo view is retired. Always use the production website.
+      if (new URLSearchParams(location.search).get("demo") === "1") {
+        location.replace("https://micole-hub.github.io/tiny-progress/");
+      }
+    </script>
     <meta name="theme-color" content="#f4f1ea" />
     <meta name="referrer" content="no-referrer" />
     <title>Tiny Progress · Every small step matters.</title>
@@ -13,8 +19,8 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261023-remember-device-v1" />
-    <link rel="stylesheet" href="github-page/milestones.css?v=20261023-visual-only" />
+    <link rel="stylesheet" href="style.css?v=20261024-stage1-weekday-v1" />
+    <link rel="stylesheet" href="github-page/milestones.css?v=20261024-journey-clean-v2" />
   </head>
   <body>
     <div class="app-shell">
@@ -47,7 +53,6 @@
             <div class="home-mode-control" id="homeModeControl" role="group" aria-label="切換週與每日檢視">
               <button type="button" data-mode="week" aria-pressed="true">整週</button>
               <button type="button" data-mode="day" aria-pressed="false">每日</button>
-              <span>同一週的不同檢視</span>
             </div>
           </div>
 
@@ -63,7 +68,7 @@
             type="button"
             hidden
           >
-            本週足跡 · 隨時寫感想
+            本週足跡
           </button>
 
           <section class="rest-banner soft-card" id="restBanner" hidden aria-label="計畫休息期間">
@@ -140,6 +145,7 @@
             </div>
             <p class="rest-date-note" id="restDateNote" hidden></p>
             <div class="task-list" id="taskList" aria-live="polite"></div>
+            <div class="focus-pool" id="focusPool" hidden></div>
             <section class="habit-tracker" id="habitTracker" hidden>
               <div class="habit-tracker-head">
                 <strong id="habitTrackerTitle">習慣追蹤</strong>
@@ -155,7 +161,7 @@
                   type="text"
                   maxlength="200"
                   autocomplete="off"
-                  placeholder="這週想加入什麼"
+                  placeholder="加入本週事項"
                   aria-label="事情名稱"
                 />
                 <button
@@ -166,42 +172,20 @@
                   ＋
                 </button>
               </div>
-              <label class="quick-date-field" id="quickDateWrap" hidden>
-                <span>安排在哪一天（每日模式必填）</span>
-                <select id="quickDate" aria-label="安排在哪一天" required></select>
-                <small>可選這週七天中的一天；想先不指定日期，請切到「整週」新增。</small>
-              </label>
-              <div class="repeat-box quick-type-box">
-                <label class="repeat-row">
-                  <span
-                    ><strong>設為重複習慣</strong
-                    ><small>只有固定要重複完成時才需要設定</small></span
-                  >
-                  <input type="checkbox" id="quickRepeat" />
-                </label>
-                <div class="repeat-fields" id="quickRepeatFields" hidden>
-                  <label
-                    ><span>頻率</span
-                    ><select id="quickFrequency">
-                      <option value="daily">每天</option>
-                      <option value="weekly">每週</option>
-                    </select></label
-                  >
-                  <label id="quickTimesWrap" hidden
-                    ><span>每週幾次</span
-                    ><select id="quickTimes"></select
-                  ></label>
-                </div>
-              </div>
               <button
                 class="more-toggle"
                 type="button"
                 id="moreToggle"
                 aria-expanded="false"
+                aria-controls="moreFields"
               >
                 ＋ 更多設定
               </button>
               <div class="more-fields" id="moreFields" hidden>
+                <label class="quick-date-field field-wide" id="quickDateWrap">
+                  <span>排在哪一天</span>
+                  <select id="quickDate" aria-label="排在哪一天"></select>
+                </label>
                 <label
                   ><span>想前進的方向</span
                   ><select id="quickGoal"></select
@@ -210,10 +194,27 @@
                   ><span>分類</span
                   ><select id="quickCategory"></select
                 ></label>
+                <div class="repeat-box quick-type-box field-wide">
+                  <label class="repeat-row">
+                    <span><strong>設為重複習慣</strong></span>
+                    <input type="checkbox" id="quickRepeat" />
+                  </label>
+                  <div class="repeat-fields" id="quickRepeatFields" hidden>
+                    <label
+                      ><span>頻率</span
+                      ><select id="quickFrequency">
+                        <option value="daily">每天</option>
+                        <option value="weekly">每週</option>
+                      </select></label
+                    >
+                    <label id="quickTimesWrap" hidden
+                      ><span>每週幾次</span
+                      ><select id="quickTimes"></select
+                    ></label>
+                  </div>
+                </div>
               </div>
             </form>
-
-            <div class="focus-pool" id="focusPool" hidden></div>
           </section>
         </section>
 
@@ -226,7 +227,7 @@
             <div>
               <p class="eyebrow" id="historyCycleLabel">Cycle 1</p>
               <h1 id="historyTitle">一週一週長出來的樣子</h1>
-              <p>每棵樹都保存那一週真正完成、重新安排與刪除的紀錄</p>
+              
             </div>
             <button class="secondary-button" id="yearReviewBtn" type="button">
               本輪回顧
@@ -237,7 +238,7 @@
             id="historyTanks"
             hidden
           ></section>
-          <section class="tp-awards-section" id="tpMilestones" aria-label="成就收藏"></section>
+          <section class="tp-awards-section" id="tpMilestones" aria-label="十二週進度小徑"></section>
           <section class="history-grid" id="historyGrid"></section>
           <section
             class="history-detail soft-card"
@@ -253,8 +254,10 @@
         >
           <div class="simple-page-head">
             <p class="eyebrow">PREFERENCES</p>
-            <h1 id="settingsTitle">設定</h1>
-            <p>把不需要天天看到的選項收在這裡</p>
+            <div class="settings-page-title">
+              <h1 id="settingsTitle">設定</h1>
+              <button class="text-button settings-help-button" id="replayTutorialBtn" type="button" aria-label="重新觀看新手教學">使用教學</button>
+            </div>
           </div>
 
           <section class="settings-list">
@@ -262,7 +265,7 @@
               <div class="setting-block-head">
                 <span
                   ><strong>12 週計畫</strong
-                  ><small>一般使用不必操作；需要開始新計畫或調整日期時再使用</small></span
+                  ></span
                 >
               </div>
               <button
@@ -276,20 +279,20 @@
             <div class="setting-row soft-card toggle-setting">
               <span
                 ><strong>完成後小記</strong
-                ><small>完成時可以留一句，不想寫就關閉</small></span
+                ></span
               >
               <label class="switch"
-                ><input type="checkbox" id="completionNoteToggle" /><i></i
+                ><input type="checkbox" id="completionNoteToggle" aria-label="完成後小記" /><i></i
               ></label>
             </div>
 
             <div class="setting-row soft-card toggle-setting">
               <span
                 ><strong>每週記錄</strong
-                ><small>開啟後，每天都能寫或修改本週感想，不必等到週末</small></span
+                ></span
               >
               <label class="switch"
-                ><input type="checkbox" id="weeklyReflectionToggle" /><i></i
+                ><input type="checkbox" id="weeklyReflectionToggle" aria-label="每週記錄" /><i></i
               ></label>
             </div>
 
@@ -297,22 +300,19 @@
               <div class="setting-block-head">
                 <span
                   ><strong>我的方向</strong
-                  ><small>最多 3 個，每個有成果和目標葉子數</small></span
+                  ></span
                 ><button class="text-button" id="addDirectionBtn" type="button">
                   ＋ 新增
                 </button>
               </div>
               <div id="directionList" class="manage-list"></div>
-              <button class="text-button" id="replayTutorialBtn" type="button">
-                重看新手教學
-              </button>
             </div>
 
             <div class="setting-block soft-card">
               <div class="setting-block-head">
                 <span
                   ><strong>重複習慣管理</strong
-                  ><small>建立請在首頁加入；在這裡調整頻率或暫停</small></span
+                  ></span
                 >
               </div>
               <div id="recurringList" class="manage-list"></div>
@@ -322,7 +322,7 @@
               <div class="setting-block-head">
                 <span
                   ><strong>分類與顏色</strong
-                  ><small>分類標籤與樹葉都會使用這個顏色</small></span
+                  ></span
                 ><button class="text-button" id="addCategoryBtn" type="button">
                   ＋ 新增
                 </button>
@@ -333,10 +333,10 @@
             <div class="setting-block soft-card">
               <div class="setting-block-head">
                 <span
-                  ><strong>LINE 推送</strong
+                   class="line-setting-title"><strong>LINE 推送</strong
                   ><small id="lineSummary"></small></span
                 ><label class="switch"
-                  ><input type="checkbox" id="lineToggle" /><i></i
+                  ><input type="checkbox" id="lineToggle" aria-label="LINE 推送" /><i></i
                 ></label>
               </div>
               <div class="line-settings" id="lineSettings">
@@ -348,7 +348,7 @@
             </div>
             <div class="setting-block soft-card">
               <div class="setting-block-head">
-                <span><strong>登入裝置</strong><small>使用完畢可以登出，並撤銷這台裝置的 30 天登入資格。</small></span>
+                <span><strong>登入裝置</strong></span>
               </div>
               <button type="button" id="logoutDevice" class="secondary-button setting-action">登出這台裝置</button>
             </div>
@@ -919,8 +919,8 @@
     <script src="github-page/config.js"></script>
     <script src="github-page/domain.js?v=20261022-sage-reflection-v1"></script>
     <script src="github-page/connection.js?v=20261023-remember-device-v1"></script>
-    <script src="github-page/milestones.js?v=20261023-visual-only"></script>
-    <script src="script.js?v=20261023-visual-only"></script>
+    <script src="github-page/milestones.js?v=20261024-journey-clean-v2"></script>
+    <script src="script.js?v=20261024-stage1-weekday-v1"></script>
     <script src="github-page/cycle-management.js"></script>
   </body>
 </html>

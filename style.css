@@ -3436,8 +3436,7 @@ body {
   background: var(--surface-2);
 }
 .quick-add {
-  width: min(100%, 840px);
-  margin: 24px auto 0;
+  margin: 18px 0 0;
   padding: 18px;
   border-color: var(--line);
   border-radius: 18px;
@@ -4440,88 +4439,114 @@ body { background: linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px); }
 .remember-device-option strong { font-size: 14px; }
 .remember-device-option small { color: var(--muted); line-height: 1.55; }
 
-.work-card {
-  border: 1px solid #dce6d9;
-  box-shadow: 0 12px 30px rgba(67, 82, 64, 0.06);
+/* v29 editorial polish: keep actions and status labels legible, reduce repeated captions. */
+.settings-page-title{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.settings-page-title h1{margin:0}
+.settings-help-button{flex:none;min-height:38px;padding:6px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.settings-list .setting-block-head small:empty,.settings-list .toggle-setting small:empty{display:none}
+.settings-list .line-setting-title{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px 14px}
+.settings-list .line-setting-title small{color:var(--ink-2);font-size:12px;line-height:1.5}
+.focus-pool-head{align-items:center}
+.focus-pool-head small:empty{display:none}
+.work-header p[hidden],.home-lede[hidden]{display:none!important}
+.tut-pane p{line-height:1.75}
+@media(max-width:620px){.settings-page-title{align-items:center}.settings-help-button{font-size:12px}.settings-list .line-setting-title{display:grid;gap:3px}}
+
+/* Keep user feedback visible above the Week Footprint dialog, but below login gates. */
+.toast{z-index:180}
+
+/* History empty state: secondary inline note, not a giant duplicate card. */
+.history-grid:has(> .history-empty-compact){display:block}
+.history-empty-compact{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  min-height:0;padding:12px 16px;margin:0;
+  background:transparent;border:0;box-shadow:none;
+  color:#7c8b7b;text-align:center;
 }
-.work-header {
-  align-items: center;
+.history-empty-compact strong{font-size:12px;font-weight:500;color:inherit}
+.history-empty-compact>span{font-size:17px;color:#87a187}
+
+/* ===== Stage 1: 本週卡片的統一版面 =====
+   任務列表、待排區、習慣追蹤、新增表單共用同一欄寬，不再各自設定寬度與置中。 */
+@media (min-width: 860px) {
+  .work-card {
+    padding-inline: max(28px, calc((100% - 840px) / 2));
+  }
 }
-.progress-number {
-  min-width: 104px;
-  padding: 9px 12px;
-  border: 1px solid #e5ebe2;
-  border-radius: 14px;
-  background: #f7f9f5;
+.work-card > .focus-pool,
+.work-card > .habit-tracker,
+.work-card > .quick-add {
+  width: auto;
+  margin-inline: 0;
 }
-.progress-number small {
-  font-size: 10px;
+.work-card > .focus-pool { margin-top: 14px; }
+
+/* 待排區與習慣追蹤共用同一種「列」：圓點／圓圈 + 名稱 + 說明 + 動作 */
+.focus-pool-head span { color: var(--ink-2); }
+.focus-choice {
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 9px;
+  min-height: 48px;
+  padding: 4px 0;
 }
-.progress-number strong {
-  font-size: 28px;
-  font-variant-numeric: tabular-nums;
+.focus-choice i {
+  justify-self: center;
+  width: 9px;
+  height: 9px;
 }
-.progress-track {
-  height: 8px;
-  background: #edf1eb;
+.focus-choice-text {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 9px;
 }
-.task-section-label {
-  padding-top: 20px;
-  color: #4c5d4e;
+.focus-choice-text b {
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
-.task-row {
-  padding-inline: 10px;
-  transition: background-color 0.18s ease, border-radius 0.18s ease;
+.focus-choice-text small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
 }
-.task-row:hover {
-  border-radius: 12px !important;
-  background: #f7f9f5 !important;
-}
-.task-row.done .task-title {
-  color: #7d877f;
-}
-.task-check {
+.focus-choice .text-button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
   background: #fff;
+  font-size: 12px;
+  white-space: nowrap;
 }
-.task-row.done .task-check {
-  background: #eff5ed;
-}
-.quick-add {
-  border-color: #e4e9df;
-  background: #f7f9f5;
-}
-.quick-row input {
-  border-color: #e2e8df;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
-}
-.quick-row input:focus {
-  border-color: #719478;
-  box-shadow: 0 0 0 3px rgba(113, 148, 120, 0.13);
-}
-.add-button {
-  background: #55785b;
-}
-.add-button:hover {
-  background: #47694d;
-}
+.habit-main strong { font-size: 13px; }
+.habit-main span { font-size: 11px; }
 
+/* 新增表單：預設只有標題；日期、方向、分類、重複習慣都在「更多設定」裡 */
+.more-fields .repeat-box {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.more-fields .repeat-row { min-height: 40px; }
+.more-fields .repeat-row strong {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.more-fields .quick-date-field { margin: 0; font-size: 11px; gap: 6px; }
+.more-fields .quick-date-field select {
+  height: 42px;
+  min-height: 42px;
+  padding: 0 10px;
+  border-radius: 12px;
+}
+.more-toggle { font-size: 12px; }
 @media (max-width: 430px) {
-  .progress-number {
-    min-width: 92px;
-    padding: 7px 9px;
-    border-radius: 12px;
-  }
-  .progress-number strong {
-    font-size: 24px;
-  }
-  .task-row {
-    padding-inline: 6px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .task-row,
-  .quick-row input {
-    transition: none;
-  }
+  .more-fields { grid-template-columns: 1fr; }
 }
