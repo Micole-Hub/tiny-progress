@@ -218,8 +218,14 @@ function recurringTask(
 // 正式版只讀取雲端資料；不再內建獨立的示範任務庫。
 
 let state = loadState();
+// Lens preference lives on this device, not in the authoritative task database.
+try {
+  const preference = localStorage.getItem("tp-view-preference");
+  if (preference === "week" || preference === "day") state.mode = preference;
+} catch {}
 // 只控制休息期 UI，與雲端儲存的週次及任務資料分離。
 let restPlannerOpen = false;
+let quickAddOpen = false;
 // 休息日的日曆日期獨立於 12 週任務，切換箭頭不會更動雲端計畫。
 state.unfinishedReasons = state.unfinishedReasons || {};
 state.tankReviewed = state.tankReviewed || {};
@@ -473,6 +479,12 @@ function renderAll() {
   saveState();
 }
 function renderHeader() {
+  const pulse = $("#cyclePulseLabel");
+  if (pulse) pulse.textContent = `Week ${CURRENT_WEEK} / 12`;
+  const note = $("#cyclePulseNote");
+  if (note) note.textContent = isCycleResting() ? "尚未開始" : "目前週次";
+  const fill = $("#cyclePulseFill");
+  if (fill) fill.style.width = `${isCycleResting() ? 0 : Math.min(100, CURRENT_WEEK / 12 * 100)}%`;
   $("#historyCycleLabel").textContent = `Cycle ${state.cycle.number}`;
   $("#homeEyebrow").textContent =
     `Cycle ${state.cycle.number} · ${state.mode === "day" ? "每日檢視" : "整週檢視"}`;
@@ -699,10 +711,10 @@ function renderRestHome() {
   $("#workHeader").hidden = true;
   $("#progressTrack").hidden = true;
   $("#progressSummary").hidden = true;
-  $("#weekStrip").hidden = dayMode;
+  $("#weekStrip").hidden = false;
   $("#dayStrip").hidden = !dayMode;
+  renderWeekStrip();
   if (dayMode) renderDayStrip();
-  else renderWeekStrip();
   // The week range / future status now lives directly above the date strip.
   // Keep the legacy element hidden so information is not repeated at the bottom.
   $("#restDateNote").hidden = true;
@@ -718,6 +730,7 @@ function renderRestHome() {
   $("#habitList").replaceChildren();
   $("#focusPool").hidden = true;
   $("#quickAddForm").hidden = true;
+  $("#openQuickAddBtn").hidden = true;
 }
 // 清單排序只影響畫面，不改動 state.tasks、事件或雲端儲存順序。
 // 尚未完成維持加入清單的順序；完成的移到下方，依實際勾選完成的先後排列。
@@ -795,9 +808,10 @@ function renderHome() {
   $("#workHint").textContent = archived ? "這週已封存，請到 History 查看" : "";
   $("#workHint").hidden = !archived;
   $("#quickTitle").placeholder = "加入本週事項";
-  $("#weekStrip").hidden = dayMode;
+  $("#weekStrip").hidden = false;
   $("#dayStrip").hidden = !dayMode;
-  dayMode ? renderDayStrip() : renderWeekStrip();
+  renderWeekStrip();
+  if (dayMode) renderDayStrip();
   // 只有休息日預設收合任務。手動展開後，使用一般的任務欄位和進度顯示。
   // 非休息日永遠正常顯示任務欄位，不顯示收合按鈕。
   $("#workCard").classList.toggle("resting", resting);
@@ -826,7 +840,7 @@ function renderHome() {
           done: dated.every((o) => o.done),
           html: habitRow(t, dated),
         });
-      } else if (t.focusDate === state.selectedDate || (!t.focusDate && taskDone(t))) {
+      } else if (t.focusDate === state.selectedDate) {
         entries.push({ task: t, done: taskDone(t), html: taskRow(t, null) });
       }
     });
@@ -897,7 +911,11 @@ function renderHome() {
   $("#progressFill").style.width = total
     ? `${Math.round((done / total) * 100)}%`
     : "0%";
-  $("#quickAddForm").hidden = archived || (resting && !planningOpen);
+  const canAdd = !archived && (!resting || planningOpen);
+  $("#openQuickAddBtn").hidden = !canAdd;
+  $("#openQuickAddBtn").setAttribute("aria-expanded", String(quickAddOpen && canAdd));
+  $("#quickAddForm").hidden = !canAdd || !quickAddOpen;
+  $("#openQuickAddBtn").textContent = quickAddOpen && canAdd ? "－ 收起新增" : "＋ 新增任務";
   renderQuickOptions();
 }
 function applyRowFeedback() {
@@ -1031,6 +1049,7 @@ function taskRow(t, occ) {
     meta.push(
       `<span class="chip" style="--c:${color}">${esc(cat.name)}</span>`,
     );
+  if (state.mode === "week" && t.focusDate) meta.push(`<span class="task-date-tag">${formatShortDate(t.focusDate)}</span>`);
   const circleDone =
     isRecurring(t) &&
     t.frequency === "daily" &&
@@ -1047,12 +1066,13 @@ function taskRow(t, occ) {
       : isRecurring(t) && state.mode === "week"
         ? "完成本週全部次數"
         : "完成";
-  return `<article class="task-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}" tabindex="0" aria-label="${completed ? "查看完成紀錄" : "編輯"}：${esc(t.title)}">
+  return `<article class="task-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}">
     <button class="task-check" type="button" aria-label="${checkLabel}">${circleDone ? "✓" : ""}</button>
     <div class="task-main"><p class="task-title">${esc(t.title)}</p>${meta.length ? `<div class="task-meta">${meta.join("")}</div>` : ""}</div>
     <button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button>
   </article>`;
 }
+function weeklyHabitProgress(t) { return `本週 ${occurrenceDoneCount(t)}/${t.targetCount} 次`; }
 function habitRow(t, occ) {
   const group = Array.isArray(occ) ? occ : null,
     color = taskColor(t),
@@ -1065,9 +1085,9 @@ function habitRow(t, occ) {
     : group
       ? "完成這次習慣"
       : "完成本週全部次數";
-  return `<article class="habit-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}" tabindex="0" aria-label="${completed ? "查看完成紀錄" : "編輯"}：${esc(t.title)}">
+  return `<article class="habit-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}">
     <button class="task-check" type="button" aria-label="${label}">${completed ? "✓" : ""}</button>
-    <div class="habit-main"><strong>${esc(t.title)}</strong><span>${t.frequency === "daily" ? "每天" : "每週"} · ${count}/${t.targetCount}</span></div>
+    <div class="habit-main"><strong>${esc(t.title)}</strong><span>${weeklyHabitProgress(t)}</span></div>
     <button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button>
   </article>`;
 }
@@ -1169,21 +1189,8 @@ function bindTaskRows() {
       openTaskActions(t, row);
     }),
   );
-  $$("#taskList .task-row, #habitList .habit-row").forEach((row) => {
-    const open = () => {
-      const t = state.tasks.find((x) => x.id === Number(row.dataset.taskId));
-      openTaskCard(t, row);
-    };
-    row.addEventListener("click", (e) => {
-      if (e.target.closest("button,a,input,select,textarea,label")) return;
-      open();
-    });
-    row.addEventListener("keydown", (e) => {
-      if (e.target !== row || !(e.key === "Enter" || e.key === " ")) return;
-      e.preventDefault();
-      open();
-    });
-  });
+  // Only the completion circle and ••• menu are interactive.
+  // Tapping a task title or empty row space must never open the editor.
 }
 // 切換完成狀態：每一件一般任務，或每一個重複習慣發生次數，各自計算。
 // 前 3 次可直接切換；第 4 次起每次都要先填理由才會真正更動狀態。
@@ -1434,13 +1441,12 @@ function renderFocusPool() {
     pool.hidden = true;
     return;
   }
-  pool.hidden = false;
   const choices = [];
   activeTasks(week).forEach((t) => {
     if (!isRecurring(t) && !t.done && !t.focusDate) {
       choices.push({
         t, occ: null,
-        label: "放進這天",
+        label: `排到週${dayLabel(state.selectedDate)}`,
         meta: "",
       });
       return;
@@ -1452,13 +1458,14 @@ function renderFocusPool() {
           t,
           occ: null,
           weekly: true,
-          label: "安排一次",
-          meta: `每週習慣 · 尚有 ${remaining.length} 次`,
+          label: `排到週${dayLabel(state.selectedDate)}`,
+          meta: `${weeklyHabitProgress(t)} · 還剩 ${remaining.length} 次未排`,
         });
     }
   });
+  pool.hidden = !choices.length;
   pool.innerHTML =
-    `<div class="focus-pool-head"><span>尚未安排日期（${choices.length}）</span></div>` +
+    `<div class="focus-pool-head"><span>本週還沒排（${choices.length}）</span></div>` +
     (choices.length
       ? choices
           .map(
@@ -1492,18 +1499,16 @@ function renderFocusPool() {
   );
 }
 function updateQuickDatePickerVisibility() {
-  const isEveryDayHabit = $("#quickRepeat").checked && $("#quickFrequency").value === "daily";
-  const show = state.mode === "day" && !(isCycleResting() && !restPlannerOpen) && !isEveryDayHabit;
-  $("#quickDateWrap").hidden = !show;
-  $("#quickDate").required = show;
+  $("#quickDateWrap").hidden = false;
+  $("#quickDate").required = false;
 }
 function renderQuickOptions() {
   const dates = Object.values(weekDateMap(state.selectedWeek));
-  // 每日模式新增任務必須有確切日期；整週模式新增可以沒有日期。
-  // 預設選擇正在觀看的那一天，且只能選任務所屬週的七天。
+  // Same task schema in both views; only the default selected date differs.
   const selected = dates.includes(state.selectedDate) ? state.selectedDate : dates[0];
-  $("#quickDate").innerHTML = dates.map((date) =>
-    `<option value="${date}" ${date === selected ? "selected" : ""}>週${dayLabel(date)} ${formatShortDate(date)}</option>`
+  const initialDate = state.mode === "day" ? selected : "";
+  $("#quickDate").innerHTML = `<option value="" ${initialDate ? "" : "selected"}>本週任一天</option>` + dates.map((date) =>
+    `<option value="${date}" ${date === initialDate ? "selected" : ""}>週${dayLabel(date)} ${formatShortDate(date)}</option>`
   ).join("");
   updateQuickDatePickerVisibility();
   $("#quickGoal").innerHTML =
@@ -2852,6 +2857,7 @@ function bindStaticEvents() {
   $$("[data-mode]").forEach((b) =>
     b.addEventListener("click", () => {
       state.mode = b.dataset.mode;
+      try { localStorage.setItem("tp-view-preference", state.mode); } catch {}
       renderAll();
     }),
   );
@@ -2868,6 +2874,13 @@ function bindStaticEvents() {
     btn.textContent = visible ? "隱藏" : "顯示";
     btn.setAttribute("aria-label", visible ? "隱藏密碼" : "顯示密碼");
     btn.setAttribute("aria-pressed", String(visible));
+  });
+  $("#openQuickAddBtn").addEventListener("click", () => {
+    quickAddOpen = !quickAddOpen;
+    $("#quickAddForm").hidden = !quickAddOpen;
+    $("#openQuickAddBtn").setAttribute("aria-expanded", String(quickAddOpen));
+    $("#openQuickAddBtn").textContent = quickAddOpen ? "－ 收起新增" : "＋ 新增任務";
+    if (quickAddOpen) $("#quickTitle").focus();
   });
   $("#moreToggle").addEventListener("click", () => {
     const box = $("#moreFields");
@@ -2899,12 +2912,10 @@ function bindStaticEvents() {
     }
     const categoryId = $("#quickCategory").value,
       goal = $("#quickGoal").value,
-      scheduledDate = state.mode === "day" ? $("#quickDate").value : "",
+      scheduledDate = $("#quickDate").value,
       isRepeat = $("#quickRepeat").checked;
-    if (state.mode === "day" &&
-        !($("#quickRepeat").checked && $("#quickFrequency").value === "daily") &&
-        !Object.values(weekDateMap(targetWeek)).includes(scheduledDate))
-      return showToast("每日模式新增任務，請先選擇這週中的一天");
+    if (scheduledDate && !Object.values(weekDateMap(targetWeek)).includes(scheduledDate))
+      return showToast("日期需要在選取的週次內");
     if (isRepeat) {
       const frequency = $("#quickFrequency").value,
         times = frequency === "daily" ? 7 : Number($("#quickTimes").value || 2);
@@ -2942,12 +2953,14 @@ function bindStaticEvents() {
     $("#quickRepeatFields").hidden = true;
     $("#quickTimesWrap").hidden = true;
     $("#moreFields").hidden = true;
+    $("#moreToggle").setAttribute("aria-expanded", "false");
     $("#moreToggle").textContent = "＋ 更多設定";
+    quickAddOpen = false;
     renderAll();
     showPendingCloudToast(
       isRepeat
         ? "已加入本週習慣"
-        : state.mode === "day"
+        : scheduledDate
           ? `已安排到 ${formatShortDate(scheduledDate)}`
           : "已經放進這週了",
     );
@@ -3359,9 +3372,18 @@ function renderTutorial() {
   } else if (tutStep === 2) {
     body.innerHTML = pane(
       "",
-      "整週和每日怎麼看？",
-      "整週可以看這一週所有任務，也能新增不指定日期的事項。每日只看指定日期的任務，未指定日期的會留在下方等待安排。切換檢視不會複製任務，也不會更改週次。",
-      `<div class="tut-reflect"><p><strong>週次依真正的日期前進。</strong>你可以提前安排、提前完成，但不能因此提早跳到下一週。</p><p>完成記錄會計入所屬週次；若雲端還在儲存，請等確認成功再關閉網頁。</p></div>`,
+      "你習慣怎麼安排？",
+      "整週和每日是同一份任務的兩個視角。請選擇平常想先看到哪一個，之後也能隨時切換。",
+      `<div class="tut-reflect"><div class="tp-lens-choice" role="group" aria-label="預設檢視"><button type="button" data-tut-lens="week" aria-pressed="${state.mode === "week"}">整週安排</button><button type="button" data-tut-lens="day" aria-pressed="${state.mode === "day"}">每日安排</button></div><p>週次依真正的日期前進。任務屬於週，日期可留空；每日鏡頭會把未排日期的任務放在「本週還沒排」。</p><p>提前安排或完成不會讓週次提早跳轉。雲端顯示成功儲存後，才算完成同步。</p></div>`,
+    );
+    $$("[data-tut-lens]").forEach(button =>
+      button.addEventListener("click", () => {
+        const lens = button.dataset.tutLens;
+        if (lens !== "week" && lens !== "day") return;
+        state.mode = lens;
+        try { localStorage.setItem("tp-view-preference", lens); } catch {}
+        $$("[data-tut-lens]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tutLens === lens)));
+      })
     );
   } else if (tutStep === 3) {
     body.innerHTML = pane(
@@ -3541,7 +3563,7 @@ function renderTutorial() {
     body.innerHTML = pane(
       `<div class="tut-done" aria-hidden="true">✓</div>`,
       "準備好了",
-      "你已經練習過：設定方向、加入事情、完成、寫感想、修改。想再看一次，到「設定」按「重看教學」。",
+      "你已經練習過：設定方向、加入事情、完成、寫感想、修改。想再看一次，到「設定」按「使用教學」。",
     );
   }
   // 樹上的葉子照順序一片一片長出來，而不是同時蹦出。
@@ -3675,6 +3697,10 @@ TPConnection.start({
   onCycleTheme: () => renderDirection(),
   replace(next) {
     state = next;
+    try {
+      const preference = localStorage.getItem("tp-view-preference");
+      if (preference === "week" || preference === "day") state.mode = preference;
+    } catch {}
     refreshClock();
     syncGoals();
     lastListKey = null;
