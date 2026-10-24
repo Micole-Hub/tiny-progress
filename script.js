@@ -1066,7 +1066,7 @@ function taskRow(t, occ) {
       : isRecurring(t) && state.mode === "week"
         ? "完成本週全部次數"
         : "完成";
-  return `<article class="task-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}" tabindex="0" aria-label="${completed ? "查看完成紀錄" : "編輯"}：${esc(t.title)}">
+  return `<article class="task-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}">
     <button class="task-check" type="button" aria-label="${checkLabel}">${circleDone ? "✓" : ""}</button>
     <div class="task-main"><p class="task-title">${esc(t.title)}</p>${meta.length ? `<div class="task-meta">${meta.join("")}</div>` : ""}</div>
     <button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button>
@@ -1085,7 +1085,7 @@ function habitRow(t, occ) {
     : group
       ? "完成這次習慣"
       : "完成本週全部次數";
-  return `<article class="habit-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}" tabindex="0" aria-label="${completed ? "查看完成紀錄" : "編輯"}：${esc(t.title)}">
+  return `<article class="habit-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}">
     <button class="task-check" type="button" aria-label="${label}">${completed ? "✓" : ""}</button>
     <div class="habit-main"><strong>${esc(t.title)}</strong><span>${weeklyHabitProgress(t)}</span></div>
     <button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button>
@@ -1189,21 +1189,8 @@ function bindTaskRows() {
       openTaskActions(t, row);
     }),
   );
-  $$("#taskList .task-row, #habitList .habit-row").forEach((row) => {
-    const open = () => {
-      const t = state.tasks.find((x) => x.id === Number(row.dataset.taskId));
-      openTaskCard(t, row);
-    };
-    row.addEventListener("click", (e) => {
-      if (e.target.closest("button,a,input,select,textarea,label")) return;
-      open();
-    });
-    row.addEventListener("keydown", (e) => {
-      if (e.target !== row || !(e.key === "Enter" || e.key === " ")) return;
-      e.preventDefault();
-      open();
-    });
-  });
+  // Only the completion circle and ••• menu are interactive.
+  // Tapping a task title or empty row space must never open the editor.
 }
 // 切換完成狀態：每一件一般任務，或每一個重複習慣發生次數，各自計算。
 // 前 3 次可直接切換；第 4 次起每次都要先填理由才會真正更動狀態。
