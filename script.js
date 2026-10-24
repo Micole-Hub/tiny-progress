@@ -3369,9 +3369,18 @@ function renderTutorial() {
   } else if (tutStep === 2) {
     body.innerHTML = pane(
       "",
-      "整週和每日怎麼看？",
-      "整週可以看這一週所有任務，也能新增不指定日期的事項。每日只看指定日期的任務，未指定日期的會留在下方等待安排。切換檢視不會複製任務，也不會更改週次。",
-      `<div class="tut-reflect"><p><strong>週次依真正的日期前進。</strong>你可以提前安排、提前完成，但不能因此提早跳到下一週。</p><p>完成記錄會計入所屬週次；若雲端還在儲存，請等確認成功再關閉網頁。</p></div>`,
+      "你習慣怎麼安排？",
+      "整週和每日是同一份任務的兩個視角。請選擇平常想先看到哪一個，之後也能隨時切換。",
+      `<div class="tut-reflect"><div class="tp-lens-choice" role="group" aria-label="預設檢視"><button type="button" data-tut-lens="week" aria-pressed="${state.mode === "week"}">整週安排</button><button type="button" data-tut-lens="day" aria-pressed="${state.mode === "day"}">每日安排</button></div><p>週次依真正的日期前進。任務屬於週，日期可留空；每日鏡頭會把未排日期的任務放在「本週還沒排」。</p><p>提前安排或完成不會讓週次提早跳轉。雲端顯示成功儲存後，才算完成同步。</p></div>`,
+    );
+    $("[data-tut-lens]").forEach(button =>
+      button.addEventListener("click", () => {
+        const lens = button.dataset.tutLens;
+        if (lens !== "week" && lens !== "day") return;
+        state.mode = lens;
+        try { localStorage.setItem("tp-view-preference", lens); } catch {}
+        $("[data-tut-lens]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tutLens === lens)));
+      })
     );
   } else if (tutStep === 3) {
     body.innerHTML = pane(
@@ -3551,7 +3560,7 @@ function renderTutorial() {
     body.innerHTML = pane(
       `<div class="tut-done" aria-hidden="true">✓</div>`,
       "準備好了",
-      "你已經練習過：設定方向、加入事情、完成、寫感想、修改。想再看一次，到「設定」按「重看教學」。",
+      "你已經練習過：設定方向、加入事情、完成、寫感想、修改。想再看一次，到「設定」按「使用教學」。",
     );
   }
   // 樹上的葉子照順序一片一片長出來，而不是同時蹦出。
