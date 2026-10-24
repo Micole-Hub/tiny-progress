@@ -4525,3 +4525,19 @@ body { background: linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px); }
 .quick-add-opener{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:47px;margin:14px 0 0;padding:10px 16px;border:1px dashed #abc0a7;border-radius:13px;background:#f5f9f3;color:var(--green-deep);font-size:14px;font-weight:700;cursor:pointer}
 .quick-add-opener:hover{background:#edf5eb}
 .quick-add-opener:focus-visible{outline:2px solid var(--green-deep);outline-offset:3px}
+
+/* Single content column shared by tasks, habits, unplanned items and add form. */
+.work-content{width:min(100%,840px);margin:0 auto;min-width:0;box-sizing:border-box}
+.work-content>*{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.work-content .quick-add{width:100%;max-width:none;margin:12px 0 0}
+.work-content .quick-add-opener{margin-top:12px}
+.work-content .habit-tracker,.work-content .focus-pool{margin-left:0;margin-right:0}
+.work-content .habit-row{grid-template-columns:36px minmax(0,1fr)36px;gap:8px;padding:9px 4px;min-height:54px}
+.work-content .habit-row .task-check{width:30px;height:30px;min-width:30px;min-height:30px}
+.work-content .habit-main{gap:4px 8px}
+.work-content .habit-main strong{font-size:13px}
+.work-content .habit-main span{font-size:11px}
+.work-content .focus-choice{display:grid;grid-template-columns:10px minmax(0,1fr)auto;gap:9px;align-items:center}
+.work-content .focus-choice>span{min-width:0}
+.work-content .focus-choice button{font-size:12px!important;padding:7px 10px;max-width:115px}
+@media(max-width:760px){.work-content{width:100%}.work-content .habit-tracker,.work-content .focus-pool{padding:10px 12px}.work-content .focus-choice{grid-template-columns:8px minmax(0,1fr)auto}.work-content .focus-choice button{margin:0}.work-content .habit-main strong{font-size:13px}}
