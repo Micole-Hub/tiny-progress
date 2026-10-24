@@ -92,3 +92,29 @@ button.tp-journey-stop:focus-visible { outline: 2px solid #68956b; outline-offse
   .tp-journey-done,.tp-journey-bar>span { animation: none !important; }
   .tp-journey-node{transition:none;}
 }
+/* Compact, orderly 12-week overview: replace the dotted serpentine path. */
+.tp-journey-section{margin-bottom:16px;padding:22px 24px;background:#fffdfa}
+.tp-journey-completion{margin:16px 0 18px}
+.tp-journey-completion-label small{display:none}
+.tp-journey-trail{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:none;min-height:0;gap:9px}
+.tp-journey-lines{display:none}
+.tp-journey-stop{
+  min-height:88px;place-self:stretch;box-sizing:border-box;display:flex;
+  flex-direction:column;justify-content:center;align-items:center;gap:5px;
+  padding:11px 5px;border:1px solid #e8e9e0;border-radius:15px;
+  background:#fafaf6;
+}
+.tp-journey-node{width:32px;height:32px;border-width:1px;background:#f3f4ef}
+.tp-journey-number{font-size:12px}
+.tp-journey-stop-copy{display:grid;gap:4px;justify-items:center;width:100%;min-width:0}
+.tp-journey-stop-copy>strong{font:700 12px/1.1 "Manrope",sans-serif}
+.tp-journey-stop-copy>small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:#6e806e}
+.tp-journey-stop.is-start{background:#f7f4e8;border-color:#e4d9ba}
+.tp-journey-stop.is-current{background:#f0f7ef;border-color:#aec8ac}
+.tp-journey-stop.is-finished{background:#f1f7ef;border-color:#c2d6c0}
+.tp-journey-stop.is-future{color:#a3aaa1;background:#fafaf7;border-color:#eceee7}
+.tp-journey-stop.is-future .tp-journey-node{background:#f2f3ed;border-color:#e3e5dc}
+.tp-journey-stop .tp-journey-node svg{width:22px;height:22px}
+.tp-journey-hint{margin:13px 0 0;font-size:11px}
+@media(max-width:760px){.tp-journey-trail{grid-template-columns:repeat(4,minmax(0,1fr))}.tp-journey-stop{min-height:76px}}
+@media(max-width:460px){.tp-journey-section{padding:17px 13px}.tp-journey-trail{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.tp-journey-stop{min-height:73px;padding:9px 3px}}
