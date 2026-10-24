@@ -4466,3 +4466,51 @@ body { background: linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px); }
 }
 .history-empty-compact strong{font-size:12px;font-weight:500;color:inherit}
 .history-empty-compact>span{font-size:17px;color:#87a187}
+
+/* Week-first lens layout, a scoped layer over the existing responsive system. */
+.cycle-pulse{grid-column:1/-1;order:0;display:flex;align-items:center;gap:15px;min-width:0;padding:10px 2px}
+.cycle-pulse-copy{display:flex;align-items:baseline;gap:10px;flex:0 0 auto}
+.cycle-pulse-copy strong{font:800 13px/1.3 var(--font-en);color:var(--green-deep)}
+.cycle-pulse-copy span{font-size:11px;color:var(--muted)}
+.cycle-pulse-track{flex:1;min-width:24px;height:5px;overflow:hidden;border-radius:99px;background:#e5e9e1}
+.cycle-pulse-track span{display:block;height:100%;width:0;background:var(--green);border-radius:99px;transition:width .3s ease}
+.growth-goal-details{min-width:0}
+.growth-goal-details summary{display:flex;align-items:center;gap:9px;cursor:pointer;list-style:none;min-height:36px}
+.growth-goal-details summary::-webkit-details-marker{display:none}
+.growth-goal-details summary .section-kicker{flex:none;margin:0}
+.growth-goal-details summary .direction-text{margin:0!important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px!important;font-weight:600}
+.growth-goal-arrow{margin-left:auto;flex:none;color:var(--green-deep);transition:transform .2s}
+.growth-goal-details[open] .growth-goal-arrow{transform:rotate(180deg)}
+.growth-goal-content{padding-top:14px}
+.growth-banner{min-height:0!important}
+.week-strip{margin-bottom:4px!important}
+.day-strip:not([hidden]){margin-top:6px;margin-bottom:16px!important;padding-top:12px;border-top:1px solid var(--line)}
+.quick-type-box{border:0!important;box-shadow:none!important;background:transparent!important;margin-top:8px}
+.more-fields[hidden]{display:none!important}
+.quick-add{margin-top:12px}
+.focus-pool:not([hidden]){width:100%;min-width:0;max-width:100%;box-sizing:border-box;margin:14px 0}
+.focus-pool-head{padding:0 0 8px}
+.focus-choice{display:flex;align-items:center;gap:9px;max-width:100%;min-width:0}
+.focus-choice>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.focus-choice button{flex:none;white-space:nowrap;font-size:12px!important}
+.focus-pool .focus-choice{padding:10px}
+.bottom-nav .nav-item small{font-family:"Noto Sans TC",sans-serif;letter-spacing:0}
+@media(min-width:1000px){
+ .page[data-page="home"]>.cycle-pulse{grid-column:1/-1;order:0}
+ .page[data-page="home"]>.home-head{order:1}
+ .page[data-page="home"]>.growth-banner{min-width:0}
+}
+@media(max-width:760px){
+ .page[data-page="home"]>.cycle-pulse{order:0;margin-bottom:-8px}
+ .cycle-pulse{padding:4px 0 6px}
+ .cycle-pulse-copy{gap:6px}
+ .cycle-pulse-copy span{font-size:10px}
+ .growth-goal-details summary{flex-wrap:wrap}
+ .growth-goal-details summary .direction-text{max-width:100%}
+ .focus-choice{flex-wrap:wrap}
+ .focus-choice button{margin-left:auto}
+ /* Keep existing native dialogs and validation, only adapt presentation on phones. */
+ dialog:not(#tutorialDialog):not(#cycleDialog):not(#yearReviewDialog){width:min(100%,560px);max-width:100vw;margin:auto auto 0;max-height:92dvh;border-radius:22px 22px 0 0}
+ dialog:not(#tutorialDialog):not(#cycleDialog):not(#yearReviewDialog)::backdrop{background:rgba(35,44,36,.35)}
+}
+@media(prefers-reduced-motion:reduce){.cycle-pulse-track span,.growth-goal-arrow{transition:none}}
