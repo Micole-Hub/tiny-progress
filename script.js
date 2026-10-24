@@ -1459,7 +1459,7 @@ function renderFocusPool() {
     if (!isRecurring(t) && !t.done && !t.focusDate) {
       choices.push({
         t, occ: null,
-        label: "排到這天",
+        label: `排到週${dayLabel(state.selectedDate)}`,
         meta: "",
       });
       return;
@@ -1471,7 +1471,7 @@ function renderFocusPool() {
           t,
           occ: null,
           weekly: true,
-          label: "排到這天",
+          label: `排到週${dayLabel(state.selectedDate)}`,
           meta: `${weeklyHabitProgress(t)} · 還剩 ${remaining.length} 次未排`,
         });
     }
