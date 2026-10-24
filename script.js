@@ -225,6 +225,7 @@ try {
 } catch {}
 // 只控制休息期 UI，與雲端儲存的週次及任務資料分離。
 let restPlannerOpen = false;
+let quickAddOpen = false;
 // 休息日的日曆日期獨立於 12 週任務，切換箭頭不會更動雲端計畫。
 state.unfinishedReasons = state.unfinishedReasons || {};
 state.tankReviewed = state.tankReviewed || {};
@@ -729,6 +730,7 @@ function renderRestHome() {
   $("#habitList").replaceChildren();
   $("#focusPool").hidden = true;
   $("#quickAddForm").hidden = true;
+  $("#openQuickAddBtn").hidden = true;
 }
 // 清單排序只影響畫面，不改動 state.tasks、事件或雲端儲存順序。
 // 尚未完成維持加入清單的順序；完成的移到下方，依實際勾選完成的先後排列。
@@ -909,7 +911,11 @@ function renderHome() {
   $("#progressFill").style.width = total
     ? `${Math.round((done / total) * 100)}%`
     : "0%";
-  $("#quickAddForm").hidden = archived || (resting && !planningOpen);
+  const canAdd = !archived && (!resting || planningOpen);
+  $("#openQuickAddBtn").hidden = !canAdd;
+  $("#openQuickAddBtn").setAttribute("aria-expanded", String(quickAddOpen && canAdd));
+  $("#quickAddForm").hidden = !canAdd || !quickAddOpen;
+  $("#openQuickAddBtn").textContent = quickAddOpen && canAdd ? "－ 收起新增" : "＋ 新增任務";
   renderQuickOptions();
 }
 function applyRowFeedback() {
@@ -2881,6 +2887,13 @@ function bindStaticEvents() {
     btn.setAttribute("aria-label", visible ? "隱藏密碼" : "顯示密碼");
     btn.setAttribute("aria-pressed", String(visible));
   });
+  $("#openQuickAddBtn").addEventListener("click", () => {
+    quickAddOpen = !quickAddOpen;
+    $("#quickAddForm").hidden = !quickAddOpen;
+    $("#openQuickAddBtn").setAttribute("aria-expanded", String(quickAddOpen));
+    $("#openQuickAddBtn").textContent = quickAddOpen ? "－ 收起新增" : "＋ 新增任務";
+    if (quickAddOpen) $("#quickTitle").focus();
+  });
   $("#moreToggle").addEventListener("click", () => {
     const box = $("#moreFields");
     box.hidden = !box.hidden;
@@ -2954,6 +2967,7 @@ function bindStaticEvents() {
     $("#moreFields").hidden = true;
     $("#moreToggle").setAttribute("aria-expanded", "false");
     $("#moreToggle").textContent = "＋ 更多設定";
+    quickAddOpen = false;
     renderAll();
     showPendingCloudToast(
       isRepeat
