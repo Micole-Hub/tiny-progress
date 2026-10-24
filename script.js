@@ -2199,7 +2199,7 @@ function renderHistory() {
           return `<button class="history-card soft-card" type="button" style="--i:${idx}" data-history-week="${x.week}"><div class="history-card-copy"><h3>Week ${x.week}</h3><div class="history-statline"><strong>${done}</strong><span>片葉子 · ${done}/${Math.max(x.total, done)}</span></div></div><div class="history-mini-tree">${tree}</div></button>`;
         })
         .join("")
-    : `<div class="history-empty soft-card"><strong>還沒有完成的週次 🌿</strong><p>每一週結束後，才會在這裡留下歷史紀錄。<span>Week 1 將於 ${historyOpenDate} 出現。</span></p></div>`;
+    : `<div class="history-empty history-empty-compact"><span aria-hidden="true">↗</span><strong>歷史紀錄將於 ${historyOpenDate} 開始</strong></div>`;
   $$('[data-history-week]').forEach((b) =>
     b.addEventListener("click", () => {
       const w = Number(b.dataset.historyWeek);
