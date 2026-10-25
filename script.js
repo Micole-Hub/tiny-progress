@@ -48,26 +48,27 @@ function morandiTone(hex) {
   return MORANDI_LEAF_TONES[group][(max + min) / 2 >= 0.63 ? 1 : 0];
 }
 const CATEGORY_PALETTE_GROUPS = [
+  // Five distinct moods. Mutating the palette never rewrites saved category HEX values.
+  // Morandi/earth-tone swatches are selected from the Just Free Slide color reference.
   { title: "莫蘭迪森林", colors: [
-    "#829D86", "#90AA9B", "#8FA6B5", "#A5A98C", "#B3A080", "#9DA7B2",
-    "#76958A", "#A9BBA6", "#A49E85", "#99A8A4", "#9D9FB4", "#B8AD91",
+    "#728A7A", "#4A7056", "#597A69", "#8A9585", "#889F8B", "#7C9788",
+    "#678F74", "#478058", "#82ABA3", "#B2BA81", "#8F9650", "#A2AFA6",
   ] },
-  { title: "柔和粉彩", colors: [
-    "#9FC3DE", "#EFB8CF", "#E7CE72", "#E3B48A", "#A9CB9F", "#C8B9E6",
-    "#D4A99C", "#91B4A2", "#AEB8D3", "#D5C09C", "#B5A3C9", "#BEC9B2",
+  { title: "海霧藍調", colors: [
+    "#8E9BAE", "#BECBD3", "#75809C", "#8E9AAB", "#8D8FA4", "#97A5C0",
+    "#9297AB", "#66828E", "#586D80", "#B3CAD8", "#627676", "#C9D3D5",
   ] },
-  { title: "自然霧色", colors: [
-    "#7F9C87", "#6E9F92", "#A5BB8E", "#C3AD86", "#BA8E81", "#C8A2A5",
-    "#A58EA9", "#819CAD", "#B7B39B", "#9FADAB", "#8BA3C7", "#CAAEA5",
+  { title: "奶油暖光", colors: [
+    "#F4C7B0", "#F4BAAF", "#E7CAA8", "#F1D09D", "#F4D4BE", "#F3C2AF",
+    "#F4E8C0", "#E6C786", "#FDE0BE", "#F8D4BC", "#EEDAC0", "#EFD3AC",
   ] },
-  // Bright macaron colors are for color selection; tree leaves retain Morandi rendering.
   { title: "馬卡龍果漾", colors: [
     "#F39BAA", "#FFB3A4", "#F4B27E", "#F6CF71", "#E9DF84", "#A9D68E",
     "#7CCFA6", "#6ED1CE", "#85C7ED", "#96ACEF", "#BAA1EA", "#E7A2D6",
   ] },
-  { title: "文青日常", colors: [
-    "#C77558", "#DA966D", "#D3AF58", "#AFA660", "#8BA674", "#6D9B7A",
-    "#5C9B97", "#679AAE", "#7596BC", "#857FB3", "#AD84A9", "#A97C5D",
+  { title: "文青陶土", colors: [
+    "#B09279", "#8E6E57", "#A39183", "#845937", "#B89886", "#8F6849",
+    "#956757", "#927157", "#877865", "#C5AB89", "#A87153", "#CA774B",
   ] },
 ];
 function normalizeHexColor(value) {
