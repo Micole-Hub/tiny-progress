@@ -467,7 +467,7 @@ function guardWeekEditable(
 }
 // View switch selection must repaint independently of cloud and History.
 function syncViewModeButtons() {
-  $("#homeModeControl [data-mode]").forEach((button) => {
+  document.querySelectorAll("#homeModeControl [data-mode]").forEach((button) => {
     const selected = button.dataset.mode === state.mode;
     button.classList.toggle("active", selected);
     button.setAttribute("aria-pressed", String(selected));
@@ -2940,7 +2940,7 @@ function bindStaticEvents() {
   $$("[data-page-target]").forEach((b) =>
     b.addEventListener("click", () => switchPage(b.dataset.pageTarget)),
   );
-  $("#homeModeControl [data-mode]").forEach((b) =>
+  document.querySelectorAll("#homeModeControl [data-mode]").forEach((b) =>
     b.addEventListener("click", () => {
       const next = b.dataset.mode;
       if (next !== "week" && next !== "day") return;
