@@ -9,22 +9,28 @@ const DAY_LABELS = {
   sat: "六",
   sun: "日",
 };
+// Morandi forest defaults apply only to newly chosen direction colors.
+// Previously saved category/direction colors and archived leaf colors remain unchanged.
 const PALETTE = [
-  "#9fc3de",
-  "#efb8cf",
-  "#e7ce72",
-  "#e3b48a",
-  "#a9cb9f",
-  "#c8b9e6",
-  "#d4a99c",
-  "#91b4a2",
-  "#aeb8d3",
-  "#d5c09c",
-  "#b5a3c9",
-  "#bec9b2",
+  "#829685", // 霧綠
+  "#AD918F", // 豆沙粉
+  "#A9A58A", // 灰橄欖
+  "#9EADC0", // 霧藍
+  "#C0A790", // 砂棕
+  "#A69BB1", // 霧紫
+  "#A7B5A3", // 葉片灰綠
+  "#BEA9A3", // 暖灰粉
+  "#8C9E9B", // 霧青
+  "#B0A48C", // 奶茶灰
+  "#9C94A5", // 灰紫
+  "#A5AFA4", // 鼠尾草
 ];
 // 只供分類使用的完整色盤；原本的方向／新手教學色盤保持不變。
 const CATEGORY_PALETTE_GROUPS = [
+  { title: "莫蘭迪森林", colors: [
+    "#829685", "#AD918F", "#A9A58A", "#9EADC0", "#C0A790", "#A69BB1",
+    "#A7B5A3", "#BEA9A3", "#8C9E9B", "#B0A48C", "#9C94A5", "#A5AFA4",
+  ] },
   { title: "柔和粉彩", colors: [
     "#9FC3DE", "#EFB8CF", "#E7CE72", "#E3B48A", "#A9CB9F", "#C8B9E6",
     "#D4A99C", "#91B4A2", "#AEB8D3", "#D5C09C", "#B5A3C9", "#BEC9B2",
