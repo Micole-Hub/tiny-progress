@@ -1,16 +1,18 @@
-/* Offline page shell; never intercept API calls, auth requests or cloud state. */
-const SHELL_CACHE = "tp-shell-20261024-v1";
+/* Offline page shell; never intercept API calls, auth requests or cloud state.
+   Keep these asset URLs aligned with index.html when preparing a release. */
+const SHELL_CACHE = "tp-shell-20261025-qa-v2";
 const SHELL = [
-  "./", "./index.html",
-  "./style.css?v=20261024-week-first-v1",
+  "./",
+  "./index.html",
+  "./style.css?v=20261025-goal-direction-v1",
   "./github-page/milestones.css?v=20261024-journey-clean-v2",
   "./github-page/config.js",
   "./github-page/domain.js?v=20261022-sage-reflection-v1",
-  "./github-page/connection.js?v=20261023-remember-device-v1",
+  "./github-page/connection.js?v=20261025-goal-direction-v1",
   "./github-page/milestones.js?v=20261024-journey-clean-v2",
-  "./script.js?v=20261024-week-first-v1",
-  "./github-page/cycle-management.js",
-  "./github-page/pwa.js?v=20261024-week-first-v1"
+  "./script.js?v=20261025-goal-direction-v1",
+  "./github-page/pwa.js?v=20261024-week-first-v1",
+  "./github-page/cycle-management.js?v=20261025-weekly-start-v1"
 ];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(SHELL_CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
