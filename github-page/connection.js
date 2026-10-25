@@ -183,13 +183,13 @@ window.TPConnection = (() => {
       ? planTheme
       : "";
   }
-  async function refreshCycleTheme() {
+  async function refreshCycleTheme(force = false) {
     if (demo || !ready || !base || !auth || paused || !navigator.onLine) return;
     const cycle = Number(adapter?.get()?.cycle?.number);
     if (!Number.isSafeInteger(cycle) || cycle < 1) return;
     const now = Date.now();
     // 同一週期十分鐘內不重複詢問；登入／切換週期會讀取對應計畫。
-    if (cycle === planThemeAttemptCycle && base === planThemeAttemptServer &&
+    if (!force && cycle === planThemeAttemptCycle && base === planThemeAttemptServer &&
         now - planThemeLastAttempt < 600000) return;
     const sequence = ++planThemeRequest;
     planThemeLastAttempt = now;
@@ -782,6 +782,7 @@ window.TPConnection = (() => {
     initial, save, start, demo,
     isConnected: () => !demo && Boolean(ready && base && auth && !paused),
     flush, manage, selectCycle, cycleTheme,
+    refreshCycleTheme, currentCycleNumber: () => Number(adapter?.get()?.cycle?.number) || null,
     isReady: () => ready && !paused,
   };
 })();
