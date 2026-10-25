@@ -5133,102 +5133,94 @@ body {background:linear-gradient(180deg,#f8f7f3 0,var(--bg) 440px)}
 }
 
 /* --------------------------------------------------------------
-   TinyProgress | Morandi forest QA theme
-   Low-saturation paper / forest / dusty-rose palette.
-   Color-only overrides: no saved task, category, direction or leaf
-   mappings are transformed. Existing custom SVG leaf fills stay intact.
+   TinyProgress | Morandi forest from Just Free Slide (QA)
+   Source: justfreeslide.com/zh/morandi-color-picker/
+   The paper and moss contrast is deliberately more visible than v1.
+   Visual-only: do not override --c task colors or SVG leaf fill values.
    -------------------------------------------------------------- */
 :root {
-  --bg: #F4F1EB;
-  --surface: #FBF8F3;
-  --surface-2: #F0ECE5;
-  --surface-3: #E9EFE8;
-  --ink: #4C544D;
-  --ink-2: #626B64;
-  --muted: #687166;
-  --line: #E3DDD3;
-  --green: #7E927D;
-  --green-deep: #5F7562;
-  --green-soft: rgba(126, 146, 125, .15);
-  --green-soft-2: rgba(169, 183, 163, .23);
-  --today: #B97C76;
-  --danger: #A35E5D;
-  --nav-coffee: #8B7A6B;
-  --edit: #75695E;
-  --edit-soft: #8B7A6B;
-  --tp-paper: #FBF8F3;
-  --tp-coffee: #8B7A6B;
-  --tp-divider: #E3DDD3;
-  --shadow-soft: 0 8px 22px rgba(75, 73, 64, .045);
-  --morandi-olive: #A9B7A3;
-  --morandi-rose: #C28A83;
-  --morandi-bark: #887B6F;
-  --morandi-cream: #F0ECE5;
+  --bg: #EFF0EA;
+  --surface: #F4EBE4;
+  --surface-2: #EAE0D7;
+  --surface-3: #CCD2CC;
+  --ink: #3B4338;
+  --ink-2: #53565C;
+  --muted: #60656C;
+  --line: #D2CABF;
+  --green: #728A7A;
+  --green-deep: #4E6E62;
+  --green-soft: rgba(169,183,170,.24);
+  --green-soft-2: rgba(204,210,204,.5);
+  --today: #976666;
+  --danger: #976666;
+  --nav-coffee: #8C736F;
+  --edit: #674D41;
+  --edit-soft: #8C736F;
+  --tp-paper: #F4EBE4;
+  --tp-coffee: #8C736F;
+  --tp-divider: #D2CABF;
+  --shadow-soft: 0 10px 23px rgba(59,67,56,.055);
+  --morandi-bark: #8C736F;
+  --morandi-leaf: #AAB8AB;
+  --morandi-dusty-rose: #D4B8B4;
+  --morandi-cream: #EAE0D7;
 }
-html, body { background: var(--bg); color: var(--ink); }
-body { background: linear-gradient(180deg, #F8F6F1 0, var(--bg) 460px); }
+html, body { background-color: var(--bg); color: var(--ink); }
+body { background: linear-gradient(180deg, #EFF0EA 0%, #E6EBE5 100%); }
 .topbar {
-  background: rgba(251, 248, 243, .96);
-  border-bottom-color: var(--line);
+  background: rgba(244,235,228,.97);
+  border-bottom: 1px solid var(--line);
 }
-.brand-mark { background: var(--green-deep); box-shadow: 0 7px 18px rgba(95,117,98,.14); }
+.brand-mark { background: var(--green-deep); box-shadow: 0 7px 18px rgba(78,110,98,.18); }
 .brand-wordmark small { color: var(--ink-2); }
 .soft-card, .work-card, .setting-block, .setting-row {
-  background-color: var(--surface);
+  background: var(--surface);
   border-color: var(--line);
 }
 .page[data-page="home"] > .work-card {
   background: var(--surface);
   border-color: var(--line);
 }
+.task-row, .habit-row { background: #F8F8F8; }
+.task-row:hover { background: color-mix(in srgb, var(--c) 6%, #F8F8F8); }
 .growth-banner,
 .page[data-page="home"] > .growth-banner {
-  background: linear-gradient(130deg, #E9EFE8, #F3F2EB 80%);
-  border-color: #D9E0D5;
+  background: linear-gradient(132deg, #CCD2CC 0%, #DCDDD5 100%);
+  border-color: #B7C2BA;
 }
 .week-tree-panel,
-.tree-panel,
-.tree-visual,
-.tree-wrap {
-  background-color: rgba(251,248,243,.48);
-  border-color: #DCE2D6;
+.tree-panel, .tree-visual, .tree-wrap {
+  background: rgba(244,235,228,.68);
+  border-color: #C4C1BC;
 }
 .tree-trunk { fill: var(--morandi-bark); stroke: var(--morandi-bark); }
-.tree-branch { stroke: #94877B; }
-.leaf-vein { stroke: rgba(255,253,248,.62); }
-.progress-track, .tp-journey-bar { background-color: #E3E4D9; }
+.tree-branch { stroke: #A39183; }
+.leaf-vein { stroke: rgba(248,248,248,.64); }
+.progress-track, .tp-journey-bar { background: #D2D2D0; }
 .progress-track span { background: var(--green); }
 .page[data-page="home"] .home-head .eyebrow,
 .page[data-page="history"] .history-heading-row .eyebrow,
-.page[data-page="settings"] .settings-heading-row .eyebrow {
-  color: #76665A;
-}
+.page[data-page="settings"] .settings-heading-row .eyebrow { color: #674D41; }
 .page[data-page="home"] .home-head .eyebrow::before,
 .page[data-page="history"] .history-heading-row .eyebrow::before,
-.page[data-page="settings"] .settings-heading-row .eyebrow::before {
-  background: #A79587;
-}
+.page[data-page="settings"] .settings-heading-row .eyebrow::before { background: var(--nav-coffee); }
 .page[data-page="home"] #homeTitle,
 .page[data-page="history"] #historyTitle,
 .page[data-page="settings"] #settingsTitle { color: var(--ink); }
 .page[data-page="home"] .home-head .home-lede,
 .page[data-page="history"] .history-head-description,
-.page[data-page="settings"] .settings-head-description {
-  color: var(--ink-2);
-}
+.page[data-page="settings"] .settings-head-description { color: var(--ink-2); }
 .page[data-page="home"] > .home-head,
 .page[data-page="history"] > .history-heading-row,
-.page[data-page="settings"] > .settings-heading-row {
-  border-bottom-color: var(--line);
-}
+.page[data-page="settings"] > .settings-heading-row { border-bottom-color: var(--line); }
 .page[data-page="home"] #homeModeControl {
-  background: var(--surface-2);
+  background: #DCDDD5;
   border-color: var(--line);
 }
 .page[data-page="home"] #homeModeControl button[data-mode][aria-pressed="true"],
 .page[data-page="home"] #homeModeControl button[data-mode].active {
   background: var(--green-deep);
-  color: #FFFDF8;
+  color: #F8F8F8;
 }
 .page[data-page="home"] #homeModeControl button[data-mode][aria-pressed="false"]:not(.active) {
   color: var(--ink-2);
@@ -5240,8 +5232,8 @@ body { background: linear-gradient(180deg, #F8F6F1 0, var(--bg) 460px); }
   color: var(--green-deep);
   border-color: var(--line);
 }
-.primary-button { background: var(--green-deep); color: #FFFDF8; }
-.primary-button:hover:not(:disabled) { background: #526956; }
+.primary-button { background: var(--green-deep); color: #F8F8F8; }
+.primary-button:hover:not(:disabled) { background: #3B5F52; }
 .secondary-button, .settings-help-button {
   background: var(--surface);
   color: var(--green-deep);
@@ -5249,16 +5241,16 @@ body { background: linear-gradient(180deg, #F8F6F1 0, var(--bg) 460px); }
 }
 .secondary-button:hover:not(:disabled),
 .page[data-page="settings"] .settings-help-button:hover {
-  background: #EBF0E9;
-  border-color: #BDCCBA;
+  background: #E6EBE5;
+  border-color: #A9B7AA;
 }
 .page[data-page="settings"] .settings-help-button {
   background: var(--surface);
   color: var(--green-deep);
   border-color: var(--line);
 }
-.calendar-month-label { color: #985C58; }
-.calendar-month-label::before { background: var(--morandi-rose); }
+.calendar-month-label { color: #855B5B; } /* legible darkened tint of #976666 */
+.calendar-month-label::before { background: #C09D9B; }
 .wk::after, .dy::after,
 .week-strip .wk.sel::after,
 .day-strip-row .dy.sel::after { background: var(--green-deep); }
@@ -5266,44 +5258,54 @@ body { background: linear-gradient(180deg, #F8F6F1 0, var(--bg) 460px); }
   background: var(--today);
   border-color: var(--surface);
 }
-.bottom-nav .nav-item.active { color: #76665A; }
+.bottom-nav {
+  --nav-coffee: #8C736F;
+  background: rgba(234,224,215,.97);
+  border-top-color: var(--line);
+}
+.nav-item { color: #53565C; }
+.bottom-nav .nav-item.active { color: #674D41; }
 .bottom-nav .nav-item::after,
 .bottom-nav .nav-item.active::after { background: var(--nav-coffee); }
 .page[data-page="settings"] .manage-list,
 .page[data-page="settings"] .manage-row,
 .page[data-page="history"] .history-completed-list {
   border-color: var(--line);
-  background-color: var(--surface);
+  background: #F8F8F8;
 }
 .page[data-page="history"] .history-card,
 .page[data-page="history"] .history-detail {
   border-color: var(--line);
   background: var(--surface);
 }
+.page[data-page="history"] .history-card:hover { background: #EFF0EA; border-color: #A9B7AA; }
 .page[data-page="history"] .history-card.selected {
-  background: #EDF1EA;
-  border-color: #A7B9A5;
-  box-shadow: 0 0 0 2px rgba(126,146,125,.12);
+  background: #CCD2CC;
+  border-color: #728A7A;
+  box-shadow: 0 0 0 2px rgba(114,138,122,.14);
 }
 .page[data-page="history"] .history-card-index {
-  background: #E8EEE5;
+  background: #CCD2CC;
   color: var(--green-deep);
 }
 .page[data-page="history"] .history-archive-kicker,
-.page[data-page="history"] .history-detail-kicker {
-  color: var(--green-deep);
-}
+.page[data-page="history"] .history-detail-kicker { color: var(--green-deep); }
 .page[data-page="history"] .history-detail-reflection,
 .page[data-page="history"] .history-directions-wrap {
-  background: #F0F1EA;
+  background: #EFF0EA;
   border-color: var(--line);
 }
 .page[data-page="history"] .history-journal-empty {
-  background: #F3F2EB;
-  border-color: #D4DBCF;
+  background: #DCDDD5;
+  border-color: #B7B7BD;
 }
 .page[data-page="history"] .history-journal-empty .history-empty-leaf {
-  background: #E3EBE0;
+  background: #CCD2CC;
   color: var(--green-deep);
 }
 .cloud-status { color: var(--ink-2); }
+@media (prefers-contrast: more) {
+  .secondary-button, .page[data-page="settings"] .settings-help-button {
+    border-color: #53565C;
+  }
+}
