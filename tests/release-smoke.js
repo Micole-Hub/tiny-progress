@@ -106,7 +106,18 @@ assert.ok(journeyCss.includes("clean history journal") && !journeyCss.includes("
 const paletteSource = read("script.js");
 assert.match(paletteSource, /function morandiTone\(hex\)/);
 assert.match(paletteSource, /title: "莫蘭迪森林"/);
-assert.match(paletteSource, /title: "深色經典"/);
+const paletteBlock = paletteSource.match(/const CATEGORY_PALETTE_GROUPS = \[([\s\S]*?)\n\];/);
+assert.ok(paletteBlock, "category preset palettes are missing");
+const presets = [...paletteBlock[1].matchAll(/\{ title: "([^"]+)", colors: \[([\s\S]*?)\]\s*\}/g)];
+assert.deepEqual(presets.map((entry) => entry[1]), [
+  "莫蘭迪森林", "柔和粉彩", "自然霧色", "馬卡龍果漾", "文青日常",
+], "category preset group names/order should match approved QA");
+for (const group of presets) {
+  assert.equal((group[2].match(/#[0-9A-Fa-f]{6}/g) || []).length, 12,
+    group[1] + " should offer 12 colors");
+}
+assert.ok(!paletteBlock[1].includes('title: "明亮活力"'));
+assert.ok(!paletteBlock[1].includes('title: "深色經典"'));
 assert.match(paletteSource, /fill="\$\{morandiTone\(l\.color\)\}"/);
 assert.match(paletteSource, /morandiTone\(categoryById\(t\.categoryId\)/);
 const renderCards = read("backend/server.js");
