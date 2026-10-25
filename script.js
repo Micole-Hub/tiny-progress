@@ -754,6 +754,36 @@ function renderDoneLast(rows) {
     .map((row) => row.html)
     .join("");
 }
+// One source of truth for Week/Day labels. Only UI copy changes; the tasks
+// remain associated with their original week in the cloud.
+function activeViewCopy() {
+  if (state.mode === "day") {
+    const isToday = state.selectedDate === TODAY;
+    const when = isToday ? "今天" : "當天";
+    return {
+      workTitle: isToday ? "今天想完成什麼" : `${formatShortDate(state.selectedDate)} 想完成什麼`,
+      scopeLabel: isToday ? "今日任務" : "當日任務",
+      completed: `${when}的任務都完成了`,
+      remaining: (n) => `${when}還有 ${n} 項任務待完成`,
+      start: `先加入一件${when}的任務`,
+      placeholder: `${when}想加入什麼任務？`,
+      empty: isToday ? "今天還沒有安排任務" : "這一天還沒有安排任務",
+      habit: isToday ? "今天的習慣" : "當天的習慣",
+      habitScope: when,
+    };
+  }
+  return {
+    workTitle: "這週想完成什麼",
+    scopeLabel: "本週任務",
+    completed: "本週任務都完成了",
+    remaining: (n) => `本週還有 ${n} 項任務待完成`,
+    start: "先加入一件本週任務",
+    placeholder: "這週想加入什麼任務？",
+    empty: "這一週還沒有安排任務",
+    habit: "本週習慣",
+    habitScope: "本週",
+  };
+}
 function renderHome() {
   if (isCycleResting() && !restPlannerOpen) {
     renderRestHome();
@@ -770,6 +800,7 @@ function renderHome() {
   if (!Object.values(dates).includes(state.selectedDate))
     state.selectedDate = defaultDateForWeek(viewWeek);
   const dayMode = state.mode === "day";
+  const copy = activeViewCopy();
   const firstWeekStart =
     CYCLE_START_YMD || CYCLE_WEEK_RANGES?.[0]?.start || CYCLE_WEEK_STARTS?.[0];
   const resting = isCycleResting();
@@ -779,7 +810,9 @@ function renderHome() {
     !resting && viewWeek === CURRENT_WEEK && state.selectedDate === TODAY;
   const preview = viewWeek !== CURRENT_WEEK;
   $("#previewBar").hidden = resting || !preview;
-  if (preview) $("#previewLabel").textContent = `預習中 · Week ${viewWeek}`;
+  if (preview) $("#previewLabel").textContent = dayMode
+    ? `預覽日期 · ${formatShortDate(state.selectedDate)}`
+    : `預習中 · Week ${viewWeek}`;
   const life = weekLifecycle(viewWeek),
     archived = life === "archived";
   const entry = $("#footprintEntry");
@@ -794,14 +827,14 @@ function renderHome() {
       ? "一天一點點，累積進度"
       : "這週慢慢長大";
   $("#homeLede").hidden = true;
-  $("#workTitle").textContent = dayMode
-    ? isToday
-      ? "今天想完成什麼"
-      : `${formatShortDate(state.selectedDate)} 想完成什麼`
-    : "這週想完成什麼";
-  $("#workHint").textContent = archived ? "這週已封存，請到 History 查看" : "";
+  $("#workTitle").textContent = copy.workTitle;
+  $("#workHint").textContent = archived
+    ? dayMode ? "這一天所屬的週次已封存，請到 History 查看" : "這週已封存，請到 History 查看"
+    : "";
   $("#workHint").hidden = !archived;
-  $("#quickTitle").placeholder = "加入本週事項";
+  $("#quickTitle").placeholder = copy.placeholder;
+  $("#progressScopeLabel").textContent = copy.scopeLabel;
+  $(".progress-number").setAttribute("aria-label", `${copy.scopeLabel}完成進度`);
   $("#weekStrip").hidden = dayMode;
   $("#dayStrip").hidden = !dayMode;
   if (dayMode) renderDayStrip();
@@ -838,7 +871,7 @@ function renderHome() {
         entries.push({ task: t, done: taskDone(t), html: taskRow(t, null) });
       }
     });
-    html = renderDoneLast(entries) || `<div class="empty-note">這一天還沒有安排任務</div>`;
+    html = renderDoneLast(entries) || `<div class="empty-note">${copy.empty}</div>`;
     habitHtml = renderDoneLast(habits);
   } else {
     // 整週視角無論是否完成都同列表顯示，不要求指定日期。
@@ -849,7 +882,7 @@ function renderHome() {
       task: t,
       done: taskDone(t),
       html: taskRow(t, null),
-    }))) || (habits.length ? "" : `<div class="empty-note">這一週還沒有放進事情</div>`);
+    }))) || (habits.length ? "" : `<div class="empty-note">${copy.empty}</div>`);
     habitHtml = renderDoneLast(habits.map((t) => ({
       task: t,
       occurrenceIds: t.occurrences.map((o) => o.id),
@@ -865,7 +898,7 @@ function renderHome() {
   );
   const habitTracker = $("#habitTracker");
   habitTracker.hidden = !habitHtml || archived || (resting && !planningOpen);
-  $("#habitTrackerTitle").textContent = dayMode ? "今天的習慣" : "習慣追蹤";
+  $("#habitTrackerTitle").textContent = copy.habit;
   $("#habitTrackerHint").textContent = "";
   $("#habitList").innerHTML = habitHtml;
   [...$("#habitList").querySelectorAll("[data-task-id]")].forEach((el, i) =>
@@ -883,7 +916,10 @@ function renderHome() {
   if (resting && !planningOpen) $("#focusPool").hidden = true;
   applyRowFeedback();
 
-  const ordinary = activeTasks(viewWeek).filter((t) => !isRecurring(t)),
+  // Daily counts are for the selected date, not every task in its week.
+  const ordinary = activeTasks(viewWeek).filter((t) =>
+    !isRecurring(t) && (!dayMode || t.focusDate === state.selectedDate)
+  ),
     done = ordinary.filter(taskDone).length,
     total = ordinary.length;
   const dc = $("#doneCount");
@@ -896,12 +932,10 @@ function renderHome() {
   dc.textContent = done;
   $("#totalCount").textContent = total;
   $("#progressSummary").textContent = total
-    ? done === total
-      ? "本週任務都完成了"
-      : "本週還有 " + (total - done) + " 項任務待完成"
-    : activeTasks(viewWeek).some(isRecurring)
+    ? done === total ? copy.completed : copy.remaining(total - done)
+    : habitHtml
       ? "習慣已在下方追蹤"
-      : "先加入一件本週任務";
+      : copy.start;
   $("#progressFill").style.width = total
     ? `${Math.round((done / total) * 100)}%`
     : "0%";
@@ -1085,7 +1119,9 @@ function habitRow(t, occ) {
       : "完成本週全部次數";
   return `<article class="habit-row ${completed ? "done" : ""}" data-task-id="${t.id}" ${group ? `data-occurrence-ids="${group.map((o) => o.id).join(",")}"` : ""} style="--c:${color}">
     <button class="task-check" type="button" aria-label="${label}">${completed ? "✓" : ""}</button>
-    <div class="habit-main"><strong>${esc(t.title)}</strong><span>${weeklyHabitProgress(t)}</span></div>
+    <div class="habit-main"><strong>${esc(t.title)}</strong><span>${group
+      ? `${activeViewCopy().habitScope} ${group.filter((o) => o.done).length}/${group.length} 次`
+      : weeklyHabitProgress(t)}</span></div>
     <button class="task-more" type="button" aria-label="更多" data-more="${t.id}">•••</button>
   </article>`;
 }
@@ -1505,7 +1541,7 @@ function renderQuickOptions() {
   // Same task schema in both views; only the default selected date differs.
   const selected = dates.includes(state.selectedDate) ? state.selectedDate : dates[0];
   const initialDate = state.mode === "day" ? selected : "";
-  $("#quickDate").innerHTML = `<option value="" ${initialDate ? "" : "selected"}>本週任一天</option>` + dates.map((date) =>
+  $("#quickDate").innerHTML = `<option value="" ${initialDate ? "" : "selected"}>不指定日期（留在本週）</option>` + dates.map((date) =>
     `<option value="${date}" ${date === initialDate ? "selected" : ""}>週${dayLabel(date)} ${formatShortDate(date)}</option>`
   ).join("");
   updateQuickDatePickerVisibility();
@@ -2957,10 +2993,12 @@ function bindStaticEvents() {
     renderAll();
     showPendingCloudToast(
       isRepeat
-        ? "已加入本週習慣"
+        ? state.mode === "day"
+          ? `已加入 ${formatShortDate(scheduledDate || state.selectedDate)} 的習慣`
+          : "已加入本週習慣"
         : scheduledDate
           ? `已安排到 ${formatShortDate(scheduledDate)}`
-          : "已經放進這週了",
+          : "已加入本週任務",
     );
   });
 
