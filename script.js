@@ -16,9 +16,21 @@ const PALETTE = [
   "#A49E85", "#99A8A4", "#9D9FB4", "#B8AD91",
 ];
 // Display colors are intentionally separate from cloud-stored HEX values.
-// The original category/direction settings and archived data stay editable.
+// Original category/direction settings and archived data stay editable.
+const MORANDI_LEAF_TONES = [
+  ["#A58E72", "#BBAA8A"], // warm sand
+  ["#999875", "#B0AE86"], // olive
+  ["#78977E", "#A1B59D"], // foliage
+  ["#779995", "#9AB4B0"], // eucalyptus
+  ["#8198AD", "#A2B4C4"], // fog blue
+  ["#9695A7", "#B1B0C2"], // mist violet
+];
 function morandiTone(hex) {
   if (!/^#[0-9a-f]{6}$/i.test(String(hex || ""))) return "#9AAE97";
+  const normalized = hex.toUpperCase();
+  // A displayed Morandi color must remain identical on repeated rendering.
+  if (PALETTE.includes(normalized) || MORANDI_LEAF_TONES.some(pair => pair.includes(normalized)))
+    return normalized;
   const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
   const max = Math.max(...rgb), min = Math.min(...rgb), delta = max - min;
   let hue = 0;
@@ -33,15 +45,7 @@ function morandiTone(hex) {
   const group = hue < 25 || hue >= 330 ? 0
     : hue < 72 ? 1 : hue < 170 ? 2
       : hue < 207 ? 3 : hue < 273 ? 4 : 5;
-  const pairs = [
-    ["#A58E72", "#BBAA8A"], // warm sand
-    ["#999875", "#B0AE86"], // olive
-    ["#78977E", "#A1B59D"], // leaves
-    ["#779995", "#9AB4B0"], // eucalyptus
-    ["#8198AD", "#A2B4C4"], // fog blue
-    ["#9695A7", "#B1B0C2"], // mist violet
-  ];
-  return pairs[group][(max + min) / 2 >= 0.63 ? 1 : 0];
+  return MORANDI_LEAF_TONES[group][(max + min) / 2 >= 0.63 ? 1 : 0];
 }
 const CATEGORY_PALETTE_GROUPS = [
   { title: "莫蘭迪森林", colors: [
