@@ -132,7 +132,7 @@ const exerciseHistorySelection = (week, cardWeeks) => {
       assert.equal(selector, "#historyGrid");
       return historyGrid;
     },
-    $: selector => {
+    $$: selector => {
       assert.equal(selector, "#historyGrid .history-card");
       return selectedCards;
     },
