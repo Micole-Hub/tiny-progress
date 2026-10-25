@@ -53,60 +53,50 @@
     if (!el || !config || !Array.isArray(config.weeks) || config.weeks.length !== TOTAL) return;
     const p = calculate(config);
     const pct = Math.round(p.finished / TOTAL * 100);
+    // Archived weeks alone count as History. Current/future leaves do not appear early.
+    const totalLeaves = p.weeks.filter(w => w.finished)
+      .reduce((sum, w) => sum + Math.max(0, Number(w.leaves) || 0), 0);
     const stages = p.weeks.map(w => {
       const number = Number(w.number);
       const status = w.finished ? "finished" :
         p.active && number === p.currentWeek ? "current" :
         p.resting && number === 1 ? "start" : "future";
       const clickable = status === "finished" && typeof config.onReviewWeek === "function";
-      const tag = clickable ? "button" : "div";
-      // Future weeks don't repeat the same muted sentence twelve times.
-      const note = status === "finished" ? Number(w.leaves || 0) + " 片葉子" :
-        status === "current" ? "正在前進" :
-        status === "start" ? shortDate(w.start) + " 開始" :
-        Number(w.leaves || 0) > 0 ? "已預做 " + Number(w.leaves) : "";
-      const accessible = note || "尚未開始";
+      const label = "Week " + number +
+        (status === "finished" ? "，已結束，點選查看回顧" :
+         status === "current" ? "，進行中" :
+         status === "start" ? "，預計 " + shortDate(w.start) + " 開始" : "，尚未到來");
+      const tag = clickable ? "button" : "span";
       return '<' + tag + ' class="tp-journey-stop is-' + status + '"' +
-        (clickable ? ' type="button" data-journey-week="' + number +
-          '" title="查看 Week ' + number + ' 的歷史紀錄"' : '') +
-        ' aria-label="Week ' + number + '，' + clean(accessible) + '">' +
+        (clickable ? ' type="button" data-journey-week="' + number + '"' : '') +
+        ' aria-label="' + clean(label) + '">' +
         '<span class="tp-journey-node" aria-hidden="true">' +
-          (status === "current" || status === "start" ? leaf :
-           status === "finished" ? '<span class="tp-journey-done">✓</span>' :
-           '<span class="tp-journey-number">' + String(number).padStart(2, "0") + '</span>') +
+          (status === "finished" ? "✓" : String(number).padStart(2, "0")) +
         '</span><span class="tp-journey-stop-copy"><strong>W' +
-        String(number).padStart(2, "0") + '</strong>' +
-        (note ? '<small>' + clean(note) + '</small>' : '') +
-        '</span></' + tag + '>';
+          String(number).padStart(2, "0") + '</strong></span></' + tag + '>';
     }).join("");
     el.className = "tp-journey-section";
-    el.setAttribute("aria-label", "12 週進度旅程");
+    el.setAttribute("aria-label", "十二週旅程：已走過 " + p.finished + " 週");
     el.innerHTML =
-      '<div class="tp-journey-head">' +
-        '<div class="tp-journey-copy">' +
-          '<p class="tp-journey-kicker">MY LITTLE JOURNEY · 12 WEEKS</p>' +
-          '<h2>' + clean(p.title) + '</h2>' +
+      '<div class="tp-journey-overview">' +
+        '<div class="tp-journey-numbers"><span class="tp-journey-kicker">12-WEEK JOURNEY</span>' +
+          '<div class="tp-journey-big"><strong>' + p.finished + '</strong><span>/ 12 週</span></div>' +
+          '<p>已走過的週次</p></div>' +
+        '<div class="tp-journey-copy"><span class="tp-journey-status">' +
+          clean(p.eyebrow) + '</span><h2>' + clean(p.title) + '</h2>' +
           '<p class="tp-journey-sub">' + clean(p.subtitle) + '</p>' +
-          '<span class="tp-journey-status">' + clean(p.eyebrow) + '</span>' +
-        '</div>' +
-        '<div class="tp-journey-art" aria-hidden="true">' +
-          (p.active && config.tree ? config.tree : '<span class="tp-journey-big-leaf">' + leaf + '</span>') +
-        '</div>' +
+          '<div class="tp-journey-leaves"><span aria-hidden="true">✦</span> ' +
+          (p.finished ? '累積 ' + totalLeaves + ' 片葉子' : '第一週結束後，成果才會收進歷史') +
+          '</div></div>' +
       '</div>' +
-      '<div class="tp-journey-completion">' +
-        '<div class="tp-journey-completion-label"><strong>已走過 ' + p.finished + ' / 12 週</strong>' +
-        '<small>以實際日期計算，不以任務完成率跳週</small></div>' +
-        '<div class="tp-journey-bar" role="progressbar" aria-valuemin="0" aria-valuemax="12" ' +
-          'aria-valuenow="' + p.finished + '" aria-label="已結束的週數">' +
-          '<span style="width:' + pct + '%"></span></div>' +
-      '</div>' +
-      '<div class="tp-journey-trail" aria-label="十二週總覽">' +
-        stages +
-      '</div>' +
+      '<div class="tp-journey-progress"><div class="tp-journey-bar" role="progressbar" ' +
+        'aria-valuemin="0" aria-valuemax="12" aria-valuenow="' + p.finished +
+        '" aria-label="已結束的週數"><span style="width:' + pct + '%"></span></div></div>' +
+      '<div class="tp-journey-trail" aria-label="十二週總覽">' + stages + '</div>' +
       '<p class="tp-journey-hint">' +
-        (p.finished ? "點選已走過的週次，可回看當週紀錄。" :
-          p.resting ? "週次會依真正的日期前進；Week 1 結束後才會出現歷史紀錄。" :
-          "每週結束後，才會留下可回看的歷史紀錄。") +
+      (p.finished ? "點選已走過的週次，查看當週留下的成果。" :
+       p.resting ? "計畫尚未開始。週次會依真正日期前進，不會提前產生歷史紀錄。" :
+       "每週結束後，才會生成那一週的歷史紀錄。") +
       '</p>';
     el.querySelectorAll("[data-journey-week]").forEach(button => {
       button.addEventListener("click", () =>
