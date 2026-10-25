@@ -1,16 +1,15 @@
-/* Offline page shell; never intercept API calls, auth requests or cloud state.
-   Keep these asset URLs aligned with index.html when preparing a release. */
-const SHELL_CACHE = "tp-shell-20261025-qa-v2";
+/* Offline shell, versioned to match History journal assets. Cloud APIs and auth are not cached. */
+const SHELL_CACHE = "tp-shell-20261025-history-journal-v1";
 const SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=20261025-goal-direction-v1",
-  "./github-page/milestones.css?v=20261024-journey-clean-v2",
+  "./style.css?v=20261025-history-journal-v1",
+  "./github-page/milestones.css?v=20261025-history-journal-v1",
   "./github-page/config.js",
   "./github-page/domain.js?v=20261022-sage-reflection-v1",
   "./github-page/connection.js?v=20261025-goal-direction-v1",
-  "./github-page/milestones.js?v=20261024-journey-clean-v2",
-  "./script.js?v=20261025-goal-direction-v1",
+  "./github-page/milestones.js?v=20261025-history-journal-v1",
+  "./script.js?v=20261025-history-journal-v1",
   "./github-page/pwa.js?v=20261024-week-first-v1",
   "./github-page/cycle-management.js?v=20261025-weekly-start-v1"
 ];
