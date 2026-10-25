@@ -109,6 +109,45 @@ assert.match(read("script.js"), /historyWeekFinished\(week\)/);
 assert.match(read("script.js"), /history-detail-layout/);
 console.log("PASS: History renders only completed weeks, uses shared archive rules, and keeps its weekly journal layout");
 
+const historyMarkSource = read("script.js").match(/function markHistorySelected\(\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(historyMarkSource, "history selection function must exist");
+const exerciseHistorySelection = (week, cardWeeks) => {
+  const selectedCards = cardWeeks.map(n => ({
+    dataset: { historyWeek: String(n) },
+    selected: null,
+    ariaPressed: null,
+    classList: { toggle(_name, value) { this.parent.selected = value; } },
+    setAttribute(_name, value) { this.ariaPressed = value; },
+  }));
+  selectedCards.forEach(card => { card.classList.parent = card; });
+  const historyGrid = { classList: {
+    toggle(name, enabled) {
+      assert.equal(name, "has-selection");
+      assert.equal(enabled, week !== null);
+    }
+  }};
+  const context = {
+    historySelected: week,
+    $: selector => {
+      assert.equal(selector, "#historyGrid");
+      return historyGrid;
+    },
+    $: selector => {
+      assert.equal(selector, "#historyGrid .history-card");
+      return selectedCards;
+    },
+  };
+  vm.runInNewContext(historyMarkSource + "\nmarkHistorySelected();", context);
+  return selectedCards;
+};
+// Initial QA state can have zero completed weeks. It must not throw before login.
+assert.equal(exerciseHistorySelection(null, []).length, 0);
+const testedCards = exerciseHistorySelection(2, [1, 2, 3]);
+assert.deepEqual(testedCards.map(c => c.selected), [false, true, false]);
+assert.deepEqual(testedCards.map(c => c.ariaPressed), ["false", "true", "false"]);
+console.log("PASS: History selection handles empty archive and multiple completed weeks without aborting login");
+
+
 
 const hexInputIds = ["directionHexColor", "categoryHexColor", "categoryQuickHexColor"];
 for (const id of hexInputIds) {
