@@ -45,6 +45,16 @@ assert.match(read("github-page/connection.js"), /document\.querySelector\("\.app
   "successful login must be able to unlock the app shell");
 console.log("PASS: unauthenticated homepage starts locked until JS verifies session");
 
+const connectionSource = read("github-page/connection.js");
+const manageSource = connectionSource.match(/async function manage\(path, options = \{\}\) \{[\s\S]*?\n  \}/)?.[0];
+assert.ok(manageSource, "cycle management request function must exist");
+assert.match(manageSource, /if \(String\(options\.method \|\| "GET"\)\.toUpperCase\(\) === "GET"\)\s+return request\(path, options\)/,
+  "GET cycle queries should not be blocked by pending writes");
+assert.match(manageSource, /await flush\(\);[\s\S]*?dirty\(\) \|\| inflight \|\| paused \|\| pendingSave/,
+  "cycle mutations must still wait for a safe, synchronized state");
+console.log("PASS: cycle management reads work during pending saves; writes stay guarded");
+
+
 assert.match(access, /app\.use\(\(req, res, next\)/);
 assert.match(access, /x-line-signature/);
 assert.match(access, /timingSafeEqual/);
