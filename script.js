@@ -2232,7 +2232,7 @@ function renderHistory() {
     : "第一週結束後";
   $("#historyArchiveSubtitle").textContent = cards.length
     ? `已收藏 ${cards.length} 週的成果。選一週，看看當時留下了什麼。`
-    : `預計 ${historyOpenDate} 才會留下第一份每週紀錄。`;
+    : "";
   $("#historyGrid").innerHTML = cards.length
     ? cards.map((x) => {
         const done = x.leaves.length;
