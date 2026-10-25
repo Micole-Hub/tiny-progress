@@ -2850,14 +2850,12 @@ app.patch("/weeks/:cycleNumber/:weekNumber/plan", async (req, res) => {
   }
 });
 
-app.post("/weeks/postpone-current", async (req, res) => {
-  try {
-    res.json(await gasPost("postpone-current-week", req.body || {}));
-  } catch (error) {
-    res
-      .status(getApiErrorStatus(error))
-      .json({ message: "本週順延失敗", error: error.message });
-  }
+// Retired: extending a Week by 1-7 days contradicts the fixed seven-day cycle.
+// Move individual unfinished tasks to a later Week instead.
+app.post("/weeks/postpone-current", (_req, res) => {
+  res.status(409).json({
+    message: "每個 Week 固定 7 天。未完成的任務請使用「移到其他週」，不調整週次日期。",
+  });
 });
 
 // 舊前端相容入口：V2 不再手動結案。
