@@ -5131,3 +5131,179 @@ body {background:linear-gradient(180deg,#f8f7f3 0,var(--bg) 440px)}
     min-height: 38px;
   }
 }
+
+/* --------------------------------------------------------------
+   TinyProgress | Morandi forest QA theme
+   Low-saturation paper / forest / dusty-rose palette.
+   Color-only overrides: no saved task, category, direction or leaf
+   mappings are transformed. Existing custom SVG leaf fills stay intact.
+   -------------------------------------------------------------- */
+:root {
+  --bg: #F4F1EB;
+  --surface: #FBF8F3;
+  --surface-2: #F0ECE5;
+  --surface-3: #E9EFE8;
+  --ink: #4C544D;
+  --ink-2: #626B64;
+  --muted: #70796F;
+  --line: #E3DDD3;
+  --green: #7E927D;
+  --green-deep: #5F7562;
+  --green-soft: rgba(126, 146, 125, .15);
+  --green-soft-2: rgba(169, 183, 163, .23);
+  --today: #B97C76;
+  --danger: #A35E5D;
+  --nav-coffee: #8B7A6B;
+  --edit: #75695E;
+  --edit-soft: #8B7A6B;
+  --tp-paper: #FBF8F3;
+  --tp-coffee: #8B7A6B;
+  --tp-divider: #E3DDD3;
+  --shadow-soft: 0 8px 22px rgba(75, 73, 64, .045);
+  --morandi-olive: #A9B7A3;
+  --morandi-rose: #C28A83;
+  --morandi-bark: #887B6F;
+  --morandi-cream: #F0ECE5;
+}
+html, body { background: var(--bg); color: var(--ink); }
+body { background: linear-gradient(180deg, #F8F6F1 0, var(--bg) 460px); }
+.topbar {
+  background: rgba(251, 248, 243, .96);
+  border-bottom-color: var(--line);
+}
+.brand-mark { background: var(--green-deep); box-shadow: 0 7px 18px rgba(95,117,98,.14); }
+.brand-wordmark small { color: var(--ink-2); }
+.soft-card, .work-card, .setting-block, .setting-row {
+  background-color: var(--surface);
+  border-color: var(--line);
+}
+.page[data-page="home"] > .work-card {
+  background: var(--surface);
+  border-color: var(--line);
+}
+.growth-banner,
+.page[data-page="home"] > .growth-banner {
+  background: linear-gradient(130deg, #E9EFE8, #F3F2EB 80%);
+  border-color: #D9E0D5;
+}
+.week-tree-panel,
+.tree-panel,
+.tree-visual,
+.tree-wrap {
+  background-color: rgba(251,248,243,.48);
+  border-color: #DCE2D6;
+}
+.tree-trunk { fill: var(--morandi-bark); stroke: var(--morandi-bark); }
+.tree-branch { stroke: #94877B; }
+.leaf-vein { stroke: rgba(255,253,248,.62); }
+.progress-track, .tp-journey-bar { background-color: #E3E4D9; }
+.progress-track span { background: var(--green); }
+.page[data-page="home"] .home-head .eyebrow,
+.page[data-page="history"] .history-heading-row .eyebrow,
+.page[data-page="settings"] .settings-heading-row .eyebrow {
+  color: var(--nav-coffee);
+}
+.page[data-page="home"] .home-head .eyebrow::before,
+.page[data-page="history"] .history-heading-row .eyebrow::before,
+.page[data-page="settings"] .settings-heading-row .eyebrow::before {
+  background: #A79587;
+}
+.page[data-page="home"] #homeTitle,
+.page[data-page="history"] #historyTitle,
+.page[data-page="settings"] #settingsTitle { color: var(--ink); }
+.page[data-page="home"] .home-head .home-lede,
+.page[data-page="history"] .history-head-description,
+.page[data-page="settings"] .settings-head-description {
+  color: var(--ink-2);
+}
+.page[data-page="home"] > .home-head,
+.page[data-page="history"] > .history-heading-row,
+.page[data-page="settings"] > .settings-heading-row {
+  border-bottom-color: var(--line);
+}
+.page[data-page="home"] #homeModeControl {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+.page[data-page="home"] #homeModeControl button[data-mode][aria-pressed="true"],
+.page[data-page="home"] #homeModeControl button[data-mode].active {
+  background: var(--green-deep);
+  color: #FFFDF8;
+}
+.page[data-page="home"] #homeModeControl button[data-mode][aria-pressed="false"]:not(.active) {
+  color: var(--ink-2);
+  background: transparent;
+}
+.page[data-page="home"] .footprint-shortcut .footprint-entry,
+.work-content .footprint-shortcut .footprint-entry {
+  background: var(--surface);
+  color: var(--green-deep);
+  border-color: var(--line);
+}
+.primary-button { background: var(--green-deep); color: #FFFDF8; }
+.primary-button:hover:not(:disabled) { background: #526956; }
+.secondary-button, .settings-help-button {
+  background: var(--surface);
+  color: var(--green-deep);
+  border-color: var(--line);
+}
+.secondary-button:hover:not(:disabled),
+.page[data-page="settings"] .settings-help-button:hover {
+  background: #EBF0E9;
+  border-color: #BDCCBA;
+}
+.page[data-page="settings"] .settings-help-button {
+  background: var(--surface);
+  color: var(--green-deep);
+  border-color: var(--line);
+}
+.calendar-month-label { color: #A96E69; }
+.calendar-month-label::before { background: var(--morandi-rose); }
+.wk::after, .dy::after,
+.week-strip .wk.sel::after,
+.day-strip-row .dy.sel::after { background: var(--green-deep); }
+.wk.now .week-number::before, .dy.today strong::before {
+  background: var(--today);
+  border-color: var(--surface);
+}
+.bottom-nav .nav-item.active { color: var(--nav-coffee); }
+.bottom-nav .nav-item::after,
+.bottom-nav .nav-item.active::after { background: var(--nav-coffee); }
+.page[data-page="settings"] .manage-list,
+.page[data-page="settings"] .manage-row,
+.page[data-page="history"] .history-completed-list {
+  border-color: var(--line);
+  background-color: var(--surface);
+}
+.page[data-page="history"] .history-card,
+.page[data-page="history"] .history-detail {
+  border-color: var(--line);
+  background: var(--surface);
+}
+.page[data-page="history"] .history-card.selected {
+  background: #EDF1EA;
+  border-color: #A7B9A5;
+  box-shadow: 0 0 0 2px rgba(126,146,125,.12);
+}
+.page[data-page="history"] .history-card-index {
+  background: #E8EEE5;
+  color: var(--green-deep);
+}
+.page[data-page="history"] .history-archive-kicker,
+.page[data-page="history"] .history-detail-kicker {
+  color: var(--green-deep);
+}
+.page[data-page="history"] .history-detail-reflection,
+.page[data-page="history"] .history-directions-wrap {
+  background: #F0F1EA;
+  border-color: var(--line);
+}
+.page[data-page="history"] .history-journal-empty {
+  background: #F3F2EB;
+  border-color: #D4DBCF;
+}
+.page[data-page="history"] .history-journal-empty .history-empty-leaf {
+  background: #E3EBE0;
+  color: var(--green-deep);
+}
+.cloud-status { color: var(--ink-2); }
