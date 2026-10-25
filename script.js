@@ -480,8 +480,7 @@ function renderAll() {
 }
 function renderHeader() {
   $("#historyCycleLabel").textContent = `Cycle ${state.cycle.number}`;
-  $("#homeEyebrow").textContent =
-    `Cycle ${state.cycle.number} · ${state.mode === "day" ? "每日檢視" : "整週檢視"}`;
+  $("#homeEyebrow").textContent = `12 週計畫 · Cycle ${state.cycle.number}`;
 }
 function directionLeafCounts(weekFilter = () => true) {
   const counts = {},
@@ -693,7 +692,7 @@ function renderRestHome() {
   const dates = Object.values(weekDateMap(viewWeek));
   const first = dates[0], last = dates.at(-1);
   $("#homeTitle").textContent = "休息日";
-  $("#homeLede").textContent = "Rest is part of progress.";
+  $("#homeLede").textContent = "休息也是前進的一部分。";
   $("#homeEyebrow").hidden = false;
   $("#homeModeControl").hidden = false;
   $("#growthBanner").hidden = true;
@@ -826,7 +825,10 @@ function renderHome() {
     : dayMode
       ? "一天一點點，累積進度"
       : "這週慢慢長大";
-  $("#homeLede").hidden = true;
+  $("#homeLede").textContent = dayMode
+    ? "今天的安排，也會累積到這一週。"
+    : "一週一週累積，每件完成的小事都算數。";
+  $("#homeLede").hidden = false;
   $("#workTitle").textContent = copy.workTitle;
   $("#workHint").textContent = archived
     ? dayMode ? "這一天所屬的週次已封存，請到 History 查看" : "這週已封存，請到 History 查看"
