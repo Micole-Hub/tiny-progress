@@ -32,6 +32,19 @@ for (const asset of linked) {
   assert.ok(sw.includes(JSON.stringify("./" + asset)), "outdated PWA cache URL: " + asset);
 }
 console.log("PASS: PWA cached resources match the current homepage asset URLs");
+
+assert.match(html, /<div class="app-shell" inert>/,
+  "app shell must be inert before JS and login");
+assert.match(html, /id="connectionGate"\s+class="connection-gate"\s+aria-label="雲端登入"\s*>/,
+  "login gate must initially be shown, even if JS fails");
+assert.match(html, /id="autoLoginLoading"[^>]*aria-live="polite">/,
+  "initial authentication loader must be visible");
+assert.match(html, /id="connectionForm" class="connection-card" hidden>/,
+  "password form should not flash before session restore check");
+assert.match(read("github-page/connection.js"), /document\.querySelector\("\.app-shell"\)\.inert = kind !== null/,
+  "successful login must be able to unlock the app shell");
+console.log("PASS: unauthenticated homepage starts locked until JS verifies session");
+
 assert.match(access, /app\.use\(\(req, res, next\)/);
 assert.match(access, /x-line-signature/);
 assert.match(access, /timingSafeEqual/);
