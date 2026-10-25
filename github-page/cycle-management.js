@@ -6,6 +6,34 @@
     message.textContent = e?.message || String(e);
   };
   let cycleRecords = [];
+  const shiftSelect = $("#changeCycleWeekShift");
+  function renderWeekStartEditor() {
+    const cycle = cycleRecords.find((c) => Number(c.cycleNumber) === Number($("#cycleSelect").value));
+    const start = normalizeDateValue(cycle?.startDate);
+    const today = TPDomain.today();
+    const eligible = Boolean(start && start > today);
+    $("#changeCycleStartForm").hidden = !eligible;
+    if (!eligible) return;
+    $("#cycleOriginalStart").textContent = "目前開始日期：" + start;
+    const choices = [];
+    for (let shift = -12; shift <= 12; shift++) {
+      const date = TPDomain.addDays(start, shift * 7);
+      if (date <= today) continue;
+      choices.push('<option value="' + shift + '"' + (shift === 0 ? ' selected' : '') + '>' +
+        (shift === 0 ? "維持原日期" : shift > 0 ? "延後 " + shift + " 週" : "提前 " + (-shift) + " 週") +
+        "（" + date + "）</option>");
+    }
+    shiftSelect.innerHTML = choices.join("");
+    renderWeekStartPreview();
+  }
+  function renderWeekStartPreview() {
+    const cycle = cycleRecords.find((c) => Number(c.cycleNumber) === Number($("#cycleSelect").value));
+    const start = normalizeDateValue(cycle?.startDate);
+    if (!start) return;
+    const next = TPDomain.addDays(start, Number(shiftSelect.value || 0) * 7);
+    $("#cycleDatePreview").textContent = "調整後： " + next + " 開始";
+  }
+  shiftSelect.addEventListener("change", renderWeekStartPreview);
   function renderGoalEditor() {
     const selected = Number($("#cycleSelect").value);
     const row = cycleRecords.find((c) => Number(c.cycleNumber) === selected);
@@ -14,7 +42,7 @@
       ? `編輯第 ${selected} 輪的本輪目標` : "編輯本輪目標";
     $("#updateCycleThemeInput").value = row?.theme || "";
   }
-  $("#cycleSelect").addEventListener("change", renderGoalEditor);
+  $("#cycleSelect").addEventListener("change", () => { renderGoalEditor(); renderWeekStartEditor(); });
   function setEnabled(enabled, hasCycles = false) {
     const select = $("#cycleSelect");
     select.disabled = !enabled || !hasCycles;
@@ -29,9 +57,7 @@
     $("#updateCycleThemeForm")
       .querySelectorAll("input,select,button")
       .forEach((el) => (el.disabled = !enabled || !hasCycles));
-    $("#postponeForm")
-      .querySelectorAll("input,select,button")
-      .forEach((el) => (el.disabled = !enabled));
+    if (!enabled) $("#changeCycleStartForm").hidden = true;
   }
   function emptyChoices(label) {
     $("#cycleSelect").innerHTML = `<option value="">${label}</option>`;
@@ -79,6 +105,7 @@
       ? TPDomain.addDays(last.weekEnd, 1) || TPDomain.today()
       : TPDomain.today();
     setEnabled(true, validCycles.length > 0);
+    renderWeekStartEditor();
     $("#cycleSyncSettings").hidden = true;
     return validCycles;
   }
@@ -183,33 +210,28 @@
   $("#changeCycleStartForm").onsubmit = async (e) => {
     e.preventDefault();
     try {
-      const cycle = $("#cycleSelect").value;
-      await TPConnection.manage("/cycles/" + cycle + "/start-date", {
+      const cycle = cycleRecords.find((c) => Number(c.cycleNumber) === Number($("#cycleSelect").value));
+      const oldStart = normalizeDateValue(cycle?.startDate);
+      if (!oldStart || oldStart <= TPDomain.today())
+        throw new Error("這輪計畫已開始，無法調整開始日期。");
+      const shift = Number(shiftSelect.value);
+      if (!Number.isInteger(shift) || shift === 0) {
+        message.textContent = "開始日期沒有變更。";
+        return;
+      }
+      const newStart = TPDomain.addDays(oldStart, shift * 7);
+      if (newStart <= TPDomain.today())
+        throw new Error("新的開始日期必須晚於今天。");
+      await TPConnection.manage("/cycles/" + cycle.cycleNumber + "/start-date", {
         method: "PATCH",
-        body: { startDate: $("#changeCycleDate").value },
+        body: { startDate: newStart },
       });
       await choices();
-      await TPConnection.selectCycle(cycle);
-      show("開始日期已更新");
+      await TPConnection.selectCycle(cycle.cycleNumber);
+      message.textContent = "開始日期已按整週調整。";
     } catch (e) {
       show(e);
     }
   };
-  $("#postponeForm").onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await TPConnection.manage("/weeks/postpone-current", {
-        method: "POST",
-        body: {
-          days: Number($("#postponeDays").value),
-          reason: $("#postponeReason").value,
-        },
-      });
-      await TPConnection.selectCycle(null);
-      show("本週及後續週次已順延。");
-      $("#cycleDialog").close();
-    } catch (e) {
-      show(e);
-    }
-  };
+
 })();
