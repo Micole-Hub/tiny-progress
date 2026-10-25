@@ -1,5 +1,5 @@
 /* TinyProgress offline shell. Authenticated and API resources are never cached. */
-const SHELL_CACHE = "tp-shell-20261025-high-contrast-palettes-v2";
+const SHELL_CACHE = "tp-shell-20261025-auth-locked-v3";
 const SHELL = [
   "./",
   "./index.html",
