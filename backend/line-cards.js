@@ -1,16 +1,51 @@
 "use strict";
 const D = require("./domain");
 const C = {
-  paper: "#FFFDF7",
-  text: "#4F5947",
-  muted: "#737B6B",
-  line: "#E8E1D5",
+  paper: "#FFFEFA",
+  text: "#3C4941",
+  muted: "#606A60",
+  line: "#E4E1D8",
   soft: "#EEF3EA",
-  list: "#93AC91",
-  draw: "#6EB7B0",
-  monday: "#7F93C8",
-  footprint: "#C9A35F",
+  list: "#739377",
+  draw: "#7A9F95",
+  monday: "#889EAD",
+  footprint: "#A89A78",
 };
+// Visual category chips match the low-saturation forest leaves in the web QA.
+// Stored HEX values are never changed.
+function morandiTone(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(String(hex || ""))) return "#9AAE97";
+  const normalized = hex.toUpperCase();
+  const palette = [
+    "#829D86", "#90AA9B", "#8FA6B5", "#A5A98C",
+    "#B3A080", "#9DA7B2", "#76958A", "#A9BBA6",
+    "#A49E85", "#99A8A4", "#9D9FB4", "#B8AD91",
+  ];
+  const tones = [
+    ["#A58E72", "#BBAA8A"],
+    ["#999875", "#B0AE86"],
+    ["#78977E", "#A1B59D"],
+    ["#779995", "#9AB4B0"],
+    ["#8198AD", "#A2B4C4"],
+    ["#9695A7", "#B1B0C2"],
+  ];
+  if (palette.includes(normalized) || tones.some(pair => pair.includes(normalized)))
+    return normalized;
+  const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(...rgb), min = Math.min(...rgb), delta = max - min;
+  let hue = 0;
+  if (delta) {
+    const n = rgb.indexOf(max);
+    hue = 60 * (n === 0 ? ((rgb[1] - rgb[2]) / delta) % 6
+      : n === 1 ? (rgb[2] - rgb[0]) / delta + 2
+      : (rgb[0] - rgb[1]) / delta + 4);
+    if (hue < 0) hue += 360;
+  }
+  const group = hue < 25 || hue >= 330 ? 0
+    : hue < 72 ? 1 : hue < 170 ? 2
+      : hue < 207 ? 3 : hue < 273 ? 4 : 5;
+  return tones[group][(max + min) / 2 >= 0.63 ? 1 : 0];
+}
 const txt = (text, size = "sm", extra = {}) => ({
   type: "text",
   text: String(text || " "),
@@ -54,10 +89,10 @@ function pill(label, a, p = {}, accent = C.list, primary = false) {
       cornerRadius: "14px",
       backgroundColor: primary
         ? accent === C.monday
-          ? "#536694"
+          ? "#566E88"
           : accent === C.draw
-            ? "#39736F"
-            : "#526F50"
+            ? "#476E63"
+            : "#526E56"
         : C.soft,
       action: typeof a === "object" ? a : action(label, a, p),
       flex: 1,
@@ -109,12 +144,12 @@ function frame(s, w, title, kind, contents, footer, webUrl) {
               paddingAll: "16px",
               backgroundColor: C.paper,
               borderColor: C[kind],
-              borderWidth: "2px",
+              borderWidth: "1px",
               cornerRadius: "18px",
             },
           ),
         ],
-        { paddingAll: "5px", backgroundColor: "#F8F4EA" },
+        { paddingAll: "5px", backgroundColor: "#F3F1EA" },
       ),
     },
   };
@@ -126,7 +161,7 @@ function progress(n, total) {
   if (total - n > 0 || !total)
     blocks.push(
       box([], {
-        backgroundColor: "#E4E7DF",
+        backgroundColor: "#E4E8DF",
         height: "7px",
         flex: Math.max(1, total - n),
       }),
@@ -160,7 +195,7 @@ function nextOccurrence(t, s) {
 }
 function taskRow(s, t, compact = false) {
   const cat = D.category(s, t),
-    clr = D.color(s, t),
+    clr = morandiTone(D.color(s, t)),
     isrec = D.recurring(t),
     o = nextOccurrence(t, s),
     isDone = D.done(t);
@@ -178,7 +213,7 @@ function taskRow(s, t, compact = false) {
   if (!compact && cat)
     info.push(
       row([
-        box([txt(cat.name, "xxs", { color: "#263B2D", align: "center" })], {
+        box([txt(cat.name, "xxs", { color: "#3C4941", align: "center" })], {
           backgroundColor: clr,
           cornerRadius: "8px",
           paddingAll: "4px",
@@ -221,7 +256,7 @@ function taskRow(s, t, compact = false) {
   return row(
     [
       box(
-        [txt(isDone ? "✓" : "○", "xl", { align: "center", color: "#557051" })],
+        [txt(isDone ? "✓" : "○", "xl", { align: "center", color: "#526E56" })],
         {
           width: "44px",
           height: "44px",
