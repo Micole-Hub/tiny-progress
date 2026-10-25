@@ -9,27 +9,44 @@ const DAY_LABELS = {
   sat: "六",
   sun: "日",
 };
-// Color defaults sampled from the user's Just Free Slide Morandi picker.
-// Existing saved direction, category, task and archived leaf colors are untouched.
+// Clean Morandi accents: foliage / olive / fog blue / sand. No dusty rose.
 const PALETTE = [
-  "#AAB8AB", // 灰綠葉片
-  "#D4B8B4", // 霧豆沙
-  "#B7B7BD", // 灰薰衣草
-  "#D4C3AA", // 麥穗米
-  "#728A7A", // 鼠尾草
-  "#A39183", // 霧灰樹皮
-  "#A9B7AA", // 淺葉綠
-  "#C09D9B", // 灰玫瑰
-  "#95A098", // 岩苔綠
-  "#8C736F", // 霧棕
-  "#ADAAA5", // 石灰灰
-  "#CCD2CC", // 霧灰綠
+  "#829D86", "#90AA9B", "#8FA6B5", "#A5A98C",
+  "#B3A080", "#9DA7B2", "#76958A", "#A9BBA6",
+  "#A49E85", "#99A8A4", "#9D9FB4", "#B8AD91",
 ];
-// The full original category palette is retained, with a new Morandi section.
+// Display colors are intentionally separate from cloud-stored HEX values.
+// The original category/direction settings and archived data stay editable.
+function morandiTone(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(String(hex || ""))) return "#9AAE97";
+  const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(...rgb), min = Math.min(...rgb), delta = max - min;
+  let hue = 0;
+  if (delta) {
+    const n = rgb.indexOf(max);
+    hue = 60 * (n === 0 ? ((rgb[1] - rgb[2]) / delta) % 6
+      : n === 1 ? (rgb[2] - rgb[0]) / delta + 2
+      : (rgb[0] - rgb[1]) / delta + 4);
+    if (hue < 0) hue += 360;
+  }
+  // Reds and pinks become warm sand instead of the unwanted dusty-rose shade.
+  const group = hue < 25 || hue >= 330 ? 0
+    : hue < 72 ? 1 : hue < 170 ? 2
+      : hue < 207 ? 3 : hue < 273 ? 4 : 5;
+  const pairs = [
+    ["#A58E72", "#BBAA8A"], // warm sand
+    ["#999875", "#B0AE86"], // olive
+    ["#78977E", "#A1B59D"], // leaves
+    ["#779995", "#9AB4B0"], // eucalyptus
+    ["#8198AD", "#A2B4C4"], // fog blue
+    ["#9695A7", "#B1B0C2"], // mist violet
+  ];
+  return pairs[group][(max + min) / 2 >= 0.63 ? 1 : 0];
+}
 const CATEGORY_PALETTE_GROUPS = [
   { title: "莫蘭迪森林", colors: [
-    "#AAB8AB", "#D4B8B4", "#B7B7BD", "#D4C3AA", "#728A7A", "#A39183",
-    "#A9B7AA", "#C09D9B", "#95A098", "#8C736F", "#ADAAA5", "#CCD2CC",
+    "#829D86", "#90AA9B", "#8FA6B5", "#A5A98C", "#B3A080", "#9DA7B2",
+    "#76958A", "#A9BBA6", "#A49E85", "#99A8A4", "#9D9FB4", "#B8AD91",
   ] },
   { title: "柔和粉彩", colors: [
     "#9FC3DE", "#EFB8CF", "#E7CE72", "#E3B48A", "#A9CB9F", "#C8B9E6",
@@ -312,7 +329,7 @@ function categoryById(id) {
   return state.categories.find((c) => c.id === id);
 }
 function taskColor(t) {
-  return categoryById(t.categoryId)?.color || NEUTRAL_LEAF;
+  return morandiTone(categoryById(t.categoryId)?.color || NEUTRAL_LEAF);
 }
 function activeTasks(week = state.selectedWeek) {
   return state.tasks.filter((t) => t.week === week && t.status === "active");
@@ -550,7 +567,7 @@ function renderDirection() {
     const c = el.children[i],
       n = counts[d.name] || 0,
       pct = d.target > 0 ? Math.min(100, Math.round((n / d.target) * 100)) : 0;
-    c.style.setProperty("--c", d.color);
+    c.style.setProperty("--c", morandiTone(d.color));
     c.title = d.outcome || "";
     c.querySelector(".tank-name").textContent = d.name;
     const cnt = c.querySelector(".tank-count"),
@@ -608,7 +625,7 @@ function renderDirectionList() {
   el.innerHTML = state.cycle.directions
     .map(
       (d) =>
-        `<div class="manage-row"><span class="color-dot" style="--c:${d.color}"></span><div><strong>${esc(d.name)}</strong><small>${esc(d.outcome || "")}${d.outcome ? " · " : ""}目標 ${d.target} 片</small></div><span></span><button class="text-button" type="button" data-edit-direction="${d.id}">編輯</button></div>`,
+        `<div class="manage-row"><span class="color-dot" style="--c:${morandiTone(d.color)}"></span><div><strong>${esc(d.name)}</strong><small>${esc(d.outcome || "")}${d.outcome ? " · " : ""}目標 ${d.target} 片</small></div><span></span><button class="text-button" type="button" data-edit-direction="${d.id}">編輯</button></div>`,
     )
     .join("");
   $("#addDirectionBtn").hidden = state.cycle.directions.length >= 3;
@@ -693,7 +710,7 @@ function renderHistoryTanks(finishedWeeks = []) {
         const n = counts[d.name] || 0,
           pct =
             d.target > 0 ? Math.min(100, Math.round((n / d.target) * 100)) : 0;
-        return `<div class="htank" style="--c:${d.color}"><div class="htank-head"><strong>${esc(d.name)}</strong><span>${n}${d.target ? ` / ${d.target}` : ""} 片</span></div>${d.outcome ? `<small>${esc(d.outcome)}</small>` : ""}<div class="tank big"><div class="tank-fill" style="width:${pct}%"></div></div></div>`;
+        return `<div class="htank" style="--c:${morandiTone(d.color)}"><div class="htank-head"><strong>${esc(d.name)}</strong><span>${n}${d.target ? ` / ${d.target}` : ""} 片</span></div>${d.outcome ? `<small>${esc(d.outcome)}</small>` : ""}<div class="tank big"><div class="tank-fill" style="width:${pct}%"></div></div></div>`;
       })
       .join("");
 }
@@ -1823,13 +1840,13 @@ function treeSvg(week, leaves, opts = {}) {
       const open = live
         ? `<g class="leaf-sway" style="animation-duration:${dur.toFixed(2)}s;animation-delay:-${phase}s">`
         : "<g>";
-      return `<g transform="translate(${f1(s.x)} ${f1(s.y)}) rotate(${((s.ang * 180) / Math.PI).toFixed(1)})" data-leaf="${esc(l.key)}" data-len="${s.len.toFixed(1)}">${open}<g class="${cls}" style="${style}"><path d="${leafD(s.len)}" fill="${l.color}"><title>${esc(l.title)}</title></path><path class="leaf-vein" d="M0 0L${f1(s.len * 0.72)} 0"/></g></g></g>`;
+      return `<g transform="translate(${f1(s.x)} ${f1(s.y)}) rotate(${((s.ang * 180) / Math.PI).toFixed(1)})" data-leaf="${esc(l.key)}" data-len="${s.len.toFixed(1)}">${open}<g class="${cls}" style="${style}"><path d="${leafD(s.len)}" fill="${morandiTone(l.color)}"><title>${esc(l.title)}</title></path><path class="leaf-vein" d="M0 0L${f1(s.len * 0.72)} 0"/></g></g></g>`;
     })
     .join("");
   const fallEls = (falls || [])
     .map(
       (f) =>
-        `<g transform="translate(${f1(f.x)} ${f1(f.y)})"><g class="leaf-fall" style="--sx:${f.sx}px;--fall:${f.fall.toFixed(0)}px;animation-delay:${(-(now - f.t0 - f.delay)).toFixed(0)}ms"><path transform="rotate(${f.deg})" d="${leafD(f.len)}" fill="${f.color}"/></g></g>`,
+        `<g transform="translate(${f1(f.x)} ${f1(f.y)})"><g class="leaf-fall" style="--sx:${f.sx}px;--fall:${f.fall.toFixed(0)}px;animation-delay:${(-(now - f.t0 - f.delay)).toFixed(0)}ms"><path transform="rotate(${f.deg})" d="${leafD(f.len)}" fill="${morandiTone(f.color)}"/></g></g>`,
     )
     .join("");
   return `<svg viewBox="0 0 250 170" preserveAspectRatio="xMidYMax meet" role="img" aria-label="Week ${week} 的成長樹"><ellipse cx="${TREE_X}" cy="${TREE_BASE + 1.5}" rx="${(30 + geo.g * 22).toFixed(0)}" ry="4" fill="rgba(90,110,86,.13)"/>${branches}<path class="tree-trunk${intro ? " draw" : ""}" d="${geo.trunkD}"/>${leafEls}${fallEls}</svg>`;
@@ -2240,7 +2257,7 @@ function renderHistory() {
           leaves: (snapshot.completed || []).map((v, i) => ({
             key: v.key || `h${week}-${i}`,
             title: v.title,
-            color: v.color || NEUTRAL_LEAF,
+            color: morandiTone(v.color || NEUTRAL_LEAF),
           })),
           total: currentTotalUnits(week),
         }
@@ -2498,7 +2515,7 @@ function historyDetailHtml(
       : x.note
         ? [`<small>${esc(x.note)}</small>`]
         : [];
-    return `<div class="history-line"><i class="leaf-dot" style="--c:${x.color || NEUTRAL_LEAF}"></i><span>${esc(x.title)}${head ? `<em class="line-head">　${esc(head)}</em>` : ""}</span>${subs.length ? `<div class="history-subs">${subs.join("")}</div>` : ""}</div>`;
+    return `<div class="history-line"><i class="leaf-dot" style="--c:${morandiTone(x.color || NEUTRAL_LEAF)}"></i><span>${esc(x.title)}${head ? `<em class="line-head">　${esc(head)}</em>` : ""}</span>${subs.length ? `<div class="history-subs">${subs.join("")}</div>` : ""}</div>`;
   };
   const left = leftover.length
     ? `<div class="history-section"><p class="field-label">還留在這週的</p>${leftover.map((x) => `<div class="history-line"><i class="leaf-dot hollow"></i><span>${esc(x.title)}</span>${x.recurring ? `<small>還差 ${x.left} 次</small>` : ""}${archived ? "" : `<div class="reason-chips">${REASONS.map((rs) => `<button type="button" class="reason-chip ${x.reason === rs ? "on" : ""}" data-reason-task="${x.id}" data-reason="${rs}">${rs}</button>`).join("")}</div>`}</div>`).join("")}</div>`
@@ -3446,7 +3463,7 @@ function renderTutorial() {
       "",
       "選擇你的成長方向",
       "本輪目標是這 12 週想達成的成果；成長方向是持續投入的 1 到 3 個項目。之後可以修改，已長出的葉子不會消失。",
-      `<div class="tut-dirs">${tutDraft.map((d, i) => `<div class="tut-dir" style="--c:${d.color}"><i class="color-dot"></i><div><input data-tut-name="${i}" value="${esc(d.name)}" placeholder="成長方向名稱" maxlength="12"><input data-tut-outcome="${i}" value="${esc(d.outcome)}" placeholder="做到什麼算完成" maxlength="40"></div></div>`).join("")}</div>${tutDraft.length < 3 ? `<button class="text-button" type="button" id="tutAddDir">＋ 再加一個方向</button>` : ""}`,
+      `<div class="tut-dirs">${tutDraft.map((d, i) => `<div class="tut-dir" style="--c:${morandiTone(d.color)}"><i class="color-dot"></i><div><input data-tut-name="${i}" value="${esc(d.name)}" placeholder="成長方向名稱" maxlength="12"><input data-tut-outcome="${i}" value="${esc(d.outcome)}" placeholder="做到什麼算完成" maxlength="40"></div></div>`).join("")}</div>${tutDraft.length < 3 ? `<button class="text-button" type="button" id="tutAddDir">＋ 再加一個方向</button>` : ""}`,
     );
     $$("[data-tut-name]").forEach((el) =>
       el.addEventListener(
