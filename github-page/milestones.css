@@ -132,39 +132,25 @@ button.tp-journey-stop:focus-visible { outline: 2px solid #638b69; outline-offse
   .tp-journey-node { transition: none; }
 }
 
-/* User-sourced Morandi forest: same palette as Home and Settings. */
-.tp-journey-section {
-  background: linear-gradient(125deg, #F4EBE4 0%, #EAE0D7 100%);
-  border-color: #D2CABF;
-  color: #3B4338;
-  box-shadow: 0 10px 24px rgba(59,67,56,.05);
-}
-.tp-journey-numbers { border-right-color: #D2CABF; }
-.tp-journey-kicker { color: #674D41; }
-.tp-journey-big strong { color: #4E6E62; }
-.tp-journey-big span, .tp-journey-numbers > p { color: #53565C; }
-.tp-journey-copy .tp-journey-status { color: #674D41; }
-.tp-journey-copy h2 { color: #3B4338; }
-.tp-journey-sub { color: #53565C; }
-.tp-journey-leaves { color: #4E6E62; }
-.tp-journey-leaves span { color: #8C736F; }
-.tp-journey-bar { background: #D2D2D0; }
-.tp-journey-bar > span { background: linear-gradient(90deg, #AAB8AB, #728A7A); }
-.tp-journey-stop { color: #60656C; }
-.tp-journey-node { background: #DCDDD5; border-color: #C4C1BC; color: #53565C; }
-.tp-journey-stop.is-finished { color: #4E6E62; }
-.tp-journey-stop.is-finished .tp-journey-node {
-  background: #CCD2CC; border-color: #A9B7AA; color: #4E6E62;
-}
-.tp-journey-stop.is-current, .tp-journey-stop.is-start { color: #674D41; }
-.tp-journey-stop.is-current .tp-journey-node {
-  background: #D4B8B4; border-color: #8C736F; color: #674D41;
-}
-.tp-journey-stop.is-start .tp-journey-node {
-  background: #EAE0D7; border-color: #A39183; color: #674D41;
-}
-button.tp-journey-stop:focus-visible { outline-color: #4E6E62; }
-.tp-journey-hint { color: #53565C; }
-@media (max-width: 500px) {
-  .tp-journey-numbers { border-bottom-color: #D2CABF; }
-}
+/* QA: clean history journal. Small muted accents, no pink-gray blocks. */
+.tp-journey-section { background:linear-gradient(130deg,#FFFEFA,#F7F7F0); border-color:#E6E0D5; color:#424A41; }
+.tp-journey-numbers { border-right-color:#E6E1D7; }
+.tp-journey-kicker { color:#687F6B; }
+.tp-journey-big strong { color:#55765A; }
+.tp-journey-big span,.tp-journey-numbers > p { color:#667166; }
+.tp-journey-copy .tp-journey-status { color:#806D5A; }
+.tp-journey-copy h2 { color:#3C4941; }
+.tp-journey-sub { color:#647066; }
+.tp-journey-leaves { color:#55765A; }
+.tp-journey-leaves span { color:#A99674; }
+.tp-journey-bar { background:#E4E7DC; }
+.tp-journey-bar > span { background:linear-gradient(90deg,#A5B7A0,#739477); }
+.tp-journey-stop { color:#818D84; }
+.tp-journey-node { background:#F0F2EB; border-color:#DEE3D8; color:#728074; }
+.tp-journey-stop.is-finished { color:#55765A; }
+.tp-journey-stop.is-finished .tp-journey-node { background:#DFECDD; border-color:#A7C1A7; color:#55765A; }
+.tp-journey-stop.is-current,.tp-journey-stop.is-start { color:#8B7562; }
+.tp-journey-stop.is-current .tp-journey-node { background:#F2EDE5; border-color:#A99682; color:#876D59; }
+.tp-journey-stop.is-start .tp-journey-node { background:#F4F1E9; border-color:#C5B6A5; color:#876D59; }
+.tp-journey-hint { color:#647066; }
+@media(max-width:500px){.tp-journey-numbers{border-bottom-color:#E6E1D7}}
