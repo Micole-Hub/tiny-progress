@@ -4956,7 +4956,7 @@ body {background:linear-gradient(180deg,#f8f7f3 0,var(--bg) 440px)}
   .page[data-page="history"] .history-detail-reflection {margin-top:22px;}
 }
 @media(max-width:490px) {
-  .page[data-page="history"] .history-heading-row {align-items:flex-start;gap:13px;}
+  .page[data-page="history"] .history-heading-row {flex-direction:row;align-items:flex-start;gap:13px;}
   .page[data-page="history"] .history-heading-copy {min-width:0;}
   .page[data-page="history"] #historyTitle {font-size:30px;}
   .page[data-page="history"] #yearReviewBtn {min-height:38px;font-size:12px;}
