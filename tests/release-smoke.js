@@ -96,6 +96,15 @@ assert.match(read("script.js"), /historyWeekFinished\(week\)/);
 assert.match(read("script.js"), /history-detail-layout/);
 console.log("PASS: History renders only completed weeks, uses shared archive rules, and keeps its weekly journal layout");
 
+
+const hexInputIds = ["directionHexColor", "categoryHexColor", "categoryQuickHexColor"];
+for (const id of hexInputIds) {
+  assert.match(html, new RegExp('id="' + id + '"'), "HEX input missing: " + id);
+}
+assert.match(read("script.js"), /function normalizeHexColor\(value\)/);
+assert.match(read("script.js"), /function bindCategoryCustomColor\(prefix, applyColor\)/);
+assert.match(read("script.js"), /function bindDirectionColorInputs\(\)/);
+
 const themeCss = read("style.css");
 const journeyCss = read("github-page/milestones.css");
 const htmlUi = read("index.html");
@@ -110,7 +119,7 @@ const paletteBlock = paletteSource.match(/const CATEGORY_PALETTE_GROUPS = \[([\s
 assert.ok(paletteBlock, "category preset palettes are missing");
 const presets = [...paletteBlock[1].matchAll(/\{ title: "([^"]+)", colors: \[([\s\S]*?)\]\s*\}/g)];
 assert.deepEqual(presets.map((entry) => entry[1]), [
-  "莫蘭迪森林", "柔和粉彩", "自然霧色", "馬卡龍果漾", "文青日常",
+  "莫蘭迪森林", "海霧藍調", "奶油暖光", "馬卡龍果漾", "文青陶土",
 ], "category preset group names/order should match approved QA");
 for (const group of presets) {
   assert.equal((group[2].match(/#[0-9A-Fa-f]{6}/g) || []).length, 12,
@@ -118,6 +127,8 @@ for (const group of presets) {
 }
 assert.ok(!paletteBlock[1].includes('title: "明亮活力"'));
 assert.ok(!paletteBlock[1].includes('title: "深色經典"'));
+const uniqueColors = presets.flatMap(group => group[2].match(/#[0-9A-Fa-f]{6}/g) || []);
+assert.equal(new Set(uniqueColors).size, 60, "the five palettes should offer 60 distinct colors");
 assert.match(paletteSource, /fill="\$\{morandiTone\(l\.color\)\}"/);
 assert.match(paletteSource, /morandiTone\(categoryById\(t\.categoryId\)/);
 const renderCards = read("backend/server.js");
