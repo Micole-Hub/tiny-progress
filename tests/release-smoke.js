@@ -99,25 +99,30 @@ console.log("PASS: History renders only completed weeks, uses shared archive rul
 const themeCss = read("style.css");
 const journeyCss = read("github-page/milestones.css");
 const htmlUi = read("index.html");
-const forest = themeCss.slice(themeCss.lastIndexOf("TinyProgress | Morandi forest from Just Free Slide"));
-assert.ok(forest.length > 5000, "User-sourced Morandi forest theme missing");
-for (const token of [
-  "--bg: #EFF0EA", "--surface: #F4EBE4", "--surface-3: #CCD2CC",
-  "--green-deep: #4E6E62", "--today: #976666", "--nav-coffee: #8C736F"
-]) assert.ok(forest.includes(token), "Missing sourced color: " + token);
-assert.match(journeyCss, /User-sourced Morandi forest/);
+const clean = themeCss.slice(themeCss.lastIndexOf("QA: clean warm-paper base"));
+assert.ok(clean.includes("background: #FFFEFA") && clean.includes("background: #F2F1EB"), "Warm white base missing");
+assert.ok(!clean.includes("#976666") && !clean.includes("#D4B8B4"), "Rejected dusty rose theme survived");
+assert.ok(journeyCss.includes("clean history journal") && !journeyCss.includes("#D4B8B4"), "History still has gray-pink fills");
 const paletteSource = read("script.js");
-for (const color of ["#AAB8AB", "#D4B8B4", "#728A7A", "#8C736F", "#CCD2CC"])
-  assert.ok(paletteSource.includes(color), "Missing sourced color option: " + color);
+assert.match(paletteSource, /function morandiTone\(hex\)/);
 assert.match(paletteSource, /title: "莫蘭迪森林"/);
 assert.match(paletteSource, /title: "深色經典"/);
-assert.match(paletteSource, /fill="\\$\\{l\\.color\\}"/);
+assert.match(paletteSource, /fill="\$\{morandiTone\(l\.color\)\}"/);
+assert.match(paletteSource, /morandiTone\(categoryById\(t\.categoryId\)/);
+const renderCards = read("backend/server.js");
+const gasCards = read("gas/Code.gs");
+const legacyCards = read("backend/line-cards.js");
+assert.match(renderCards, /const LINE_TAG_PALETTE/);
+assert.match(gasCards, /const TP_LINE_TAGS/);
+assert.ok(!renderCards.includes('bg: "#F6E5E7"') && !gasCards.includes('bg: "#F2E4EF"'), "LINE card rose tags remain");
+assert.match(legacyCards, /morandiTone\(D\.color\(s, t\)\)/);
+assert.match(renderCards, /card: "#FFFEFA"/);
+assert.match(gasCards, /card: "#FFFEFA"/);
 const themeManifest = JSON.parse(read("manifest.webmanifest"));
-assert.equal(themeManifest.background_color, "#EFF0EA");
-assert.equal(themeManifest.theme_color, "#4E6E62");
-assert.match(htmlUi, /name="theme-color" content="#4E6E62"/);
-assert.match(read("app-icon.svg"), /fill="#4E6E62"/);
+assert.equal(themeManifest.background_color, "#F4F1EA");
+assert.equal(themeManifest.theme_color, "#719478");
+assert.match(htmlUi, /name="theme-color" content="#f4f1ea"/);
 assert.match(htmlUi, /id="homeModeControl"/);
-console.log("PASS: user-sourced Morandi forest palette, tree colors, PWA theme, existing custom options");
+console.log("PASS: clean warm-paper theme, forest leaves and Morandi LINE card color assets");
 
 console.log("NOTE: cloud save, LINE delivery, schedule, PWA install and multi-device sync still require QA integration tests.");
