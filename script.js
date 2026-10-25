@@ -2344,12 +2344,11 @@ function reflectionSaved(v) {
 function markHistorySelected() {
   const g = $("#historyGrid");
   g.classList.toggle("has-selection", historySelected !== null);
-  $$("#historyGrid .history-card").forEach((c) =>
-    (c.classList.toggle(
-      "selected",
-      Number(c.dataset.historyWeek) === historySelected,
-    ), c.setAttribute("aria-pressed", String(Number(c.dataset.historyWeek) === historySelected))),
-  );
+  $("#historyGrid .history-card").forEach((c) => {
+    const selected = Number(c.dataset.historyWeek) === historySelected;
+    c.classList.toggle("selected", selected);
+    c.setAttribute("aria-pressed", String(selected));
+  });
 }
 function closeHistory() {
   $("#historyDetail").hidden = true;
