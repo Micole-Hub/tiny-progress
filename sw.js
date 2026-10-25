@@ -1,5 +1,5 @@
 /* TinyProgress offline shell. Authenticated and API resources are never cached. */
-const SHELL_CACHE = "tp-shell-20261025-auth-locked-v3";
+const SHELL_CACHE = "tp-shell-20261025-login-history-fix-v4";
 const SHELL = [
   "./",
   "./index.html",
@@ -9,7 +9,7 @@ const SHELL = [
   "./github-page/domain.js?v=20261022-sage-reflection-v1",
   "./github-page/connection.js?v=20261025-goal-direction-v1",
   "./github-page/milestones.js?v=20261025-history-journal-v1",
-  "./script.js?v=20261025-high-contrast-palettes-v2",
+  "./script.js?v=20261025-login-history-fix-v3",
   "./github-page/pwa.js?v=20261024-week-first-v1",
   "./github-page/cycle-management.js?v=20261025-weekly-start-v1",
   "./manifest.webmanifest?v=20261025-clean-forest-v3",
