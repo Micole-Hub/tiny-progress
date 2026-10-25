@@ -60,4 +60,40 @@ const replies = Bot.respond(
 );
 assert.ok(Array.isArray(replies) && replies.length, "LINE text command should return messages");
 console.log("PASS: LINE list, Monday, footprint cards and list command render locally");
+
+const Milestones = require(path.join(root, "github-page/milestones.js"));
+const journeyNode = {
+  innerHTML: "", className: "",
+  setAttribute() {}, querySelectorAll() { return []; }
+};
+const originalDocument = global.document;
+try {
+  global.document = { getElementById: (id) => id === "tpMilestones" ? journeyNode : null };
+  const weeks = Array.from({ length: 12 }, (_, i) => ({
+    number: i + 1, start: "2026-10-26", end: "2026-11-01",
+    finished: false, leaves: i === 0 ? 3 : 0,
+  }));
+  Milestones.renderJourney({
+    weeks, resting: true, currentWeek: 1, today: "2026-10-25",
+    onReviewWeek() {},
+  });
+  assert.equal((journeyNode.innerHTML.match(/class="tp-journey-stop /g) || []).length, 12);
+  assert.ok(!journeyNode.innerHTML.includes("data-journey-week="), "rest period cannot browse future History");
+  assert.ok(journeyNode.innerHTML.includes("第一週結束後"), "no premature History during rest");
+  weeks[0].finished = true;
+  Milestones.renderJourney({
+    weeks, resting: false, currentWeek: 2, today: "2026-11-02",
+    onReviewWeek() {},
+  });
+  assert.equal((journeyNode.innerHTML.match(/data-journey-week=/g) || []).length, 1);
+  assert.ok(journeyNode.innerHTML.includes("累積 3 片葉子"));
+} finally {
+  global.document = originalDocument;
+}
+assert.match(html, /id="historyArchiveSubtitle"/);
+assert.match(html, /id="historyDirectionsWrap"/);
+assert.match(read("script.js"), /historyWeekFinished\(week\)/);
+assert.match(read("script.js"), /history-detail-layout/);
+console.log("PASS: History renders only completed weeks, uses shared archive rules, and keeps its weekly journal layout");
+
 console.log("NOTE: cloud save, LINE delivery, schedule, PWA install and multi-device sync still require QA integration tests.");
