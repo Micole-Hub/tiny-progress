@@ -883,39 +883,17 @@
               required /></label
           ><button class="primary-button" type="submit">建立新計畫</button>
         </form>
-        <form id="changeCycleStartForm">
-          <h4>調整尚未開始的計畫日期</h4>
+        <form id="changeCycleStartForm" hidden>
+          <h4>調整尚未開始的計畫</h4>
           <p class="dialog-help">
-            先在上方選擇還沒開始的計畫，再設定新的開始日期。
+            開始日期以完整的一週（7 天）為單位調整；週次仍依真正日期前進。
           </p>
-          <label class="dialog-label"
-            >新的開始日期<input
-              type="date"
-              id="changeCycleDate"
-              required /></label
-          ><button class="secondary-button" type="submit">
-            更新開始日期
-          </button>
-        </form>
-        <form id="postponeForm">
-          <h4>本週需要多一點時間？</h4>
-          <p class="dialog-help">
-            將本週和後續週次一起往後順延；每週最多延後一次。
-          </p>
-          <label class="dialog-label"
-            >順延幾天<select id="postponeDays">
-              <option value="1">1 天</option>
-              <option value="2">2 天</option>
-              <option value="3">3 天</option>
-              <option value="4">4 天</option>
-              <option value="5">5 天</option>
-              <option value="6">6 天</option>
-              <option value="7">7 天</option>
-            </select></label
-          ><label class="dialog-label"
-            >簡單記錄原因<input id="postponeReason" maxlength="200" required
-          /></label>
-          <button class="secondary-button" type="submit">順延本週與後續日期</button>
+          <p class="cycle-date-current" id="cycleOriginalStart"></p>
+          <label class="dialog-label">開始日期調整
+            <select id="changeCycleWeekShift" required></select>
+          </label>
+          <p class="cycle-date-preview" id="cycleDatePreview" aria-live="polite"></p>
+          <button class="secondary-button" type="submit">更新開始日期</button>
         </form>
       </div>
     </dialog>
@@ -925,6 +903,6 @@
     <script src="github-page/milestones.js?v=20261024-journey-clean-v2"></script>
     <script src="script.js?v=20261025-goal-direction-v1"></script>
     <script src="github-page/pwa.js?v=20261024-week-first-v1" defer></script>
-    <script src="github-page/cycle-management.js?v=20261025-goal-direction-v1"></script>
+    <script src="github-page/cycle-management.js?v=20261025-weekly-start-v1"></script>
   </body>
 </html>
