@@ -4692,3 +4692,25 @@ body {background:linear-gradient(180deg,#f8f7f3 0,var(--bg) 440px)}
   .page[data-page="home"] .home-mode-control button {padding-inline:7px}
   .page[data-page="home"]>.work-card:not(.resting) {padding-inline:12px}
 }
+
+/* QA: clearly distinguish the single cycle outcome from growth directions. */
+#cycleGoalBlock { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 22px;align-items:center; }
+#cycleGoalBlock .setting-block-head { grid-column:1/-1;margin:0;padding:0 0 10px;border-bottom:1px solid var(--line); }
+#cycleGoalBlock .setting-block-head span { display:grid;gap:4px; }
+#cycleGoalBlock .setting-block-head strong { font-size:16px; }
+#cycleGoalBlock .setting-block-head small { font-size:12px;color:var(--muted);font-weight:400;line-height:1.55; }
+#cycleGoalBlock .cycle-goal-summary { min-width:0; }
+#cycleGoalBlock .cycle-goal-summary p { margin:0 0 7px;font-size:17px;font-weight:650;line-height:1.65;color:var(--ink);overflow-wrap:anywhere; }
+#cycleGoalBlock .cycle-goal-summary small { display:block;color:var(--muted);font-size:11px;line-height:1.6; }
+#cycleGoalBlock .setting-action { justify-self:end; }
+#directionBlock .setting-block-head span { display:grid;gap:4px; }
+#directionBlock .setting-block-head small { font-size:12px;color:var(--muted);font-weight:400;line-height:1.55; }
+.growth-direction-label { display:grid;gap:3px;margin:0 0 12px; }
+.growth-direction-label strong { font-size:13px;color:var(--green-deep); }
+.growth-direction-label small { font-size:11px;color:var(--ink-2);line-height:1.5; }
+#updateCycleThemeForm[hidden] { display:none !important; }
+@media(max-width:760px) {
+  #cycleGoalBlock { grid-template-columns:minmax(0,1fr); }
+  #cycleGoalBlock .setting-action { justify-self:stretch;width:100%;white-space:normal; }
+  #cycleGoalBlock .cycle-goal-summary p {font-size:16px;}
+}
