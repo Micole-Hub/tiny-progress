@@ -52,7 +52,13 @@ const html = fs.readFileSync(path.join(root,"index.html"),"utf8");
 const css = fs.readFileSync(path.join(root,"style.css"),"utf8");
 assert(!page.includes('data-footprint-next'));
 assert(/<button\b[^>]*id="footprintEntry"[^>]*>[\s\S]*?本週足跡[\s\S]*?<\/button>/.test(html));
-assert(css.includes('--bg: #e9f0e8'));
-assert(css.includes('linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px)'));
-console.log("PASS UI: no early archive button, note entry, pale sage page background");
+// Test the final effective QA layer, not outdated theme rules earlier in CSS.
+const cleanTheme = css.slice(css.lastIndexOf("QA: clean warm-paper base"));
+assert(cleanTheme.includes("html, body { background: #F2F1EB; }"),
+  "QA warm-paper page background is missing");
+assert(cleanTheme.includes("background: #FFFEFA;"),
+  "QA warm-white card background is missing");
+assert(!cleanTheme.includes("#D4B8B4"),
+  "rejected gray-pink surface remains in active QA theme");
+console.log("PASS UI: no early archive button, note entry, warm-paper QA theme");
 console.log(`${passed+1} weekly-reflection groups passed`);
