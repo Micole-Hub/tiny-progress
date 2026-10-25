@@ -5145,7 +5145,7 @@ body {background:linear-gradient(180deg,#f8f7f3 0,var(--bg) 440px)}
   --surface-3: #E9EFE8;
   --ink: #4C544D;
   --ink-2: #626B64;
-  --muted: #70796F;
+  --muted: #687166;
   --line: #E3DDD3;
   --green: #7E927D;
   --green-deep: #5F7562;
@@ -5201,7 +5201,7 @@ body { background: linear-gradient(180deg, #F8F6F1 0, var(--bg) 460px); }
 .page[data-page="home"] .home-head .eyebrow,
 .page[data-page="history"] .history-heading-row .eyebrow,
 .page[data-page="settings"] .settings-heading-row .eyebrow {
-  color: var(--nav-coffee);
+  color: #76665A;
 }
 .page[data-page="home"] .home-head .eyebrow::before,
 .page[data-page="history"] .history-heading-row .eyebrow::before,
@@ -5257,7 +5257,7 @@ body { background: linear-gradient(180deg, #F8F6F1 0, var(--bg) 460px); }
   color: var(--green-deep);
   border-color: var(--line);
 }
-.calendar-month-label { color: #A96E69; }
+.calendar-month-label { color: #985C58; }
 .calendar-month-label::before { background: var(--morandi-rose); }
 .wk::after, .dy::after,
 .week-strip .wk.sel::after,
@@ -5266,7 +5266,7 @@ body { background: linear-gradient(180deg, #F8F6F1 0, var(--bg) 460px); }
   background: var(--today);
   border-color: var(--surface);
 }
-.bottom-nav .nav-item.active { color: var(--nav-coffee); }
+.bottom-nav .nav-item.active { color: #76665A; }
 .bottom-nav .nav-item::after,
 .bottom-nav .nav-item.active::after { background: var(--nav-coffee); }
 .page[data-page="settings"] .manage-list,
