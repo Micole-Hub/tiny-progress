@@ -23,7 +23,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261024-week-first-v1" />
+    <link rel="stylesheet" href="style.css?v=20261025-goal-direction-v1" />
     <link rel="stylesheet" href="github-page/milestones.css?v=20261024-journey-clean-v2" />
   </head>
   <body>
@@ -81,9 +81,8 @@
           <section class="growth-banner soft-card" id="growthBanner">
             <div class="growth-copy">
               <details class="growth-goal-details" id="growthGoalDetails">
-                <summary><span class="section-kicker">12 週目標</span><strong class="direction-text" id="directionText"></strong><span class="growth-goal-arrow" aria-hidden="true">⌄</span></summary>
-                <div class="growth-goal-content">
-                  <div class="direction-tags" id="directionTags"></div>
+                <summary><span class="section-kicker">本輪目標</span><strong class="direction-text" id="directionText"></strong><span class="growth-goal-arrow" aria-hidden="true">⌄</span></summary>
+                <div class="growth-goal-content"><div class="growth-direction-label"><strong>成長方向</strong><small>完成任務後，葉子會累積在對應方向裡。</small></div><div class="direction-tags" id="directionTags"></div>
                   <div class="tank-hint" id="tankHint" hidden></div>
                 </div>
               </details>
@@ -210,7 +209,7 @@
                 </div>
               </div>
                 <label
-                  ><span>想前進的方向</span
+                  ><span>成長方向</span
                   ><select id="quickGoal"></select
                 ></label>
                 <label
@@ -270,20 +269,10 @@
           </div>
 
           <section class="settings-list">
-            <div class="setting-block soft-card">
-              <div class="setting-block-head">
-                <span
-                  ><strong>12 週計畫</strong
-                  ></span
-                >
-              </div>
-              <button
-                type="button"
-                id="openCycleManagement"
-                class="secondary-button setting-action"
-              >
-                管理 12 週計畫
-              </button>
+            <div class="setting-block soft-card" id="cycleGoalBlock">
+              <div class="setting-block-head"><span><strong>本輪目標</strong><small>這 12 週最想達成的一件重要成果</small></span></div>
+              <div class="cycle-goal-summary"><p id="settingsCycleGoal" aria-live="polite">載入中…</p><small>整輪計畫的終點；下方「成長方向」記錄平時的累積。</small></div>
+              <button type="button" id="openCycleManagement" class="secondary-button setting-action">編輯目標與管理計畫</button>
             </div>
             <div class="setting-row soft-card toggle-setting">
               <span
@@ -308,10 +297,9 @@
             <div class="setting-block soft-card" id="directionBlock">
               <div class="setting-block-head">
                 <span
-                  ><strong>我的方向</strong
-                  ></span
+                  ><strong>成長方向</strong><small>1～3 個持續投入的方向，完成任務就累積葉子</small></span
                 ><button class="text-button" id="addDirectionBtn" type="button">
-                  ＋ 新增
+                  ＋ 新增方向
                 </button>
               </div>
               <div id="directionList" class="manage-list"></div>
@@ -427,7 +415,7 @@
           >名稱<input id="editTaskTitle" type="text" maxlength="200"
         /></label>
         <label class="dialog-label"
-          >想前進的方向<select id="editTaskGoal"></select
+          >成長方向<select id="editTaskGoal"></select
         ></label>
         <label class="dialog-label"
           >分類<select id="editTaskCategory"></select
@@ -554,7 +542,7 @@
           >分類<select id="recurringCategory"></select
         ></label
         ><label class="dialog-label"
-          >想前進的方向<select id="recurringGoal"></select></label
+          >成長方向<select id="recurringGoal"></select></label
         ><label class="dialog-label"
           >頻率<select id="recurringFrequency">
             <option value="daily">每天</option>
@@ -577,10 +565,10 @@
 
     <dialog id="directionDialog">
       <form method="dialog" class="dialog-card" id="directionForm">
-        <p class="eyebrow">方向</p>
-        <h3 id="directionDialogTitle">新增方向</h3>
+        <p class="eyebrow">成長方向</p>
+        <h3 id="directionDialogTitle">新增成長方向</h3>
         <label class="dialog-label"
-          >名稱<input
+          >方向名稱<input
             id="directionNameInput"
             type="text"
             required
@@ -854,7 +842,7 @@
         </button>
         <h3>12 週計畫管理</h3>
         <p class="dialog-help">
-          平常安排每週事項不需要進來。這裡只用來切換或建立 12 週計畫，以及調整週次日期。
+          可以修改本輪目標、查看其他週期或建立新計畫。一般的任務安排仍在首頁完成。
         </p>
         <p id="cycleMessage" role="status"></p>
         <button
@@ -875,6 +863,12 @@
             回到目前計畫
           </button>
         </div>
+        <form id="updateCycleThemeForm" hidden>
+          <h4 id="updateCycleThemeHeading">編輯本輪目標</h4>
+          <p class="dialog-help">只修改選定計畫的目標文字，不會重新開始週期或清空任務。</p>
+          <label class="dialog-label">本輪目標<input id="updateCycleThemeInput" type="text" maxlength="200" required autocomplete="off" placeholder="例如：完成可以公開使用的 App"></label>
+          <button class="primary-button" id="updateCycleThemeSubmit" type="submit">儲存目標</button>
+        </form>
         <form id="newCycleForm">
           <h4>開始新的 12 週計畫</h4>
           <p class="dialog-help">
@@ -883,7 +877,7 @@
           <label class="dialog-label"
             >新計畫開始日期<input type="date" id="newCycleDate" required /></label
           ><label class="dialog-label"
-            >這 12 週想完成的方向<input
+            >本輪目標<input
               id="newCycleTheme"
               maxlength="200"
               required /></label
@@ -927,10 +921,10 @@
     </dialog>
     <script src="github-page/config.js"></script>
     <script src="github-page/domain.js?v=20261022-sage-reflection-v1"></script>
-    <script src="github-page/connection.js?v=20261023-remember-device-v1"></script>
+    <script src="github-page/connection.js?v=20261025-goal-direction-v1"></script>
     <script src="github-page/milestones.js?v=20261024-journey-clean-v2"></script>
-    <script src="script.js?v=20261024-week-first-v1"></script>
+    <script src="script.js?v=20261025-goal-direction-v1"></script>
     <script src="github-page/pwa.js?v=20261024-week-first-v1" defer></script>
-    <script src="github-page/cycle-management.js"></script>
+    <script src="github-page/cycle-management.js?v=20261025-goal-direction-v1"></script>
   </body>
 </html>
