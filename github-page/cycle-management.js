@@ -5,6 +5,16 @@
   const show = (e) => {
     message.textContent = e?.message || String(e);
   };
+  let cycleRecords = [];
+  function renderGoalEditor() {
+    const selected = Number($("#cycleSelect").value);
+    const row = cycleRecords.find((c) => Number(c.cycleNumber) === selected);
+    $("#updateCycleThemeForm").hidden = !row;
+    $("#updateCycleThemeHeading").textContent = row
+      ? `編輯第 ${selected} 輪的本輪目標` : "編輯本輪目標";
+    $("#updateCycleThemeInput").value = row?.theme || "";
+  }
+  $("#cycleSelect").addEventListener("change", renderGoalEditor);
   function setEnabled(enabled, hasCycles = false) {
     const select = $("#cycleSelect");
     select.disabled = !enabled || !hasCycles;
@@ -16,6 +26,9 @@
     $("#newCycleForm")
       .querySelectorAll("input,select,button")
       .forEach((el) => (el.disabled = !enabled));
+    $("#updateCycleThemeForm")
+      .querySelectorAll("input,select,button")
+      .forEach((el) => (el.disabled = !enabled || !hasCycles));
     $("#postponeForm")
       .querySelectorAll("input,select,button")
       .forEach((el) => (el.disabled = !enabled));
@@ -53,6 +66,11 @@
           )
           .join("")
       : `<option value="">目前沒有可選週期</option>`;
+    cycleRecords = validCycles;
+    const current = TPConnection.currentCycleNumber();
+    if (validCycles.some((c) => Number(c.cycleNumber) === current))
+      $("#cycleSelect").value = String(current);
+    renderGoalEditor();
     const validWeeks = (Array.isArray(weeks) ? weeks : []).filter(
       (w) => w && normalizeDateValue(w.weekEnd),
     );
@@ -66,6 +84,8 @@
   }
   $("#openCycleManagement").onclick = async () => {
     if (TPConnection.demo) {
+      cycleRecords = [];
+      $("#updateCycleThemeForm").hidden = true;
       emptyChoices("教學模式不提供正式週期");
       setEnabled(false);
       $("#cycleSyncSettings").hidden = true;
@@ -74,6 +94,8 @@
       $("#cycleDialog").showModal();
       return;
     }
+    cycleRecords = [];
+    $("#updateCycleThemeForm").hidden = true;
     emptyChoices("正在載入週期…");
     setEnabled(false);
     $("#cycleSyncSettings").hidden = true;
@@ -113,6 +135,31 @@
       $("#cycleDialog").close();
     } catch (e) {
       show(e);
+    }
+  };
+  $("#updateCycleThemeForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const selected = Number($("#cycleSelect").value);
+    const theme = $("#updateCycleThemeInput").value.trim();
+    const row = cycleRecords.find((c) => Number(c.cycleNumber) === selected);
+    if (!row || !theme) return show("請先選擇計畫並填寫本輪目標。");
+    const button = $("#updateCycleThemeSubmit");
+    button.disabled = true;
+    message.textContent = "正在儲存本輪目標…";
+    try {
+      await TPConnection.manage(`/cycles/${selected}/theme`, {
+        method: "PATCH", body: { theme },
+      });
+      await choices();
+      $("#cycleSelect").value = String(selected);
+      renderGoalEditor();
+      if (TPConnection.currentCycleNumber() === selected)
+        await TPConnection.refreshCycleTheme(true);
+      message.textContent = "本輪目標已更新，任務與週次沒有重置。";
+    } catch (error) {
+      show(error);
+    } finally {
+      button.disabled = false;
     }
   };
   $("#newCycleForm").onsubmit = async (e) => {
