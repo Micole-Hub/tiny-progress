@@ -99,20 +99,25 @@ console.log("PASS: History renders only completed weeks, uses shared archive rul
 const themeCss = read("style.css");
 const journeyCss = read("github-page/milestones.css");
 const htmlUi = read("index.html");
-const forest = themeCss.slice(themeCss.lastIndexOf("TinyProgress | Morandi forest QA theme"));
-assert.ok(forest, "Morandi forest theme is missing");
-for (const token of ["--bg: #F4F1EB", "--surface: #FBF8F3", "--green-deep: #5F7562",
-                     "--today: #B97C76", "--nav-coffee: #8B7A6B"]) {
-  assert.ok(forest.includes(token), "Morandi color token missing: " + token);
-}
-assert.match(journeyCss, /Morandi forest continuity/);
-assert.match(read("script.js"), /title: "莫蘭迪森林"/);
-assert.match(read("script.js"), /title: "深色經典"/);
-assert.match(read("script.js"), /fill="\\$\\{l\\.color\\}"/);
+const forest = themeCss.slice(themeCss.lastIndexOf("TinyProgress | Morandi forest from Just Free Slide"));
+assert.ok(forest.length > 5000, "User-sourced Morandi forest theme missing");
+for (const token of [
+  "--bg: #EFF0EA", "--surface: #F4EBE4", "--surface-3: #CCD2CC",
+  "--green-deep: #4E6E62", "--today: #976666", "--nav-coffee: #8C736F"
+]) assert.ok(forest.includes(token), "Missing sourced color: " + token);
+assert.match(journeyCss, /User-sourced Morandi forest/);
+const paletteSource = read("script.js");
+for (const color of ["#AAB8AB", "#D4B8B4", "#728A7A", "#8C736F", "#CCD2CC"])
+  assert.ok(paletteSource.includes(color), "Missing sourced color option: " + color);
+assert.match(paletteSource, /title: "莫蘭迪森林"/);
+assert.match(paletteSource, /title: "深色經典"/);
+assert.match(paletteSource, /fill="\\$\\{l\\.color\\}"/);
 const themeManifest = JSON.parse(read("manifest.webmanifest"));
-assert.equal(themeManifest.background_color, "#F4F1EB");
-assert.equal(themeManifest.theme_color, "#5F7562");
+assert.equal(themeManifest.background_color, "#EFF0EA");
+assert.equal(themeManifest.theme_color, "#4E6E62");
+assert.match(htmlUi, /name="theme-color" content="#4E6E62"/);
+assert.match(read("app-icon.svg"), /fill="#4E6E62"/);
 assert.match(htmlUi, /id="homeModeControl"/);
-console.log("PASS: Morandi forest tokens, PWA colors and original custom-color options are preserved");
+console.log("PASS: user-sourced Morandi forest palette, tree colors, PWA theme, existing custom options");
 
 console.log("NOTE: cloud save, LINE delivery, schedule, PWA install and multi-device sync still require QA integration tests.");
