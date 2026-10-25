@@ -23,8 +23,8 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261025-goal-direction-v1" />
-    <link rel="stylesheet" href="github-page/milestones.css?v=20261024-journey-clean-v2" />
+    <link rel="stylesheet" href="style.css?v=20261025-history-journal-v1" />
+    <link rel="stylesheet" href="github-page/milestones.css?v=20261025-history-journal-v1" />
   </head>
   <body>
     <div class="app-shell">
@@ -232,27 +232,29 @@
           aria-labelledby="historyTitle"
         >
           <div class="simple-page-head history-heading-row">
-            <div>
+            <div class="history-heading-copy">
               <p class="eyebrow" id="historyCycleLabel">Cycle 1</p>
-              <h1 id="historyTitle">一週一週長出來的樣子</h1>
-              
+              <h1 id="historyTitle">每週足跡</h1>
+              <p class="history-head-description">走過的每一週，都值得好好保存。</p>
             </div>
             <button class="secondary-button" id="yearReviewBtn" type="button">
               本輪回顧
             </button>
           </div>
-          <section
-            class="history-tanks soft-card"
-            id="historyTanks"
-            hidden
-          ></section>
-          <section class="tp-awards-section" id="tpMilestones" aria-label="十二週進度小徑"></section>
-          <section class="history-grid" id="historyGrid"></section>
-          <section
-            class="history-detail soft-card"
-            id="historyDetail"
-            hidden
-          ></section>
+          <section class="tp-awards-section" id="tpMilestones" aria-label="十二週成長旅程"></section>
+          <div class="history-archive-head">
+            <div>
+              <p class="history-archive-kicker">WEEKLY JOURNAL</p>
+              <h2>每週紀錄</h2>
+            </div>
+            <p id="historyArchiveSubtitle">每週結束後，這裡會留下當週的成果與感想。</p>
+          </div>
+          <section class="history-grid" id="historyGrid" aria-label="已結束週次的紀錄"></section>
+          <section class="history-detail soft-card" id="historyDetail" hidden aria-live="polite"></section>
+          <details class="history-directions-wrap" id="historyDirectionsWrap" hidden>
+            <summary>查看成長方向的累積 <span aria-hidden="true">⌄</span></summary>
+            <section class="history-tanks" id="historyTanks"></section>
+          </details>
         </section>
 
         <section
@@ -900,8 +902,8 @@
     <script src="github-page/config.js"></script>
     <script src="github-page/domain.js?v=20261022-sage-reflection-v1"></script>
     <script src="github-page/connection.js?v=20261025-goal-direction-v1"></script>
-    <script src="github-page/milestones.js?v=20261024-journey-clean-v2"></script>
-    <script src="script.js?v=20261025-goal-direction-v1"></script>
+    <script src="github-page/milestones.js?v=20261025-history-journal-v1"></script>
+    <script src="script.js?v=20261025-history-journal-v1"></script>
     <script src="github-page/pwa.js?v=20261024-week-first-v1" defer></script>
     <script src="github-page/cycle-management.js?v=20261025-weekly-start-v1"></script>
   </body>
