@@ -119,7 +119,7 @@ const paletteBlock = paletteSource.match(/const CATEGORY_PALETTE_GROUPS = \[([\s
 assert.ok(paletteBlock, "category preset palettes are missing");
 const presets = [...paletteBlock[1].matchAll(/\{ title: "([^"]+)", colors: \[([\s\S]*?)\]\s*\}/g)];
 assert.deepEqual(presets.map((entry) => entry[1]), [
-  "莫蘭迪森林", "海霧藍調", "奶油暖光", "馬卡龍果漾", "文青陶土",
+  "莫蘭迪森林", "晴空海岸", "暖陽果實", "馬卡龍果漾", "文青插畫",
 ], "category preset group names/order should match approved QA");
 for (const group of presets) {
   assert.equal((group[2].match(/#[0-9A-Fa-f]{6}/g) || []).length, 12,
@@ -129,6 +129,15 @@ assert.ok(!paletteBlock[1].includes('title: "明亮活力"'));
 assert.ok(!paletteBlock[1].includes('title: "深色經典"'));
 const uniqueColors = presets.flatMap(group => group[2].match(/#[0-9A-Fa-f]{6}/g) || []);
 assert.equal(new Set(uniqueColors).size, 60, "the five palettes should offer 60 distinct colors");
+const colorRgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+for (const [name, swatches] of presets.map(([_, name, contents]) => [name, contents.match(/#[0-9A-Fa-f]{6}/g) || []])) {
+  for (let i = 1; i < swatches.length; i++) {
+    const before = colorRgb(swatches[i - 1]), after = colorRgb(swatches[i]);
+    const distance = Math.hypot(...before.map((v, channel) => v - after[channel]));
+    assert.ok(distance >= 60, name + ": adjacent swatches look too similar at " + (i - 1) + "/" + i);
+  }
+}
+
 assert.match(paletteSource, /fill="\$\{morandiTone\(l\.color\)\}"/);
 assert.match(paletteSource, /morandiTone\(categoryById\(t\.categoryId\)/);
 const renderCards = read("backend/server.js");
