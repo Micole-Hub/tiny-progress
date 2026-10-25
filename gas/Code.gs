@@ -477,7 +477,7 @@ function executeTinyProgressAction(action, body) {
     );
   if (action === "archive-week") return archiveWeekInSheet(body);
   if (action === "postpone-current-week")
-    return postponeCurrentWeekInSheet(body);
+    throw new Error("每個 Week 固定 7 天；未完成的任務請使用移到其他週。");
   if (action === "update-current-week-plan")
     return updateCurrentWeekPlanInSheet(body);
   if (action === "update-week-plan") return updateWeekPlanInSheet(body);
