@@ -60,13 +60,14 @@ const CATEGORY_PALETTE_GROUPS = [
     "#7F9C87", "#6E9F92", "#A5BB8E", "#C3AD86", "#BA8E81", "#C8A2A5",
     "#A58EA9", "#819CAD", "#B7B39B", "#9FADAB", "#8BA3C7", "#CAAEA5",
   ] },
-  { title: "明亮活力", colors: [
-    "#E76F51", "#F4A261", "#E9C46A", "#83C785", "#38A3A5", "#57B6D4",
-    "#6C9EF8", "#9580DE", "#D57AC8", "#F07FA1", "#E8A838", "#75B7A7",
+  // Bright macaron colors are for color selection; tree leaves retain Morandi rendering.
+  { title: "馬卡龍果漾", colors: [
+    "#F39BAA", "#FFB3A4", "#F4B27E", "#F6CF71", "#E9DF84", "#A9D68E",
+    "#7CCFA6", "#6ED1CE", "#85C7ED", "#96ACEF", "#BAA1EA", "#E7A2D6",
   ] },
-  { title: "深色經典", colors: [
-    "#4F5947", "#3D7055", "#256B64", "#285E79", "#43577C", "#645184",
-    "#7A4F73", "#93566A", "#965D45", "#8D7560", "#6B727A", "#404A53",
+  { title: "馬卡龍奶霜", colors: [
+    "#F4BEC8", "#F7C2AD", "#F2C7A1", "#F9DE99", "#D6E7A0", "#AFE2B8",
+    "#B1E5D9", "#A9DCE9", "#B7D3F3", "#C7B9EC", "#DCC0EB", "#F0BDE1",
   ] },
 ];
 function normalizeHexColor(value) {
@@ -642,7 +643,7 @@ function renderDirectionList() {
 let editingDirectionId = null,
   directionPickColor = PALETTE[0];
 function renderDirectionPalette() {
-  // 與「分類與顏色」共用同一組 48 色、選取樣式與 HEX 色彩規則。
+  // 與「分類與顏色」共用預設色盤、選取樣式與 HEX 色彩規則。
   renderCategoryPresetPalette("directionPalette", directionPickColor, (color) => {
     setDirectionColor(color);
   });
