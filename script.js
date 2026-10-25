@@ -670,9 +670,9 @@ function renderHistoryTanks(finishedWeeks = []) {
     finished = new Set(finishedWeeks),
     counts = directionLeafCounts((week) => finished.has(week)),
     box = $("#historyTanks");
-  box.hidden = !ds.length || !finished.size;
+  $("#historyDirectionsWrap").hidden = !ds.length || !finished.size;
   box.innerHTML =
-    `<p class="field-label">方向水缸</p>` +
+    `<p class="field-label">已結束週次的成長方向</p>` +
     ds
       .map((d) => {
         const n = counts[d.name] || 0,
@@ -2230,19 +2230,37 @@ function renderHistory() {
   const historyOpenDate = firstWeekDates.length
     ? formatShortDate(D.addDays(firstWeekDates.at(-1), 1))
     : "第一週結束後";
+  $("#historyArchiveSubtitle").textContent = cards.length
+    ? `已收藏 ${cards.length} 週的成果。選一週，看看當時留下了什麼。`
+    : `預計 ${historyOpenDate} 才會留下第一份每週紀錄。`;
   $("#historyGrid").innerHTML = cards.length
-    ? cards
-        .map((x, idx) => {
-          const done = x.leaves.length;
-          const tree = treeSvg(
-            x.week,
-            x.leaves,
-            x.map ? { slotOf: (k) => x.map[k], hidden: flyingKeys } : {},
-          );
-          return `<button class="history-card soft-card" type="button" style="--i:${idx}" data-history-week="${x.week}"><div class="history-card-copy"><h3>Week ${x.week}</h3><div class="history-statline"><strong>${done}</strong><span>片葉子 · ${done}/${Math.max(x.total, done)}</span></div></div><div class="history-mini-tree">${tree}</div></button>`;
-        })
-        .join("")
-    : `<div class="history-empty history-empty-compact"><span aria-hidden="true">↗</span><strong>歷史紀錄將於 ${historyOpenDate} 開始</strong></div>`;
+    ? cards.map((x) => {
+        const done = x.leaves.length;
+        const dates = Object.values(weekDateMap(x.week));
+        const dateRange = dates.length
+          ? `${formatShortDate(dates[0])}－${formatShortDate(dates.at(-1))}`
+          : "";
+        const tree = treeSvg(
+          x.week, x.leaves,
+          x.map ? { slotOf: (k) => x.map[k], hidden: flyingKeys } : {},
+        );
+        return `<button class="history-card soft-card" type="button" data-history-week="${x.week}" aria-pressed="false" aria-label="查看 Week ${x.week} 的歷史紀錄">
+          <span class="history-card-index">W${String(x.week).padStart(2, "0")}</span>
+          <div class="history-card-copy">
+            <span class="history-card-overline">已完成的週次</span>
+            <h3>Week ${x.week}</h3>
+            <p class="history-card-date">${esc(dateRange)}</p>
+            <div class="history-statline"><strong>${done}</strong><span>片葉子</span></div>
+          </div>
+          <div class="history-mini-tree" aria-hidden="true">${tree}</div>
+          <span class="history-card-arrow" aria-hidden="true">↗</span>
+        </button>`;
+      }).join("")
+    : `<div class="history-empty history-journal-empty">
+        <span class="history-empty-leaf" aria-hidden="true">✦</span>
+        <div><strong>第一份每週紀錄，還在路上</strong>
+        <p>${esc(historyOpenDate)} 起，這裡會收好已結束週次的任務成果和感想。現在不會提前產生歷史紀錄。</p></div>
+      </div>`;
   $$('[data-history-week]').forEach((b) =>
     b.addEventListener("click", () => {
       const w = Number(b.dataset.historyWeek);
@@ -2327,10 +2345,10 @@ function markHistorySelected() {
   const g = $("#historyGrid");
   g.classList.toggle("has-selection", historySelected !== null);
   $$("#historyGrid .history-card").forEach((c) =>
-    c.classList.toggle(
+    (c.classList.toggle(
       "selected",
       Number(c.dataset.historyWeek) === historySelected,
-    ),
+    ), c.setAttribute("aria-pressed", String(Number(c.dataset.historyWeek) === historySelected))),
   );
 }
 function closeHistory() {
@@ -2399,8 +2417,8 @@ function showHistoryWeek(week) {
     leftover,
     daily,
   );
-  // Decoration only. Uses existing weekly history without writing back to state.
-  window.TPMilestones?.renderWeekKeepsake(box, state, week);
+  // The detailed weekly journal is now the single source of review presentation.
+  // No duplicated keepsake card is inserted above the actual records.
   $("[data-close-history]")?.addEventListener("click", closeHistory);
   $("[data-save-reflection]")?.addEventListener("click", () => {
     const good = $("#reviewGood").value.trim(),
@@ -2472,10 +2490,36 @@ function historyDetailHtml(
   } else if (saved) {
     reviewBlock = `<div class="history-section"><p class="field-label">感想</p><div class="history-readonly-review">${r.good ? `<p><small>這週做得不錯的地方</small><br>${esc(r.good)}</p>` : ""}${r.adjust ? `<p><small>下週想調整的地方</small><br>${esc(r.adjust)}</p>` : ""}</div></div>`;
   }
-  const encouragement = saved
-    ? `<p>${encouragementMessage(week, count)}</p>`
+  const dates = Object.values(weekDateMap(week));
+  const range = dates.length
+    ? `${formatShortDate(dates[0])}－${formatShortDate(dates.at(-1))}`
     : "";
-  return `<div class="history-detail-head"><span>Week ${week}${archived ? " · 已封存" : ""}</span><button class="text-button" type="button" data-close-history>收起</button></div><h3>這週留下來的進度</h3><div class="history-section"><p class="field-label">完成 ${count} 次</p>${daily ? `<p class="daily-line">${esc(daily)}</p>` : ""}${completed.length ? completed.map(line).join("") : `<div class="empty-note">這週還沒有完成紀錄</div>`}</div>${left}${replanned.length ? `<div class="history-section"><p class="field-label">移到其他週</p>${replanned.map((x) => `<div class="history-line history-change"><span>→</span><span>${esc(x)}</span></div>`).join("")}</div>` : ""}${deleted.length ? `<div class="history-section"><p class="field-label">刪除</p>${deleted.map((x) => `<div class="history-line history-delete"><span>×</span><span>${esc(x)}</span></div>`).join("")}</div>` : ""}${reviewBlock}${encouragement}`;
+  const doneLines = completed.length
+    ? completed.map(line).join("")
+    : `<p class="history-no-results">這週還沒有完成紀錄。</p>`;
+  const completedSection = `<section class="history-section history-completed-section">
+      <div class="history-section-heading"><h4>完成的事情</h4><span>${count} 片葉子</span></div>
+      ${daily ? `<p class="daily-line">${esc(daily)}</p>` : ""}
+      <div class="history-completed-list">${doneLines}</div>
+    </section>`;
+  const changes = `${left}
+    ${replanned.length ? `<section class="history-section"><p class="field-label">移到其他週</p>${replanned.map((x) => `<div class="history-line history-change"><span>→</span><span>${esc(x)}</span></div>`).join("")}</section>` : ""}
+    ${deleted.length ? `<section class="history-section"><p class="field-label">已刪除</p>${deleted.map((x) => `<div class="history-line history-delete"><span>×</span><span>${esc(x)}</span></div>`).join("")}</section>` : ""}`;
+  const reflectionColumn = reviewBlock
+    ? `<aside class="history-detail-reflection">${reviewBlock}</aside>`
+    : "";
+  const encouragement = saved
+    ? `<p class="history-encouragement">${encouragementMessage(week, count)}</p>` : "";
+  return `<div class="history-detail-head">
+      <div><p class="history-detail-kicker">WEEK ${String(week).padStart(2, "0")} · ${esc(range)}</p>
+      <h3>第 ${week} 週的紀錄</h3>
+      <p class="history-detail-lede">完成的、調整過的，都留在這一週。</p></div>
+      <button class="text-button" type="button" data-close-history aria-label="收起第 ${week} 週紀錄">收起 ↑</button>
+    </div>
+    <div class="history-detail-layout${reviewBlock ? " has-reflection" : ""}">
+      <div class="history-detail-results">${completedSection}${changes}</div>
+      ${reflectionColumn}
+    </div>${encouragement}`;
 }
 function renderSettings() {
   $$("[data-mode]").forEach((b) => {
