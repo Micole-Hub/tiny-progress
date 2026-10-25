@@ -48,10 +48,6 @@
           data-page="home"
           aria-labelledby="homeTitle"
         >
-          <div class="cycle-pulse" id="cyclePulse" role="status" aria-live="off">
-            <div class="cycle-pulse-copy"><strong id="cyclePulseLabel">Week 1 / 12</strong><span id="cyclePulseNote">本週進度</span></div>
-            <div class="cycle-pulse-track" aria-hidden="true"><span id="cyclePulseFill"></span></div>
-          </div>
           <div class="home-head">
             <p class="eyebrow" id="homeEyebrow"></p>
             <h1 id="homeTitle">這週慢慢長大</h1>
@@ -70,14 +66,6 @@
               回到本週
             </button>
           </div>
-          <button
-            class="footprint-entry"
-            id="footprintEntry"
-            type="button"
-            hidden
-          >
-            本週足跡
-          </button>
 
           <section class="rest-banner soft-card" id="restBanner" hidden aria-label="計畫休息期間">
             <span class="rest-banner-icon" aria-hidden="true">🌿</span>
@@ -228,6 +216,9 @@
                 ></label>
               </div>
             </form>
+              <div class="footprint-shortcut">
+                <button class="footprint-entry" id="footprintEntry" type="button" hidden>本週足跡</button>
+              </div>
             </div>
 
           </section>
