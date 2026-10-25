@@ -4979,3 +4979,20 @@ body {background:linear-gradient(180deg,#f8f7f3 0,var(--bg) 440px)}
   .page[data-page="history"] .history-card {transition:none;}
   .page[data-page="history"] .history-directions-wrap > summary > span {transition:none;}
 }
+
+/* Ensure either view uses the same clear green active state. */
+.page[data-page="home"] #homeModeControl button[data-mode] {
+  background: transparent;
+  color: var(--ink-2);
+  box-shadow: none;
+}
+.page[data-page="home"] #homeModeControl button[data-mode][aria-pressed="true"],
+.page[data-page="home"] #homeModeControl button[data-mode].active {
+  background: var(--green-deep);
+  color: #fff;
+  box-shadow: 0 2px 7px rgba(47,73,51,.12);
+}
+.page[data-page="home"] #homeModeControl button[data-mode][aria-pressed="false"]:not(.active) {
+  background: transparent;
+  color: var(--ink-2);
+}
