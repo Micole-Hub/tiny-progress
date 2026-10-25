@@ -96,4 +96,23 @@ assert.match(read("script.js"), /historyWeekFinished\(week\)/);
 assert.match(read("script.js"), /history-detail-layout/);
 console.log("PASS: History renders only completed weeks, uses shared archive rules, and keeps its weekly journal layout");
 
+const themeCss = read("style.css");
+const journeyCss = read("github-page/milestones.css");
+const htmlUi = read("index.html");
+const forest = themeCss.slice(themeCss.lastIndexOf("TinyProgress | Morandi forest QA theme"));
+assert.ok(forest, "Morandi forest theme is missing");
+for (const token of ["--bg: #F4F1EB", "--surface: #FBF8F3", "--green-deep: #5F7562",
+                     "--today: #B97C76", "--nav-coffee: #8B7A6B"]) {
+  assert.ok(forest.includes(token), "Morandi color token missing: " + token);
+}
+assert.match(journeyCss, /Morandi forest continuity/);
+assert.match(read("script.js"), /title: "莫蘭迪森林"/);
+assert.match(read("script.js"), /title: "深色經典"/);
+assert.match(read("script.js"), /fill="\\$\\{l\\.color\\}"/);
+const themeManifest = JSON.parse(read("manifest.webmanifest"));
+assert.equal(themeManifest.background_color, "#F4F1EB");
+assert.equal(themeManifest.theme_color, "#5F7562");
+assert.match(htmlUi, /id="homeModeControl"/);
+console.log("PASS: Morandi forest tokens, PWA colors and original custom-color options are preserved");
+
 console.log("NOTE: cloud save, LINE delivery, schedule, PWA install and multi-device sync still require QA integration tests.");
