@@ -2526,7 +2526,7 @@ function renderCategoryList() {
           `<button type="button" class="category-color-trigger" data-open-category-color="${esc(c.id)}" aria-label="調整 ${esc(c.name)} 的顏色" title="調整顏色"><span class="category-color-sample" style="--category-color:${color}"></span></button>` +
           `<div class="category-compact-copy"><strong>${esc(c.name)}</strong><small>${color}</small></div>` +
           `<div class="category-compact-actions">` +
-          `<button type="button" class="category-action-btn" data-edit-category="${esc(c.id)}">改名稱</button>` +
+          `<button type="button" class="category-action-btn" data-edit-category="${esc(c.id)}">編輯</button>` +
           `<button type="button" class="category-action-btn category-color-action" data-open-category-color="${esc(c.id)}">調色</button>` +
           `</div></div>`;
       }).join("")
