@@ -2388,7 +2388,7 @@ function reflectionSaved(v) {
 function markHistorySelected() {
   const g = $("#historyGrid");
   g.classList.toggle("has-selection", historySelected !== null);
-  $("#historyGrid .history-card").forEach((c) => {
+  $$("#historyGrid .history-card").forEach((c) => {
     const selected = Number(c.dataset.historyWeek) === historySelected;
     c.classList.toggle("selected", selected);
     c.setAttribute("aria-pressed", String(selected));
