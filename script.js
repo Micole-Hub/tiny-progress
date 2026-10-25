@@ -479,12 +479,6 @@ function renderAll() {
   saveState();
 }
 function renderHeader() {
-  const pulse = $("#cyclePulseLabel");
-  if (pulse) pulse.textContent = `Week ${CURRENT_WEEK} / 12`;
-  const note = $("#cyclePulseNote");
-  if (note) note.textContent = isCycleResting() ? "尚未開始" : "目前週次";
-  const fill = $("#cyclePulseFill");
-  if (fill) fill.style.width = `${isCycleResting() ? 0 : Math.min(100, CURRENT_WEEK / 12 * 100)}%`;
   $("#historyCycleLabel").textContent = `Cycle ${state.cycle.number}`;
   $("#homeEyebrow").textContent =
     `Cycle ${state.cycle.number} · ${state.mode === "day" ? "每日檢視" : "整週檢視"}`;
@@ -711,10 +705,10 @@ function renderRestHome() {
   $("#workHeader").hidden = true;
   $("#progressTrack").hidden = true;
   $("#progressSummary").hidden = true;
-  $("#weekStrip").hidden = false;
+  $("#weekStrip").hidden = dayMode;
   $("#dayStrip").hidden = !dayMode;
-  renderWeekStrip();
   if (dayMode) renderDayStrip();
+  else renderWeekStrip();
   // The week range / future status now lives directly above the date strip.
   // Keep the legacy element hidden so information is not repeated at the bottom.
   $("#restDateNote").hidden = true;
@@ -808,10 +802,10 @@ function renderHome() {
   $("#workHint").textContent = archived ? "這週已封存，請到 History 查看" : "";
   $("#workHint").hidden = !archived;
   $("#quickTitle").placeholder = "加入本週事項";
-  $("#weekStrip").hidden = false;
+  $("#weekStrip").hidden = dayMode;
   $("#dayStrip").hidden = !dayMode;
-  renderWeekStrip();
   if (dayMode) renderDayStrip();
+  else renderWeekStrip();
   // 只有休息日預設收合任務。手動展開後，使用一般的任務欄位和進度顯示。
   // 非休息日永遠正常顯示任務欄位，不顯示收合按鈕。
   $("#workCard").classList.toggle("resting", resting);
@@ -964,13 +958,17 @@ function renderCalendarMonthLabel() {
   const lastYear = Number(last.slice(0, 4));
   const firstMonth = Number(first.slice(5, 7));
   const lastMonth = Number(last.slice(5, 7));
-  month.textContent = firstYear !== lastYear
-    ? `${firstYear} 年 ${firstMonth} 月－${lastYear} 年 ${lastMonth} 月`
-    : firstMonth !== lastMonth
-      ? `${firstYear} 年 ${firstMonth} 月－${lastMonth} 月`
-      : `${firstYear} 年 ${firstMonth} 月`;
+  month.textContent = state.mode === "day"
+    ? `${Number(state.selectedDate.slice(0, 4))} 年 ${Number(state.selectedDate.slice(5, 7))} 月`
+    : firstYear !== lastYear
+      ? `${firstYear} 年 ${firstMonth} 月－${lastYear} 年 ${lastMonth} 月`
+      : firstMonth !== lastMonth
+        ? `${firstYear} 年 ${firstMonth} 月－${lastMonth} 月`
+        : `${firstYear} 年 ${firstMonth} 月`;
 
-  title.textContent = `Week ${state.selectedWeek}`;
+  // Only Week view shows week number. Day view shows the selected month and day strip.
+  title.textContent = state.mode === "week" ? `Week ${state.selectedWeek}` : "";
+  title.hidden = state.mode !== "week";
   // Week view gives the date range once. Day view already shows 7 individual dates.
   range.textContent = `${formatShortDate(first)}～${formatShortDate(last)}`;
   range.hidden = state.mode !== "week";
@@ -985,7 +983,7 @@ function renderCalendarMonthLabel() {
   const future = today < first;
   const past = today > last;
   phase.textContent = future ? "尚未開始" : past ? "已結束" : "進行中";
-  phase.hidden = false;
+  phase.hidden = state.mode !== "week";
   phase.classList.toggle("is-future", future);
   phase.classList.toggle("is-past", past);
 }
