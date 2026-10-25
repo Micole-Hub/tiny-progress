@@ -767,8 +767,14 @@ window.TPConnection = (() => {
     if (demo) throw new Error("教學模式不會變更正式週期");
     if (!ready || !base || !auth || paused || !navigator.onLine)
       throw new Error("請先完成雲端登入，並確認網路連線正常。");
+    // Read-only cycle/week queries must not fail just because an unrelated
+    // task save is currently in flight. Mutations still require a clean
+    // synchronized state, so users cannot overwrite pending cloud changes.
+    if (String(options.method || "GET").toUpperCase() === "GET")
+      return request(path, options);
     await flush();
-    if (dirty() || inflight || paused) throw new Error("請等待雲端儲存完成");
+    if (dirty() || inflight || paused || pendingSave)
+      throw new Error("請等待雲端儲存完成");
     return request(path, options);
   }
   async function selectCycle(cycle) {
