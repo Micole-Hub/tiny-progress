@@ -2058,7 +2058,7 @@ function renderFootprintCard(week) {
       ? groups
           .map(
             (g) =>
-              `<div class="footprint-day"><strong>${esc(g.label)}</strong>${g.items.map((x) => `<div class="footprint-item" style="--i:${i++};--c:${x.color || NEUTRAL_LEAF}"><i></i><span>${esc(x.title)}</span>${x.n > 1 ? `<em>${x.n} 次</em>` : ""}</div>`).join("")}</div>`,
+              `<div class="footprint-day"><strong>${esc(g.label)}</strong>${g.items.map((x) => `<div class="footprint-item" style="--i:${i++};--c:${morandiTone(x.color || NEUTRAL_LEAF)}"><i></i><span>${esc(x.title)}</span>${x.n > 1 ? `<em>${x.n} 次</em>` : ""}</div>`).join("")}</div>`,
           )
           .join("")
       : `<div class="footprint-empty">這週還沒有完成紀錄</div>`;
@@ -2068,7 +2068,7 @@ function renderFootprintCard(week) {
       ? items
           .map(
             (x) =>
-              `<div class="footprint-item" style="--i:${i++};--c:${x.color || NEUTRAL_LEAF}"><i></i><span>${esc(x.title)}</span>${x.rec ? `<em>完成 ${x.n} 次</em>` : ""}</div>`,
+              `<div class="footprint-item" style="--i:${i++};--c:${morandiTone(x.color || NEUTRAL_LEAF)}"><i></i><span>${esc(x.title)}</span>${x.rec ? `<em>完成 ${x.n} 次</em>` : ""}</div>`,
           )
           .join("")
       : `<div class="footprint-empty">這週還沒有完成紀錄</div>`;
@@ -2581,7 +2581,7 @@ function renderRecurringList() {
     ? state.recurringRules
         .map(
           (r) =>
-            `<div class="manage-row"><span class="color-dot" style="--c:${categoryById(r.categoryId)?.color || NEUTRAL_LEAF}"></span><div><strong>${esc(r.title)}</strong><small>${r.frequency === "daily" ? "每天" : `每週 ${r.timesPerWeek} 次`}</small></div><label class="mini-switch"><input type="checkbox" data-rule-active="${r.id}" ${r.active ? "checked" : ""}><i></i></label><button class="text-button" type="button" data-edit-rule="${r.id}">編輯</button></div>`,
+            `<div class="manage-row"><span class="color-dot" style="--c:${morandiTone(categoryById(r.categoryId)?.color || NEUTRAL_LEAF)}"></span><div><strong>${esc(r.title)}</strong><small>${r.frequency === "daily" ? "每天" : `每週 ${r.timesPerWeek} 次`}</small></div><label class="mini-switch"><input type="checkbox" data-rule-active="${r.id}" ${r.active ? "checked" : ""}><i></i></label><button class="text-button" type="button" data-edit-rule="${r.id}">編輯</button></div>`,
         )
         .join("")
     : `<div class="empty-note">還沒有重複習慣</div>`;
@@ -3543,7 +3543,7 @@ function renderTutorial() {
       "",
       "完成一件，長一片葉子",
       "點事情左邊的圈圈，看水缸長高。這只是練習，不會留下正式紀錄。",
-      `<div class="tut-demo"><div class="tank demo" style="--c:${dir.color}"><div class="tank-fill" id="tutDemoFill" style="width:${Math.min(100, n * stepPct)}%"></div><span class="tank-name">${esc(dir.name)}</span><span class="tank-count" id="tutDemoCount">${n} / ${dir.target}</span></div><div class="tut-sandbox" id="tutList">${tutTasks.map((t) => tutRow(t, dir.color)).join("")}</div></div><p class="tut-note" id="tutDemoMsg">${n ? "再點一件試試看" : "做完一件事，水缸就會長高"}</p>`,
+      `<div class="tut-demo"><div class="tank demo" style="--c:${morandiTone(dir.color)}"><div class="tank-fill" id="tutDemoFill" style="width:${Math.min(100, n * stepPct)}%"></div><span class="tank-name">${esc(dir.name)}</span><span class="tank-count" id="tutDemoCount">${n} / ${dir.target}</span></div><div class="tut-sandbox" id="tutList">${tutTasks.map((t) => tutRow(t, dir.color)).join("")}</div></div><p class="tut-note" id="tutDemoMsg">${n ? "再點一件試試看" : "做完一件事，水缸就會長高"}</p>`,
     );
     $$("#tutList .task-check").forEach((btn) =>
       btn.addEventListener("click", () => {
