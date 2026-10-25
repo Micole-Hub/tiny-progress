@@ -4553,39 +4553,37 @@ function runTinyProgressSchemaUpdate() {
 // =========================================================
 
 const TP_LINE_THEME = {
-  cream: "#F8F4EA",
-  card: "#FFFAF1",
-  paper: "#FFFDF7",
-  text: "#4F5947",
-  muted: "#7F8777",
-  line: "#E8E1D5",
-  brand: "#769275",
+  cream: "#F3F1EA",
+  card: "#FFFEFA",
+  paper: "#F9FAF6",
+  text: "#3C4941",
+  muted: "#606A60",
+  line: "#E4E1D8",
+  brand: "#729174",
   brandSoft: "#EEF3EA",
-  brandBorder: "#C9D5C3",
-  brandText: "#566A55",
-  progress: "#769275",
+  brandBorder: "#CAD8C6",
+  brandText: "#4E6752",
+  progress: "#729174",
 };
 
-// 固定 5 張主卡中的兩張主動推播：週一安排、週日回顧。
-// 另外三張日常操作卡由 Render/server.js 產生。
 const TP_LINE_CARD_ACCENTS = {
-  monday: "#7F93C8", // ④ 週一安排
-  sunday: "#C9A35F", // ⑤ 週日回顧
+  monday: "#889EAD", // 週一安排：霧藍
+  sunday: "#A89A78", // 週日回顧：暖砂
 };
 
 const TP_LINE_TAGS = [
-  { bg: "#E6F0E4", text: "#56705A", border: "#BDD5BC", accent: "#87AA88" },
-  { bg: "#F6E5E7", text: "#805D67", border: "#E5BEC6", accent: "#C88998" },
-  { bg: "#E5EEF7", text: "#526B84", border: "#BDD1E5", accent: "#83A9CB" },
-  { bg: "#F7E9D8", text: "#806349", border: "#E7C9A8", accent: "#CFA276" },
-  { bg: "#EEE6F5", text: "#6C5B7C", border: "#D5C3E5", accent: "#AA90C0" },
-  { bg: "#E1F0EF", text: "#4F7272", border: "#B9D9D6", accent: "#72AAA8" },
-  { bg: "#F4EBCF", text: "#7A693D", border: "#E2D095", accent: "#C7AE5F" },
-  { bg: "#E8EEE0", text: "#607052", border: "#C7D4B9", accent: "#92A97B" },
-  { bg: "#F5E4DD", text: "#7D5F54", border: "#E4C0B2", accent: "#C48E79" },
-  { bg: "#E6EAF5", text: "#5B647D", border: "#C7CFE5", accent: "#8E9ABD" },
-  { bg: "#E5F0E8", text: "#58705F", border: "#C0D9C6", accent: "#82A991" },
-  { bg: "#F2E4EF", text: "#755E72", border: "#DFC0D7", accent: "#B98EAE" },
+  { bg: "#EAF0E7", text: "#405C46", border: "#CBDACA", accent: "#849D84" },
+  { bg: "#EAF0E9", text: "#425C51", border: "#CFDACE", accent: "#92A895" },
+  { bg: "#EAF0F3", text: "#405D73", border: "#CBDCE5", accent: "#829FB3" },
+  { bg: "#F3EFE4", text: "#6B583F", border: "#E0D8C6", accent: "#B5A17E" },
+  { bg: "#EEEFF2", text: "#525A6F", border: "#D6DAE1", accent: "#929BAD" },
+  { bg: "#E8F1F0", text: "#3D625D", border: "#C7DDDA", accent: "#7FA59E" },
+  { bg: "#F3F1E5", text: "#635E40", border: "#E2DDC4", accent: "#ACA580" },
+  { bg: "#ECF0E6", text: "#50613F", border: "#CFDAC5", accent: "#97A780" },
+  { bg: "#F2EFE8", text: "#6B5845", border: "#DDD5C8", accent: "#AB987F" },
+  { bg: "#EDF0F4", text: "#455B70", border: "#D0D8E1", accent: "#8B9EAF" },
+  { bg: "#E9F0EB", text: "#405D4B", border: "#C8DBCE", accent: "#84A18C" },
+  { bg: "#F0F0EB", text: "#4B5A50", border: "#D3D9D2", accent: "#96A59A" },
 ];
 
 function tpLineHash(value, salt) {
@@ -4787,8 +4785,8 @@ function tpLineFrame(frameColor, contents) {
           paddingAll: "15px",
           backgroundColor: TP_LINE_THEME.card,
           borderColor: frameColor || TP_LINE_THEME.brand,
-          borderWidth: "2px",
-          cornerRadius: "22px",
+          borderWidth: "1px",
+          cornerRadius: "20px",
           contents: contents,
         },
       ],
