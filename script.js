@@ -465,7 +465,16 @@ function guardWeekEditable(
   }
   return true;
 }
+// View switch selection must repaint independently of cloud and History.
+function syncViewModeButtons() {
+  $("#homeModeControl [data-mode]").forEach((button) => {
+    const selected = button.dataset.mode === state.mode;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+}
 function renderAll() {
+  syncViewModeButtons();
   refreshClock();
   syncRecurringTasks();
   autoArchivePastWeeks();
@@ -786,6 +795,7 @@ function activeViewCopy() {
   };
 }
 function renderHome() {
+  syncViewModeButtons();
   if (isCycleResting() && !restPlannerOpen) {
     renderRestHome();
     return;
@@ -2521,11 +2531,6 @@ function historyDetailHtml(
     </div>${encouragement}`;
 }
 function renderSettings() {
-  $$("[data-mode]").forEach((b) => {
-    const selected = b.dataset.mode === state.mode;
-    b.classList.toggle("active", selected);
-    b.setAttribute("aria-pressed", String(selected));
-  });
   $("#completionNoteToggle").checked = state.preferences.completionNote;
   $("#weeklyReflectionToggle").checked = state.preferences.weeklyReflection;
   $("#lineToggle").checked = state.preferences.lineEnabled;
@@ -2935,10 +2940,13 @@ function bindStaticEvents() {
   $$("[data-page-target]").forEach((b) =>
     b.addEventListener("click", () => switchPage(b.dataset.pageTarget)),
   );
-  $$("[data-mode]").forEach((b) =>
+  $("#homeModeControl [data-mode]").forEach((b) =>
     b.addEventListener("click", () => {
-      state.mode = b.dataset.mode;
-      try { localStorage.setItem("tp-view-preference", state.mode); } catch {}
+      const next = b.dataset.mode;
+      if (next !== "week" && next !== "day") return;
+      state.mode = next;
+      syncViewModeButtons();
+      try { localStorage.setItem("tp-view-preference", next); } catch {}
       renderAll();
     }),
   );
@@ -3464,8 +3472,9 @@ function renderTutorial() {
         const lens = button.dataset.tutLens;
         if (lens !== "week" && lens !== "day") return;
         state.mode = lens;
+        syncViewModeButtons();
         try { localStorage.setItem("tp-view-preference", lens); } catch {}
-        $$("[data-tut-lens]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tutLens === lens)));
+        $("[data-tut-lens]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tutLens === lens)));
       })
     );
   } else if (tutStep === 3) {
