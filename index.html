@@ -49,14 +49,17 @@
           aria-labelledby="homeTitle"
         >
           <div class="home-head">
-            <p class="eyebrow" id="homeEyebrow"></p>
-            <h1 id="homeTitle">這週慢慢長大</h1>
-            <p class="home-lede" id="homeLede">
-              一件一件完成，讓這週留下自己的樣子
-            </p>
-            <div class="home-mode-control" id="homeModeControl" role="group" aria-label="切換週與每日檢視">
-              <button type="button" data-mode="week" aria-pressed="true">整週</button>
-              <button type="button" data-mode="day" aria-pressed="false">每日</button>
+            <div class="home-head-copy">
+              <p class="eyebrow" id="homeEyebrow"></p>
+              <h1 id="homeTitle">這週慢慢長大</h1>
+              <p class="home-lede" id="homeLede">任務以週累積，安排方式由你決定。</p>
+            </div>
+            <div class="home-view-switch">
+              <span class="home-view-label">查看方式</span>
+              <div class="home-mode-control" id="homeModeControl" role="group" aria-label="切換任務檢視方式">
+                <button type="button" data-mode="week" aria-pressed="true">整週</button>
+                <button type="button" data-mode="day" aria-pressed="false">每日</button>
+              </div>
             </div>
           </div>
 
