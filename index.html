@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="github-page/milestones.css?v=20261025-clean-forest-v3" />
   </head>
   <body>
-    <div class="app-shell">
+    <div class="app-shell" inert>
       <header class="topbar">
         <a
           class="brand"
@@ -769,14 +769,13 @@
       id="connectionGate"
       class="connection-gate"
       aria-label="雲端登入"
-      hidden
     >
-      <div id="autoLoginLoading" class="connection-card auto-login-loading" role="status" aria-live="polite" hidden>
+      <div id="autoLoginLoading" class="connection-card auto-login-loading" role="status" aria-live="polite">
         <span class="auto-login-spinner" aria-hidden="true"></span>
         <h2>正在恢復登入</h2>
         <p>正在安全確認雲端連線，請稍候…</p>
       </div>
-      <form id="connectionForm" class="connection-card">
+      <form id="connectionForm" class="connection-card" hidden>
         <p class="eyebrow">TINY PROGRESS</p>
         <h1>登入 Tiny Progress</h1>
         <p>登入後自動載入雲端進度。網路中斷時會暫停編輯，不會建立另一份離線資料。</p>
