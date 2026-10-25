@@ -132,41 +132,39 @@ button.tp-journey-stop:focus-visible { outline: 2px solid #638b69; outline-offse
   .tp-journey-node { transition: none; }
 }
 
-/* Morandi forest continuity with Home and Settings. */
+/* User-sourced Morandi forest: same palette as Home and Settings. */
 .tp-journey-section {
-  background: linear-gradient(125deg, #FBF8F3 0%, #F0ECE5 100%);
-  border-color: #E3DDD3;
-  color: #4C544D;
-  box-shadow: 0 12px 28px rgba(75,73,64,.045);
+  background: linear-gradient(125deg, #F4EBE4 0%, #EAE0D7 100%);
+  border-color: #D2CABF;
+  color: #3B4338;
+  box-shadow: 0 10px 24px rgba(59,67,56,.05);
 }
-.tp-journey-numbers { border-right-color: #E3DDD3; }
-.tp-journey-kicker { color: #8B7A6B; }
-.tp-journey-big strong { color: #5F7562; }
-.tp-journey-big span, .tp-journey-numbers > p { color: #677167; }
-.tp-journey-copy .tp-journey-status { color: #927765; }
-.tp-journey-copy h2 { color: #4C544D; }
-.tp-journey-sub { color: #677167; }
-.tp-journey-leaves { color: #5F7562; }
-.tp-journey-leaves span { color: #B4A084; }
-.tp-journey-bar { background: #E3E4D9; }
-.tp-journey-bar > span { background: linear-gradient(90deg, #A9B7A3, #7E927D); }
-.tp-journey-stop { color: #929A90; }
-.tp-journey-node {
-  background: #F0EEE7; border-color: #E2DED3; color: #848E83;
-}
-.tp-journey-stop.is-finished { color: #5F7562; }
+.tp-journey-numbers { border-right-color: #D2CABF; }
+.tp-journey-kicker { color: #674D41; }
+.tp-journey-big strong { color: #4E6E62; }
+.tp-journey-big span, .tp-journey-numbers > p { color: #53565C; }
+.tp-journey-copy .tp-journey-status { color: #674D41; }
+.tp-journey-copy h2 { color: #3B4338; }
+.tp-journey-sub { color: #53565C; }
+.tp-journey-leaves { color: #4E6E62; }
+.tp-journey-leaves span { color: #8C736F; }
+.tp-journey-bar { background: #D2D2D0; }
+.tp-journey-bar > span { background: linear-gradient(90deg, #AAB8AB, #728A7A); }
+.tp-journey-stop { color: #60656C; }
+.tp-journey-node { background: #DCDDD5; border-color: #C4C1BC; color: #53565C; }
+.tp-journey-stop.is-finished { color: #4E6E62; }
 .tp-journey-stop.is-finished .tp-journey-node {
-  background: #E2EAE0; border-color: #A9B7A3; color: #5F7562;
+  background: #CCD2CC; border-color: #A9B7AA; color: #4E6E62;
 }
-.tp-journey-stop.is-current,.tp-journey-stop.is-start { color: #8B7A6B; }
+.tp-journey-stop.is-current, .tp-journey-stop.is-start { color: #674D41; }
 .tp-journey-stop.is-current .tp-journey-node {
-  background: #EDE8E0; border-color: #A28D7B; color: #786755;
+  background: #D4B8B4; border-color: #8C736F; color: #674D41;
 }
 .tp-journey-stop.is-start .tp-journey-node {
-  background: #F1EDE5; border-color: #C7B8A6; color: #8B7A6B;
+  background: #EAE0D7; border-color: #A39183; color: #674D41;
 }
-button.tp-journey-stop:focus-visible { outline-color: #5F7562; }
-.tp-journey-hint { color: #70796F; }
+button.tp-journey-stop:focus-visible { outline-color: #4E6E62; }
+.tp-journey-hint { color: #53565C; }
 @media (max-width: 500px) {
-  .tp-journey-numbers { border-bottom-color: #E3DDD3; }
+  .tp-journey-numbers { border-bottom-color: #D2CABF; }
 }
