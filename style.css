@@ -4554,3 +4554,41 @@ body { background: linear-gradient(180deg, #f1f5ef 0px, var(--bg) 390px); }
 #taskList .task-row, #habitList .habit-row { cursor: default; }
 #taskList .task-check, #habitList .task-check,
 #taskList .task-more, #habitList .task-more { cursor: pointer; }
+
+/* QA: one date navigation per view; footprint is a compact task footer action. */
+#weekStrip[hidden],
+#dayStrip[hidden],
+#footprintEntry[hidden],
+#calendarViewTitle[hidden],
+#calendarWeekRange[hidden],
+#calendarPhase[hidden],
+.footprint-shortcut:has(> #footprintEntry[hidden]) { display: none !important; }
+.footprint-shortcut {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 12px;
+}
+.work-content .footprint-shortcut .footprint-entry {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface, #fff);
+  color: var(--green-deep);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.work-content .footprint-shortcut .footprint-entry:hover { background: var(--surface-2, #faf9f5); }
+.work-content .footprint-shortcut .footprint-entry:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: 3px;
+}
