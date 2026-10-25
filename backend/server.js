@@ -764,6 +764,7 @@ const FLEX_COLORS = {
   brandSoft: "#EEF3EA",
   brandBorder: "#CAD8C6",
   brandText: "#4E6752",
+  greenFresh: "#729174", // segmented progress fallback
 };
 
 const CARD_ACCENTS = {
