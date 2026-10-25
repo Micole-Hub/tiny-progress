@@ -488,7 +488,7 @@ function renderAll() {
   saveState();
 }
 function renderHeader() {
-  $("#historyCycleLabel").textContent = `Cycle ${state.cycle.number}`;
+  $("#historyCycleLabel").textContent = `12 週回顧 · Cycle ${state.cycle.number}`;
   $("#homeEyebrow").textContent = `12 週計畫 · Cycle ${state.cycle.number}`;
 }
 function directionLeafCounts(weekFilter = () => true) {
@@ -771,7 +771,7 @@ function activeViewCopy() {
     const isToday = state.selectedDate === TODAY;
     const when = isToday ? "今天" : "當天";
     return {
-      workTitle: isToday ? "今天想完成什麼" : `${formatShortDate(state.selectedDate)} 想完成什麼`,
+      workTitle: isToday ? "今日任務" : `${formatShortDate(state.selectedDate)} 的任務`,
       scopeLabel: isToday ? "今日任務" : "當日任務",
       completed: `${when}的任務都完成了`,
       remaining: (n) => `${when}還有 ${n} 項任務待完成`,
@@ -783,7 +783,7 @@ function activeViewCopy() {
     };
   }
   return {
-    workTitle: "這週想完成什麼",
+    workTitle: "本週任務",
     scopeLabel: "本週任務",
     completed: "本週任務都完成了",
     remaining: (n) => `本週還有 ${n} 項任務待完成`,
@@ -835,11 +835,15 @@ function renderHome() {
   $("#homeTitle").textContent = showRest
     ? "休息日"
     : dayMode
-      ? "一天一點點，累積進度"
-      : "這週慢慢長大";
-  $("#homeLede").textContent = dayMode
-    ? "今天的安排，也會累積到這一週。"
-    : "一週一週累積，每件完成的小事都算數。";
+      ? (state.selectedDate === TODAY ? "今天的安排" : "這一天的安排")
+      : "這週想完成什麼";
+  $("#homeLede").textContent = showRest
+    ? "休息也是前進的一部分。"
+    : dayMode
+      ? (state.selectedDate === TODAY
+          ? "今天完成的，也會累積到這一週。"
+          : "這一天完成的，也會累積到這一週。")
+      : "任務以週累積，日期可以慢慢安排。";
   $("#homeLede").hidden = false;
   $("#workTitle").textContent = copy.workTitle;
   $("#workHint").textContent = archived
