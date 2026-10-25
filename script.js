@@ -48,27 +48,28 @@ function morandiTone(hex) {
   return MORANDI_LEAF_TONES[group][(max + min) / 2 >= 0.63 ? 1 : 0];
 }
 const CATEGORY_PALETTE_GROUPS = [
-  // Five distinct moods. Mutating the palette never rewrites saved category HEX values.
-  // Morandi/earth-tone swatches are selected from the Just Free Slide color reference.
+  // Every group contains twelve visually separated, mixed-hue swatches.
+  // Adjacent choices alternate hue/lightness rather than forming near-duplicate gradients.
+  // This only changes the picker suggestions; saved HEX data and tree display mapping stay intact.
   { title: "莫蘭迪森林", colors: [
-    "#728A7A", "#4A7056", "#597A69", "#8A9585", "#889F8B", "#7C9788",
-    "#678F74", "#478058", "#82ABA3", "#B2BA81", "#8F9650", "#A2AFA6",
+    "#927157", "#BFD1C4", "#9D5A16", "#7C9788", "#F4C7B0", "#4A7056",
+    "#CA774B", "#8F9650", "#A392A2", "#D3AC73", "#586D80", "#B09279",
   ] },
-  { title: "海霧藍調", colors: [
-    "#8E9BAE", "#BECBD3", "#75809C", "#8E9AAB", "#8D8FA4", "#97A5C0",
-    "#9297AB", "#66828E", "#586D80", "#B3CAD8", "#627676", "#C9D3D5",
+  { title: "晴空海岸", colors: [
+    "#B3CAD8", "#5F609B", "#DFF7E6", "#4D7893", "#C9B4C7", "#5C9B97",
+    "#9079AA", "#A4C3B7", "#2A4C65", "#8D8FA4", "#C0C182", "#6B98B6",
   ] },
-  { title: "奶油暖光", colors: [
-    "#F4C7B0", "#F4BAAF", "#E7CAA8", "#F1D09D", "#F4D4BE", "#F3C2AF",
-    "#F4E8C0", "#E6C786", "#FDE0BE", "#F8D4BC", "#EEDAC0", "#EFD3AC",
+  { title: "暖陽果實", colors: [
+    "#B87F78", "#D6E1D7", "#BB6F32", "#EBD8C9", "#B95756", "#A09952",
+    "#F77E66", "#E6C786", "#8E6E57", "#F4BAAF", "#8D6A6E", "#D9913C",
   ] },
   { title: "馬卡龍果漾", colors: [
-    "#F39BAA", "#FFB3A4", "#F4B27E", "#F6CF71", "#E9DF84", "#A9D68E",
-    "#7CCFA6", "#6ED1CE", "#85C7ED", "#96ACEF", "#BAA1EA", "#E7A2D6",
+    "#7CCFA6", "#F39BAA", "#6ED1CE", "#FFB3A4", "#85C7ED", "#F6CF71",
+    "#BAA1EA", "#D9E66A", "#E7A2D6", "#A9D68E", "#96ACEF", "#F4B27E",
   ] },
-  { title: "文青陶土", colors: [
-    "#B09279", "#8E6E57", "#A39183", "#845937", "#B89886", "#8F6849",
-    "#956757", "#927157", "#877865", "#C5AB89", "#A87153", "#CA774B",
+  { title: "文青插畫", colors: [
+    "#9C945B", "#507287", "#79A34D", "#BA5649", "#45A17D", "#B17F95",
+    "#597E68", "#E0A443", "#5E91A4", "#B8BA53", "#826EB3", "#8B785B",
   ] },
 ];
 function normalizeHexColor(value) {
