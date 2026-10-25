@@ -9,27 +9,27 @@ const DAY_LABELS = {
   sat: "六",
   sun: "日",
 };
-// Morandi forest defaults apply only to newly chosen direction colors.
-// Previously saved category/direction colors and archived leaf colors remain unchanged.
+// Color defaults sampled from the user's Just Free Slide Morandi picker.
+// Existing saved direction, category, task and archived leaf colors are untouched.
 const PALETTE = [
-  "#829685", // 霧綠
-  "#AD918F", // 豆沙粉
-  "#A9A58A", // 灰橄欖
-  "#9EADC0", // 霧藍
-  "#C0A790", // 砂棕
-  "#A69BB1", // 霧紫
-  "#A7B5A3", // 葉片灰綠
-  "#BEA9A3", // 暖灰粉
-  "#8C9E9B", // 霧青
-  "#B0A48C", // 奶茶灰
-  "#9C94A5", // 灰紫
-  "#A5AFA4", // 鼠尾草
+  "#AAB8AB", // 灰綠葉片
+  "#D4B8B4", // 霧豆沙
+  "#B7B7BD", // 灰薰衣草
+  "#D4C3AA", // 麥穗米
+  "#728A7A", // 鼠尾草
+  "#A39183", // 霧灰樹皮
+  "#A9B7AA", // 淺葉綠
+  "#C09D9B", // 灰玫瑰
+  "#95A098", // 岩苔綠
+  "#8C736F", // 霧棕
+  "#ADAAA5", // 石灰灰
+  "#CCD2CC", // 霧灰綠
 ];
-// 只供分類使用的完整色盤；原本的方向／新手教學色盤保持不變。
+// The full original category palette is retained, with a new Morandi section.
 const CATEGORY_PALETTE_GROUPS = [
   { title: "莫蘭迪森林", colors: [
-    "#829685", "#AD918F", "#A9A58A", "#9EADC0", "#C0A790", "#A69BB1",
-    "#A7B5A3", "#BEA9A3", "#8C9E9B", "#B0A48C", "#9C94A5", "#A5AFA4",
+    "#AAB8AB", "#D4B8B4", "#B7B7BD", "#D4C3AA", "#728A7A", "#A39183",
+    "#A9B7AA", "#C09D9B", "#95A098", "#8C736F", "#ADAAA5", "#CCD2CC",
   ] },
   { title: "柔和粉彩", colors: [
     "#9FC3DE", "#EFB8CF", "#E7CE72", "#E3B48A", "#A9CB9F", "#C8B9E6",
