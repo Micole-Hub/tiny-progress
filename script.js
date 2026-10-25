@@ -65,9 +65,9 @@ const CATEGORY_PALETTE_GROUPS = [
     "#F39BAA", "#FFB3A4", "#F4B27E", "#F6CF71", "#E9DF84", "#A9D68E",
     "#7CCFA6", "#6ED1CE", "#85C7ED", "#96ACEF", "#BAA1EA", "#E7A2D6",
   ] },
-  { title: "馬卡龍奶霜", colors: [
-    "#F4BEC8", "#F7C2AD", "#F2C7A1", "#F9DE99", "#D6E7A0", "#AFE2B8",
-    "#B1E5D9", "#A9DCE9", "#B7D3F3", "#C7B9EC", "#DCC0EB", "#F0BDE1",
+  { title: "文青日常", colors: [
+    "#C77558", "#DA966D", "#D3AF58", "#AFA660", "#8BA674", "#6D9B7A",
+    "#5C9B97", "#679AAE", "#7596BC", "#857FB3", "#AD84A9", "#A97C5D",
   ] },
 ];
 function normalizeHexColor(value) {
