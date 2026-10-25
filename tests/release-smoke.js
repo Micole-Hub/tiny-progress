@@ -1,0 +1,63 @@
+"use strict";
+// Run from the repository root: node tests/release-smoke.js
+// No network, GAS, LINE messaging or cloud writes. A PASS does not replace E2E QA.
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+const root = path.resolve(__dirname, "..");
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const html = read("index.html");
+const sw = read("sw.js");
+const server = read("backend/server.js");
+const access = read("backend/access.js");
+const gas = read("gas/Code.gs");
+const files = [
+  "script.js", "github-page/connection.js", "github-page/cycle-management.js",
+  "github-page/domain.js", "github-page/milestones.js", "github-page/pwa.js",
+  "sw.js", "backend/server.js", "backend/access.js", "backend/domain.js",
+  "backend/line-cards.js", "backend/line-bot.js", "gas/Code.gs",
+  "gas/TPDomain.gs", "gas/TinyProgressMissing.gs",
+];
+for (const file of files) {
+  new vm.Script(read(file), { filename: file });
+}
+console.log("PASS: syntax parsed for browser, backend and GAS sources");
+const linked = [...html.matchAll(/(?:href|src)="((?:style\.css|script\.js|github-page\/[^"]+\.(?:css|js))(?:\?[^"]*)?)"/g)]
+  .map((match) => match[1]);
+assert.ok(linked.length >= 9, "expected full homepage asset inventory");
+for (const asset of linked) {
+  const pathname = asset.split("?")[0];
+  assert.ok(fs.existsSync(path.join(root, pathname)), "missing frontend asset: " + pathname);
+  assert.ok(sw.includes(JSON.stringify("./" + asset)), "outdated PWA cache URL: " + asset);
+}
+console.log("PASS: PWA cached resources match the current homepage asset URLs");
+assert.match(access, /app\.use\(\(req, res, next\)/);
+assert.match(access, /x-line-signature/);
+assert.match(access, /timingSafeEqual/);
+assert.match(server, /Access\.install\(app, ACCESS/);
+assert.match(server, /app\.post\("\/line\/webhook"/);
+console.log("PASS: authentication and LINE signature checks are wired in source");
+assert.match(server, /app\.post\("\/weeks\/postpone-current"[\s\S]*?status\(409\)/);
+assert.match(gas, /if \(action === "postpone-current-week"\)\s*throw new Error/);
+assert.match(read("script.js"), /function openReplanTask\(/);
+console.log("PASS: retired day-based Week extension is blocked; task moving remains");
+const D = require(path.join(root, "backend/domain.js"));
+const Cards = require(path.join(root, "backend/line-cards.js"));
+const Bot = require(path.join(root, "backend/line-bot.js"));
+const state = D.empty("2026-10-26");
+D.add(state, "測試整週任務", 1);
+for (const kind of ["list", "monday", "footprint"]) {
+  const card = Cards[kind](state, { week: 1, webUrl: "https://example.org/tiny-progress/" });
+  assert.equal(card.type, "flex", kind + " must generate a LINE Flex message");
+  assert.ok(card.altText && card.contents && card.contents.type === "bubble");
+  assert.ok(JSON.stringify(card).length < 60000, kind + " card looks unexpectedly large");
+}
+const replies = Bot.respond(
+  state,
+  { source: { type: "user", userId: "Utest" }, message: { text: "清單" } },
+  { webUrl: "https://example.org/tiny-progress/" }
+);
+assert.ok(Array.isArray(replies) && replies.length, "LINE text command should return messages");
+console.log("PASS: LINE list, Monday, footprint cards and list command render locally");
+console.log("NOTE: cloud save, LINE delivery, schedule, PWA install and multi-device sync still require QA integration tests.");
