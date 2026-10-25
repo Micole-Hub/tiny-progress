@@ -514,8 +514,10 @@ function renderDirection() {
   syncGoals();
   // The 12-week plan goal (cycles.theme) is not a water tank. Display it
   // separately from cycle.directions and never overwrite state here.
-  $("#directionText").textContent =
-    TPConnection.cycleTheme?.() || state.cycle.direction;
+  const currentGoal = TPConnection.cycleTheme?.() || state.cycle.direction;
+  $("#directionText").textContent = currentGoal;
+  const settingsGoal = $("#settingsCycleGoal");
+  if (settingsGoal) settingsGoal.textContent = currentGoal || "尚未設定本輪目標";
   const ds = state.cycle.directions,
     counts = directionLeafCounts(),
     el = $("#directionTags");
@@ -653,7 +655,7 @@ function bindDirectionColorInputs() {
 function openDirectionDialog(id = null) {
   editingDirectionId = id;
   const d = id ? state.cycle.directions.find((x) => x.id === id) : null;
-  $("#directionDialogTitle").textContent = d ? "編輯方向" : "新增方向";
+  $("#directionDialogTitle").textContent = d ? "編輯成長方向" : "新增成長方向";
   $("#directionNameInput").value = d?.name || "";
   $("#directionOutcomeInput").value = d?.outcome || "";
   $("#directionTargetInput").value = d?.target || 12;
@@ -1548,7 +1550,7 @@ function renderQuickOptions() {
   ).join("");
   updateQuickDatePickerVisibility();
   $("#quickGoal").innerHTML =
-    `<option value="">不連結方向</option>` +
+    `<option value="">不指定成長方向</option>` +
     state.cycle.goals.map((g) => `<option>${esc(g)}</option>`).join("");
   $("#quickCategory").innerHTML = categoryOptions();
   $("#quickTimes").innerHTML = timesOptions(2);
@@ -2559,7 +2561,7 @@ function openEditTask(t) {
   editingTaskOccurrenceId = actionOccurrenceId;
   $("#editTaskTitle").value = t.title;
   $("#editTaskGoal").innerHTML =
-    `<option value="">不連結方向</option>` +
+    `<option value="">不指定成長方向</option>` +
     state.cycle.goals
       .map(
         (g) => `<option ${g === t.goal ? "selected" : ""}>${esc(g)}</option>`,
@@ -2619,7 +2621,7 @@ function openRecurringDialog(id = null) {
   $("#recurringTitleInput").value = r?.title || "";
   $("#recurringCategory").innerHTML = categoryOptions(r?.categoryId || "");
   $("#recurringGoal").innerHTML =
-    `<option value="">不連結方向</option>` +
+    `<option value="">不指定成長方向</option>` +
     state.cycle.goals
       .map(
         (g) => `<option ${g === (r?.goal || "") ? "selected" : ""}>${esc(g)}</option>`,
@@ -2773,7 +2775,7 @@ function bindStaticEvents() {
     commitDirections(list);
     $("#directionDialog").close();
     renderAll();
-    showPendingCloudToast("方向已更新");
+    showPendingCloudToast("成長方向已更新");
   });
   $("#deleteDirectionBtn").addEventListener("click", () => {
     if (state.cycle.directions.length <= 1) return;
@@ -2784,7 +2786,7 @@ function bindStaticEvents() {
     );
     $("#directionDialog").close();
     renderAll();
-    showPendingCloudToast("方向已刪除，葉子仍保留");
+    showPendingCloudToast("成長方向已刪除，葉子仍保留");
   });
   $("#replayTutorialBtn").addEventListener("click", openTutorial);
 
@@ -3381,9 +3383,9 @@ function renderTutorial() {
   } else if (tutStep === 1) {
     body.innerHTML = pane(
       "",
-      "先選幾個方向",
-      "寫下 1 到 3 個想前進的方向，之後隨時能改，已長出的葉子不會消失。",
-      `<div class="tut-dirs">${tutDraft.map((d, i) => `<div class="tut-dir" style="--c:${d.color}"><i class="color-dot"></i><div><input data-tut-name="${i}" value="${esc(d.name)}" placeholder="方向名稱" maxlength="12"><input data-tut-outcome="${i}" value="${esc(d.outcome)}" placeholder="做到什麼算完成" maxlength="40"></div></div>`).join("")}</div>${tutDraft.length < 3 ? `<button class="text-button" type="button" id="tutAddDir">＋ 再加一個方向</button>` : ""}`,
+      "選擇你的成長方向",
+      "本輪目標是這 12 週想達成的成果；成長方向是持續投入的 1 到 3 個項目。之後可以修改，已長出的葉子不會消失。",
+      `<div class="tut-dirs">${tutDraft.map((d, i) => `<div class="tut-dir" style="--c:${d.color}"><i class="color-dot"></i><div><input data-tut-name="${i}" value="${esc(d.name)}" placeholder="成長方向名稱" maxlength="12"><input data-tut-outcome="${i}" value="${esc(d.outcome)}" placeholder="做到什麼算完成" maxlength="40"></div></div>`).join("")}</div>${tutDraft.length < 3 ? `<button class="text-button" type="button" id="tutAddDir">＋ 再加一個方向</button>` : ""}`,
     );
     $$("[data-tut-name]").forEach((el) =>
       el.addEventListener(
@@ -3601,7 +3603,7 @@ function renderTutorial() {
     body.innerHTML = pane(
       `<div class="tut-done" aria-hidden="true">✓</div>`,
       "準備好了",
-      "你已經練習過：設定方向、加入事情、完成、寫感想、修改。想再看一次，到「設定」按「使用教學」。",
+      "你已經練習過：設定成長方向、加入任務、完成、寫感想、修改。想再看一次，到「設定」按「使用教學」。",
     );
   }
   // 樹上的葉子照順序一片一片長出來，而不是同時蹦出。
