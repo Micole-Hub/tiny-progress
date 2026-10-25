@@ -20,6 +20,11 @@
 - PWA `sw.js` 更新快取版本與首頁檔案清單，以免顯示舊 JS/CSS。
 - `node tests/release-smoke.js` 提供不連網的語法、靜態資產、存取控制掛載及 LINE Flex 卡片預覽檢查。**目前尚未在使用者的實際 Windows 本機 QA 跑過這支新測試。**
 
+## 本次已實際執行的本機測試（不連雲端）
+- PASS：`backend/line-cards.js` 的 list / monday / footprint 產生 Flex bubble，`backend/line-bot.js` 的「清單」指令返回訊息。測試檔案以 Git blob SHA 比對 QA，三份來源完全相同，沒有呼叫 LINE 或使用任何正式資料。
+- PASS：在與 QA SHA 完全相同的 `github-page/domain.js`、`backend/domain.js`、`gas/TPDomain.gs` 上執行 `tests/cycle-boundaries.js` 邏輯，涵蓋休息期、跨週、封存、完成備註、刪除原因、每週習慣、12 週結束。
+- 尚未在使用者 Windows QA 跑 `tests/release-smoke.js` 全套，也**尚未測試真正的 Sheets 寫入、Render 登入、LINE push/reply、手機瀏覽器 PWA**。
+
 ## 合併阻擋（須先解決並驗證）
 
 1. **週期資料來源不同步：** `gas/TinyProgressMissing.gs` 的 `tpWebRead(cycle)` 目前未依參數切換週期；`changeCycleStartDateInSheet` 只修改 `cycles/weeks/items` 的日期，首頁以 `web_state.cycle.startDate` 為準。應先明訂唯一真實來源，修復週期選擇/開始日更新，並做 QA 實際讀寫/重新載入驗收。**目前不要透過正式版測試修改開始日。**
