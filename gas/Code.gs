@@ -295,10 +295,12 @@ function doPost(e) {
       return jsonResponse({ ok: true, action: action, result: result });
     }
     ensureSchema();
-    if (isLineWebhookBody(body) && action !== "line-ingress")
+    if (isLineWebhookBody(body) && action !== "line-ingress" && action !== "line-admit")
       throw new Error("LINE 請改由 Render 簽章入口接收");
     const unlocked = [
       "line-ingress",
+      "line-admit",
+      "line-process",
       "retry-pending-queue",
       "line-pending-set",
       "line-pending-clear",
@@ -438,6 +440,8 @@ function executeTinyProgressAction(action, body) {
   if (action === "reminder-claim") return tpReminderClaim();
   if (action === "reminder-sent") return tpReminderSent(body);
   if (action === "line-ingress") return tpLineIngress(body);
+  if (action === "line-admit") return handleLineWebhookToQueue(body, { admitOnly: true });
+  if (action === "line-process") return processAdmittedLineQueue(body);
   if (action === "web-import") return tpImportLocal(body);
 
   if (action === "create") return createItemToSheet(body.item || body);
@@ -3460,51 +3464,57 @@ function isLineWebhookBody(body) {
   return body && Array.isArray(body.events);
 }
 
-function handleLineWebhookToQueue(body) {
+// First persist every admissible event in Sheets. Processing must not be part of
+// the webhook acknowledgement. The legacy line-ingress action remains intact.
+function handleLineWebhookToQueue(body, options) {
+  const admitOnly = Boolean(options && options.admitOnly);
   const events = body.events || [];
   const results = [];
 
   events.forEach(function (event) {
-    if (!event.source || !event.source.userId) return;
+    if (!event || !event.source || !event.source.userId) return;
     if (!event.replyToken) return;
-
     const userId = String(event.source.userId || "").trim();
-    let messageText = "";
+    const isPostback = event.type === "postback";
+    const isText = event.type === "message" && event.message && event.message.type === "text";
+    if (!isPostback && !isText) return;
+    const rawData = isPostback ? String((event.postback || {}).data || "").trim() : "";
+    const rawText = isText ? String(event.message.text || "").trim() : "";
+    if (!rawData && !rawText) return;
 
-    if (event.type === "postback") {
-      const rawData = String((event.postback || {}).data || "").trim();
-      if (!rawData) return;
-      prepareLinePendingFromPostback(userId, rawData);
-      messageText = TP_LINE_POSTBACK_PREFIX + rawData;
-    } else if (
-      event.type === "message" &&
-      event.message &&
-      event.message.type === "text"
-    ) {
-      const rawText = String(event.message.text || "").trim();
-      if (!rawText) return;
-      messageText = consumeLinePendingText(userId, rawText).messageText;
-    } else {
-      return;
-    }
-
+    // Defer pending-state changes until *after* the exact event-ID check under
+    // the queue lock. A redelivered event must not consume the same input twice.
+    const resolveMessageText = function () {
+      if (isPostback) {
+        prepareLinePendingFromPostback(userId, rawData);
+        return TP_LINE_POSTBACK_PREFIX + rawData;
+      }
+      return consumeLinePendingText(userId, rawText).messageText;
+    };
     const admissionResult = createQueueMessageForImmediateProcessing({
-      id:
-        "line-" +
-        tpDigest(event.webhookEventId || event.replyToken).slice(0, 40),
+      id: "line-" + tpDigest(event.webhookEventId || event.replyToken).slice(0, 40),
       userId: userId,
-      messageText: messageText,
+      messageText: admitOnly ? undefined : resolveMessageText(),
+      resolveMessageText: admitOnly ? resolveMessageText : undefined,
       replyToken: event.replyToken,
+      status: admitOnly ? "pending" : "processing",
     });
 
     if (admissionResult.duplicate) {
       const duplicate = admissionResult.duplicate;
+      if (admitOnly) {
+        results.push({
+          duplicate: true,
+          duplicateReason: duplicate.reason,
+          reusedQueueId: duplicate.item.id,
+        });
+        return;
+      }
       let replyText = DUPLICATE_PENDING_MESSAGE_REPLY;
       if (duplicate.reason === "processing")
         replyText = DUPLICATE_PROCESSING_MESSAGE_REPLY;
       if (duplicate.reason === "recent_done_write")
         replyText = DUPLICATE_RECENT_WRITE_MESSAGE_REPLY;
-
       try {
         const replyResult = replyLineMessage(event.replyToken, replyText);
         results.push({
@@ -3527,6 +3537,10 @@ function handleLineWebhookToQueue(body) {
     }
 
     const queueMessage = admissionResult.queueMessage;
+    if (admitOnly) {
+      results.push({ queued: true, queueId: queueMessage.id });
+      return;
+    }
     const processResult = tryImmediateReplyByRender(queueMessage);
     results.push({
       duplicate: false,
@@ -3535,6 +3549,34 @@ function handleLineWebhookToQueue(body) {
     });
   });
 
+  return {
+    processedCount: results.length,
+    results: results,
+    ...(admitOnly
+      ? { queueIds: results.filter(function (r) { return r.queued; }).map(function (r) { return r.queueId; }) }
+      : {}),
+  };
+}
+
+// Render calls this after replying to LINE. If Render dies between admission and
+// processing, the existing retryPendingQueue() still finds the pending rows.
+function processAdmittedLineQueue(body) {
+  const ids = body && body.queueIds;
+  if (!Array.isArray(ids) || ids.length > 20)
+    throw new Error("line-process queueIds 格式不正確或超過 20 筆");
+  const results = [];
+  const seen = {};
+  ids.forEach(function (rawId) {
+    const id = String(rawId || "").trim();
+    if (!/^line-[a-f0-9]{40}$/.test(id) || seen[id]) return;
+    seen[id] = true;
+    const claimed = claimQueueMessageForRetry(id);
+    if (!claimed) {
+      results.push({ queueId: id, skipped: true, reason: "already_claimed" });
+      return;
+    }
+    results.push({ queueId: id, processResult: tryImmediateReplyByRender(claimed) });
+  });
   return { processedCount: results.length, results: results };
 }
 
@@ -3796,22 +3838,25 @@ function createQueueMessageForImmediateProcessing(input) {
         duplicate: {
           item: existingEvent,
           reason: "same_event",
-          meta: buildQueueDedupeMeta(input.messageText),
+          meta: buildQueueDedupeMeta(existingEvent.messageText),
         },
       };
-    const duplicate = findDuplicateQueueMessage(
-      input.userId,
-      input.messageText,
-    );
+
+    // Resolve pending conversation state only once for each webhookEventId.
+    const messageText = typeof input.resolveMessageText === "function"
+      ? input.resolveMessageText()
+      : input.messageText;
+    const duplicate = findDuplicateQueueMessage(input.userId, messageText);
     if (duplicate) return { duplicate };
 
+    const pending = input.status === "pending";
     const queueMessage = createQueueMessage({
       id: input.id,
       userId: input.userId,
-      messageText: input.messageText,
+      messageText: messageText,
       replyToken: input.replyToken,
-      status: "processing",
-      lastError: "已由立即處理流程鎖定",
+      status: pending ? "pending" : "processing",
+      lastError: pending ? "已持久入列，等待處理" : "已由立即處理流程鎖定",
     });
     return { duplicate: null, queueMessage };
   });
